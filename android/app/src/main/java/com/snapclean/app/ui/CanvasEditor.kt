@@ -171,7 +171,7 @@ fun CanvasEditor(
                 
                 if (mode == "draw") {
                     if (paths.isEmpty() && currentPath == null && texts.isEmpty()) {
-                        onDone(activeBitmap)
+                        onDone(activeBitmap, activeBitmap, paths, texts)
                         return@Button
                     }
                     if (canvasWidth > 0 && canvasHeight > 0) {
