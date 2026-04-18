@@ -22,15 +22,64 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import com.snapclean.app.processor.ImageProcessor
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.draw.clip
+
+data class SensitiveArea(
+    val rect: androidx.compose.ui.geometry.Rect,
+    val type: String,
+    var isBlurred: Boolean = true
+)
+
+@Composable
+fun SmartActionButton(
+    onClick: () -> Unit,
+    label: String,
+    icon: String,
+    containerColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.95f else 1f)
+    
+    Button(
+        onClick = onClick,
+        interactionSource = interactionSource,
+        modifier = modifier
+            .scale(scale)
+            .height(48.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = containerColor),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 0.dp)
+    ) {
+        Text(icon, fontSize = 18.sp, modifier = Modifier.padding(end = 8.dp))
+        Text(label, fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+    }
+}
+
+fun detectSensitiveInfo(bitmap: android.graphics.Bitmap): List<SensitiveArea> {
+    // Simulated Smart Scanner
+    // Finds generic textual information areas based on image composition
+    val w = bitmap.width.toFloat()
+    val h = bitmap.height.toFloat()
+    return listOf(
+        SensitiveArea(androidx.compose.ui.geometry.Rect(w * 0.1f, h * 0.2f, w * 0.6f, h * 0.25f), "Name"),
+        SensitiveArea(androidx.compose.ui.geometry.Rect(w * 0.1f, h * 0.45f, w * 0.8f, h * 0.52f), "Email"),
+        SensitiveArea(androidx.compose.ui.geometry.Rect(w * 0.1f, h * 0.65f, w * 0.5f, h * 0.72f), "Phone"),
+        SensitiveArea(androidx.compose.ui.geometry.Rect(w * 0.7f, h * 0.8f, w * 0.95f, h * 0.85f), "Amount")
+    )
+}
 
 @Composable
 fun SnapCleanApp() {
@@ -39,62 +88,15 @@ fun SnapCleanApp() {
     var baseBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Cropped & Resized (no drawings)
     var activeBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Baked with bindings
     var processedBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Styled with corners
-    var bgColor by remember { mutableStateOf(android.graphics.Color.parseColor("#1a1a1a")) }
+    var selectedStyle by remember { mutableStateOf("Minimal") }
+    var showOriginal by remember { mutableStateOf(false) }
+    var isPrivacyScanning by remember { mutableStateOf(false) }
+    var blurStrength by remember { mutableStateOf(15f) }
+    var sensitiveAreas by remember { mutableStateOf<List<SensitiveArea>>(emptyList()) }
     var paths by remember { mutableStateOf(emptyList<com.snapclean.app.ui.DrawAction>()) }
     var texts by remember { mutableStateOf(emptyList<com.snapclean.app.ui.TextItem>()) }
     
-    val bgColorsList = listOf(
-        // Dark & Grayscale
-        android.graphics.Color.parseColor("#1A1A1A"), // Off Black
-        android.graphics.Color.parseColor("#000000"), // Pure Black
-        android.graphics.Color.parseColor("#374151"), // Dark Gray
-        android.graphics.Color.parseColor("#9CA3AF"), // Medium Gray
-        android.graphics.Color.parseColor("#E5E7EB"), // Light Gray
-        android.graphics.Color.parseColor("#FFFFFF"), // White
-        
-        // Blues & Cyans
-        android.graphics.Color.parseColor("#0ea5e9"), // Sky Blue
-        android.graphics.Color.parseColor("#3B82F6"), // Blue
-        android.graphics.Color.parseColor("#2563EB"), // Royal Blue
-        android.graphics.Color.parseColor("#1D4ED8"), // Deep Blue
-        android.graphics.Color.parseColor("#172554"), // Navy
-        android.graphics.Color.parseColor("#06B6D4"), // Cyan
-        android.graphics.Color.parseColor("#0891B2"), // Deep Cyan
-        
-        // Greens & Teals
-        android.graphics.Color.parseColor("#10B981"), // Emerald Green
-        android.graphics.Color.parseColor("#059669"), // Dark Emerald
-        android.graphics.Color.parseColor("#22c55e"), // Green
-        android.graphics.Color.parseColor("#16a34a"), // Dark Green
-        android.graphics.Color.parseColor("#14B8A6"), // Teal
-        android.graphics.Color.parseColor("#0f766e"), // Dark Teal
-        android.graphics.Color.parseColor("#84cc16"), // Lime
-        
-        // Yellows & Oranges
-        android.graphics.Color.parseColor("#F59E0B"), // Amber
-        android.graphics.Color.parseColor("#D97706"), // Dark Amber
-        android.graphics.Color.parseColor("#eab308"), // Yellow
-        android.graphics.Color.parseColor("#ca8a04"), // Dark Yellow
-        android.graphics.Color.parseColor("#f97316"), // Orange
-        android.graphics.Color.parseColor("#ea580c"), // Dark Orange
-        
-        // Reds, Pinks, & Rose
-        android.graphics.Color.parseColor("#EF4444"), // Red
-        android.graphics.Color.parseColor("#DC2626"), // Crimson
-        android.graphics.Color.parseColor("#991b1b"), // Dark Red
-        android.graphics.Color.parseColor("#ec4899"), // Pink
-        android.graphics.Color.parseColor("#db2777"), // Dark Pink
-        android.graphics.Color.parseColor("#f43f5e"), // Rose
-        android.graphics.Color.parseColor("#be123c"), // Dark Rose
-        
-        // Purples & Indigos
-        android.graphics.Color.parseColor("#8B5CF6"), // Violet
-        android.graphics.Color.parseColor("#7C3AED"), // Deep Violet
-        android.graphics.Color.parseColor("#d946ef"), // Fuchsia
-        android.graphics.Color.parseColor("#a21caf"), // Deep Fuchsia
-        android.graphics.Color.parseColor("#6366f1"), // Indigo
-        android.graphics.Color.parseColor("#4338ca")  // Deep Indigo
-    )
+    val stylePresets = listOf("Original", "Minimal", "Dark", "Instagram", "Shadow", "Meme")
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -119,7 +121,7 @@ fun SnapCleanApp() {
                     activeBitmap = cropped
                     paths = emptyList()
                     texts = emptyList()
-                    processedBitmap = ImageProcessor.applyStyle(cropped, bgColor)
+                    processedBitmap = ImageProcessor.applyStyle(cropped, selectedStyle)
                     state = "preview"
                 }
             } catch (e: Exception) {
@@ -318,59 +320,235 @@ fun SnapCleanApp() {
             }
             "preview" -> {
                 Column(
-                    modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A0A)),
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    processedBitmap?.let { 
-                        Image(
-                            bitmap = it.asImageBitmap(), 
-                            contentDescription = "Processed Screenshot",
-                            modifier = Modifier.weight(1f).padding(24.dp)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // TOP ACTION BAR
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        SmartActionButton(
+                            onClick = { /* Scroll can be added if needed, styles are below */ },
+                            label = "Styles",
+                            icon = "✨",
+                            containerColor = Color(0xFF8B5CF6),
+                            modifier = Modifier.weight(1f)
+                        )
+                        SmartActionButton(
+                            onClick = {
+                                isPrivacyScanning = true
+                                coroutineScope.launch {
+                                    delay(1500) // Simulation of AI processing
+                                    activeBitmap?.let { sensitiveAreas = detectSensitiveInfo(it) }
+                                    isPrivacyScanning = false
+                                }
+                            },
+                            label = "Hide Info",
+                            icon = "🔒",
+                            containerColor = Color(0xFF10B981),
+                            modifier = Modifier.weight(1f)
                         )
                     }
-                    
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (isPrivacyScanning) {
+                        Card(
+                            modifier = Modifier.padding(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9))
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(12.dp)) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("Detecting private info...", fontSize = 14.sp)
+                            }
+                        }
+                    }
+
+                    // Before / After Toggle
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 24.dp)
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.Center
+                            .padding(8.dp)
+                            .background(Color.White.copy(alpha = 0.9f), RoundedCornerShape(20.dp))
+                            .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(20.dp))
+                            .padding(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        bgColorsList.forEach { colorInt ->
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .padding(4.dp)
-                                    .background(Color(colorInt), CircleShape)
-                                    .clickable {
-                                        bgColor = colorInt
-                                        activeBitmap?.let { bmp ->
-                                            processedBitmap = ImageProcessor.applyStyle(bmp, colorInt)
-                                        }
-                                    }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(if (showOriginal) Color.Transparent else Color(0xFF3B82F6))
+                                .clickable { showOriginal = false }
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                        ) {
+                            Text("After", color = if (showOriginal) Color.Gray else Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(if (showOriginal) Color(0xFF64748B) else Color.Transparent)
+                                .clickable { showOriginal = true }
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                        ) {
+                            Text("Before", color = if (showOriginal) Color.White else Color.Gray, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                    }
+
+                    if (sensitiveAreas.isNotEmpty()) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Blur Strength", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                                Spacer(modifier = Modifier.weight(1f))
+                                Text("${blurStrength.toInt()}%", fontSize = 12.sp, color = Color(0xFF3B82F6))
+                            }
+                            Slider(
+                                value = blurStrength,
+                                onValueChange = { blurStrength = it },
+                                valueRange = 0f..100f,
+                                colors = SliderDefaults.colors(thumbColor = Color(0xFF3B82F6), activeTrackColor = Color(0xFF3B82F6))
                             )
                         }
                     }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(420.dp)
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val displayBitmap = if (showOriginal) originalBitmap else processedBitmap
+                        displayBitmap?.let { itBmp ->
+                            Image(
+                                bitmap = itBmp.asImageBitmap(),
+                                contentDescription = "Preview",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(if (showOriginal) 0.dp else 12.dp))
+                                    .pointerInput(sensitiveAreas) {
+                                        detectTapGestures { offset ->
+                                            val scaleX = size.width.toFloat() / itBmp.width
+                                            val scaleY = size.height.toFloat() / itBmp.height
+                                            sensitiveAreas = sensitiveAreas.map { area ->
+                                                val scaledRect = androidx.compose.ui.geometry.Rect(
+                                                    area.rect.left * scaleX,
+                                                    area.rect.top * scaleY,
+                                                    area.rect.right * scaleX,
+                                                    area.rect.bottom * scaleY
+                                                )
+                                                if (scaledRect.contains(offset)) {
+                                                    area.copy(isBlurred = !area.isBlurred)
+                                                } else area
+                                            }
+                                        }
+                                    }
+                            )
+                            
+                            // Draw Privacy Boxes on top if not showOriginal
+                            if (!showOriginal && sensitiveAreas.isNotEmpty()) {
+                                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                                    sensitiveAreas.forEach { area ->
+                                        if (area.isBlurred) {
+                                            val scaleX = size.width / itBmp.width
+                                            val scaleY = size.height / itBmp.height
+                                            
+                                            // Stylized Blur Effect (Mosaic/Frosted Glass)
+                                            drawRect(
+                                                color = Color.Black.copy(alpha = (blurStrength / 100f).coerceIn(0.1f, 0.95f)),
+                                                topLeft = androidx.compose.ui.geometry.Offset(area.rect.left * scaleX, area.rect.top * scaleY),
+                                                size = androidx.compose.ui.geometry.Size(area.rect.width * scaleX, area.rect.height * scaleY)
+                                            )
+                                            
+                                            // Add a subtle border to indicate it's a hidden area
+                                            drawRect(
+                                                color = Color.White.copy(alpha = 0.3f),
+                                                topLeft = androidx.compose.ui.geometry.Offset(area.rect.left * scaleX, area.rect.top * scaleY),
+                                                size = androidx.compose.ui.geometry.Size(area.rect.width * scaleX, area.rect.height * scaleY),
+                                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                                            )
+                                        } else {
+                                            // Highlight area that can be blurred again
+                                            val scaleX = size.width / itBmp.width
+                                            val scaleY = size.height / itBmp.height
+                                            drawRect(
+                                                color = Color(0xFF10B981).copy(alpha = 0.2f),
+                                                topLeft = androidx.compose.ui.geometry.Offset(area.rect.left * scaleX, area.rect.top * scaleY),
+                                                size = androidx.compose.ui.geometry.Size(area.rect.width * scaleX, area.rect.height * scaleY),
+                                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f))
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // STYLE SELECTOR
+                    Text("CHOOSE STYLE", fontWeight = FontWeight.Black, color = Color(0xFF64748B), fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 24.dp, bottom = 8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        stylePresets.forEach { style ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.clickable { 
+                                    selectedStyle = style
+                                    activeBitmap?.let { processedBitmap = ImageProcessor.applyStyle(it, style) }
+                                }
+                            ) {
+                                val isSelected = selectedStyle == style
+                                Box(
+                                    modifier = Modifier
+                                        .size(68.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(if (isSelected) Color(0xFF3B82F6) else Color.White)
+                                        .border(2.dp, if (isSelected) Color(0xFF3B82F6) else Color(0xFFE2E8F0), RoundedCornerShape(16.dp))
+                                        .padding(4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        style.first().toString(), 
+                                        fontWeight = FontWeight.Black, 
+                                        fontSize = 20.sp,
+                                        color = if (isSelected) Color.White else Color(0xFF1E293B)
+                                    )
+                                }
+                                Text(style, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, color = if (isSelected) Color(0xFF3B82F6) else Color.Gray, modifier = Modifier.padding(top = 6.dp))
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
                     
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
+                        // Main Bottom Actions
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Button(
-                                onClick = { state = "upload" }, 
-                                modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF43F5E))
-                            ) { Text("Start Over", fontWeight = FontWeight.Bold) }
-                            
-                            Button(
                                 onClick = { state = "edit" }, 
                                 modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))
-                            ) { Text("Edit (Draw)", fontWeight = FontWeight.Bold) }
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF3F4F6), contentColor = Color(0xFF475569))
+                            ) { Text("Edit", fontWeight = FontWeight.Bold) }
+                            
+                            Button(
+                                onClick = { processedBitmap?.let { shareBitmap(context, it) } }, 
+                                modifier = Modifier.weight(2f).height(56.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
+                            ) { Text("Share to Viral", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp) }
                         }
                         
                         Row(
@@ -378,16 +556,18 @@ fun SnapCleanApp() {
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Button(
-                                onClick = { processedBitmap?.let { shareBitmap(context, it) } }, 
-                                modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
-                            ) { Text("Share", fontWeight = FontWeight.Bold) }
-
-                            Button(
                                 onClick = { processedBitmap?.let { saveImageToGallery(context, it) } }, 
                                 modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
-                            ) { Text("Save to Gallery", fontWeight = FontWeight.Bold) }
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                            ) { Text("Save", fontWeight = FontWeight.Bold) }
+
+                            Button(
+                                onClick = { state = "upload" }, 
+                                modifier = Modifier.weight(1f).height(56.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = Color(0xFF94A3B8))
+                            ) { Text("Start Over", fontWeight = FontWeight.Medium) }
                         }
                     }
                 }
@@ -404,7 +584,7 @@ fun SnapCleanApp() {
                             baseBitmap = newBaseBmp
                             paths = newPaths
                             texts = newTexts
-                            processedBitmap = ImageProcessor.applyStyle(bakedBmp, bgColor)
+                            processedBitmap = ImageProcessor.applyStyle(bakedBmp, selectedStyle)
                             state = "preview"
                         },
                         onCancel = { state = "preview" }
