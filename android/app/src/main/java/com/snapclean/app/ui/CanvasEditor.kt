@@ -45,7 +45,9 @@ data class TextItem(val text: String, val offset: Offset, val color: Color = Col
 fun CanvasEditor(
     activeBitmap: Bitmap,
     originalBitmap: Bitmap,
-    onDone: (Bitmap) -> Unit,
+    initialPaths: List<DrawAction>,
+    initialTexts: List<TextItem>,
+    onDone: (Bitmap, Bitmap, List<DrawAction>, List<TextItem>) -> Unit,
     onCancel: () -> Unit
 ) {
     var mode by remember { mutableStateOf("draw") } // "draw" or "crop"
@@ -53,11 +55,11 @@ fun CanvasEditor(
     var refreshTick by remember { mutableIntStateOf(0) } // force compose layout refresh on drag
     
     // Draw state
-    var paths by remember { mutableStateOf(listOf<DrawAction>()) }
+    var paths by remember { mutableStateOf(initialPaths) }
     var currentPath by remember { mutableStateOf<Path?>(null) }
     
     // Text state
-    var texts by remember { mutableStateOf(listOf<TextItem>()) }
+    var texts by remember { mutableStateOf(initialTexts) }
     var showTextDialog by remember { mutableStateOf(false) }
     var currentTextContent by remember { mutableStateOf("") }
     var currentTextColor by remember { mutableStateOf(Color.White) }
@@ -233,13 +235,13 @@ fun CanvasEditor(
                             androidCanvas.drawText(textItem.text, textX, textY, textPaint)
                         }
                         
-                        onDone(finalBitmap)
+                        onDone(finalBitmap, activeBitmap, paths, texts)
                     } else {
-                        onDone(activeBitmap)
+                        onDone(activeBitmap, activeBitmap, paths, texts)
                     }
                 } else if (mode == "crop") {
                     if (cropRect == null) {
-                        onDone(originalBitmap)
+                        onDone(originalBitmap, originalBitmap, emptyList(), emptyList())
                         return@Button
                     }
                     val imgRatio = originalBitmap.width.toFloat() / originalBitmap.height
@@ -269,7 +271,7 @@ fun CanvasEditor(
                     val height = (endY - startY).coerceAtLeast(1)
                     
                     val finalBitmap = Bitmap.createBitmap(originalBitmap, startX, startY, width, height)
-                    onDone(finalBitmap)
+                    onDone(finalBitmap, finalBitmap, emptyList(), emptyList())
                 }
             }, colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)) {
                 Text("Done")
@@ -311,7 +313,7 @@ fun CanvasEditor(
             contentAlignment = Alignment.Center
         ) {
             val renderBmp = if (mode == "draw") activeBitmap else originalBitmap
-            val imgBitmap = renderBmp.asImageBitmap()
+            val imgBitmap = remember(renderBmp) { renderBmp.asImageBitmap() }
             
             var dragStart by remember { mutableStateOf(Offset.Zero) }
             

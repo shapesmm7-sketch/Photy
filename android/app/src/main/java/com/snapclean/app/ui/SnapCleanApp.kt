@@ -31,9 +31,12 @@ import com.snapclean.app.processor.ImageProcessor
 fun SnapCleanApp() {
     var state by remember { mutableStateOf("upload") } // upload, processing, preview, edit
     var originalBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Untouched
-    var activeBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Cropped & Drawn (raw)
+    var baseBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Cropped & Resized (no drawings)
+    var activeBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Baked with bindings
     var processedBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Styled with corners
     var bgColor by remember { mutableStateOf(android.graphics.Color.parseColor("#1a1a1a")) }
+    var paths by remember { mutableStateOf(emptyList<com.snapclean.app.ui.DrawAction>()) }
+    var texts by remember { mutableStateOf(emptyList<com.snapclean.app.ui.TextItem>()) }
     
     val bgColorsList = listOf(
         // Dark & Grayscale
@@ -107,7 +110,10 @@ fun SnapCleanApp() {
                 coroutineScope.launch {
                     delay(1000)
                     val cropped = ImageProcessor.autoCrop(softBitmap)
+                    baseBitmap = cropped
                     activeBitmap = cropped
+                    paths = emptyList()
+                    texts = emptyList()
                     processedBitmap = ImageProcessor.applyStyle(cropped, bgColor)
                     state = "preview"
                 }
@@ -231,13 +237,18 @@ fun SnapCleanApp() {
                 }
             }
             "edit" -> {
-                if (activeBitmap != null && originalBitmap != null) {
+                if (baseBitmap != null && originalBitmap != null) {
                     CanvasEditor(
-                        activeBitmap = activeBitmap!!,
+                        activeBitmap = baseBitmap!!,
                         originalBitmap = originalBitmap!!,
-                        onDone = { editedBmp -> 
-                            activeBitmap = editedBmp
-                            processedBitmap = ImageProcessor.applyStyle(editedBmp, bgColor)
+                        initialPaths = paths,
+                        initialTexts = texts,
+                        onDone = { bakedBmp, newBaseBmp, newPaths, newTexts -> 
+                            activeBitmap = bakedBmp
+                            baseBitmap = newBaseBmp
+                            paths = newPaths
+                            texts = newTexts
+                            processedBitmap = ImageProcessor.applyStyle(bakedBmp, bgColor)
                             state = "preview"
                         },
                         onCancel = { state = "preview" }
