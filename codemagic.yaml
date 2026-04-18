@@ -5,6 +5,7 @@ workflows:
     working_directory: android
     environment:
       java: 21
+      node: 22
       # Uncomment the following lines to use Android signing via Codemagic UI:
       # android_signing:
       #   - keystore_reference
