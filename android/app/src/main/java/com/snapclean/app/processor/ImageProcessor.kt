@@ -61,6 +61,7 @@ object ImageProcessor {
         
         // 1. Process Source (Blur/Mask)
         var baseImage = source
+        var isBaseImageACopy = false
         
         when (styleName) {
             "Money" -> {
@@ -69,6 +70,7 @@ object ImageProcessor {
                 if (moneyAreas.isNotEmpty()) {
                     val fullArea = listOf(SensitiveArea(androidx.compose.ui.geometry.Rect(0f, 0f, source.width.toFloat(), source.height.toFloat()), "BG", true))
                     baseImage = blurRegions(source, fullArea, 20f) // Blur entire BG
+                    isBaseImageACopy = true
                     
                     // Draw original sharp money areas back
                     val canvas = Canvas(baseImage)
@@ -100,6 +102,7 @@ object ImageProcessor {
                 val centerRect = RectF(w * 0.2f, h * 0.2f, w * 0.8f, h * 0.8f)
                 val bgBlur = listOf(SensitiveArea(androidx.compose.ui.geometry.Rect(0f, 0f, w, h), "BG", true))
                 baseImage = blurRegions(source, bgBlur, 40f)
+                isBaseImageACopy = true
                 
                 val canvas = Canvas(baseImage)
                 val rect = Rect(centerRect.left.toInt(), centerRect.top.toInt(), centerRect.right.toInt(), centerRect.bottom.toInt())
@@ -110,6 +113,7 @@ object ImageProcessor {
             else -> {
                 if (sensitiveAreas.any { it.isBlurred }) {
                     baseImage = blurRegions(source, sensitiveAreas.filter { it.isBlurred }, blurStrength)
+                    isBaseImageACopy = true
                 }
             }
         }
@@ -169,6 +173,11 @@ object ImageProcessor {
         canvas.clipPath(clipPath)
         canvas.drawBitmap(baseImage, null, destRect, paint)
         canvas.restore()
+        
+        // Final cleanup of intermediate copy
+        if (isBaseImageACopy) {
+            baseImage.recycle()
+        }
         
         // 4. Style-Specific Overlays
         when (styleName) {

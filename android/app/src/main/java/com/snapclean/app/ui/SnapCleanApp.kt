@@ -31,10 +31,12 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.snapclean.app.processor.ImageProcessor
+import com.snapclean.app.utils.BitmapUtils
 import com.snapclean.app.utils.SmartScanner
 
 data class SensitiveArea(
@@ -110,24 +113,23 @@ fun SnapCleanApp() {
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
             try {
-                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, it))
-                } else {
-                    MediaStore.Images.Media.getBitmap(context.contentResolver, it)
-                }
+                // Downsample image to avoid OOM for large photos
+                val sampledBitmap = BitmapUtils.decodeSampledBitmapFromUri(context, it, 1600, 1600)
                 
-                val softBitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
-                originalBitmap = softBitmap
-                state = "processing"
-                
-                coroutineScope.launch {
-                    delay(1000)
-                    val cropped = ImageProcessor.autoCrop(softBitmap)
-                    baseBitmap = cropped
-                    activeBitmap = cropped
-                    paths = emptyList()
-                    texts = emptyList()
-                    state = "preview"
+                sampledBitmap?.let { bitmap ->
+                    val softBitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+                    originalBitmap = softBitmap
+                    state = "processing"
+                    
+                    coroutineScope.launch {
+                        delay(500) // Shorter delay
+                        val cropped = ImageProcessor.autoCrop(softBitmap)
+                        baseBitmap = cropped
+                        activeBitmap = cropped
+                        paths = emptyList()
+                        texts = emptyList()
+                        state = "preview"
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -515,12 +517,16 @@ fun SnapCleanApp() {
                                         .then(
                                             if (config?.bgGradient != null) {
                                                 Modifier.background(
-                                                    androidx.compose.ui.graphics.Brush.linearGradient(
-                                                        config.bgGradient.map { Color(it) }
-                                                    )
+                                                    brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                                        colors = config.bgGradient.map { Color(it.toLong()) }
+                                                    ),
+                                                    shape = RoundedCornerShape(16.dp)
                                                 )
                                             } else {
-                                                Modifier.background(bgColor)
+                                                Modifier.background(
+                                                    color = bgColor,
+                                                    shape = RoundedCornerShape(16.dp)
+                                                )
                                             }
                                         )
                                         .border(

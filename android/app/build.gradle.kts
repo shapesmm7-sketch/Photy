@@ -41,5 +41,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("com.google.mlkit:text-recognition:16.0.0")
     implementation("com.google.mlkit:face-detection:16.1.5")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
