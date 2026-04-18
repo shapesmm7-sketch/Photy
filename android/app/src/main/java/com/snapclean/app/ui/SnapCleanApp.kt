@@ -363,14 +363,14 @@ fun SnapCleanApp() {
                             Button(
                                 onClick = { state = "upload" }, 
                                 modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                            ) { Text("Start Over") }
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF43F5E))
+                            ) { Text("Start Over", fontWeight = FontWeight.Bold) }
                             
                             Button(
                                 onClick = { state = "edit" }, 
                                 modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                            ) { Text("Edit (Draw)") }
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6))
+                            ) { Text("Edit (Draw)", fontWeight = FontWeight.Bold) }
                         }
                         
                         Row(
@@ -380,14 +380,14 @@ fun SnapCleanApp() {
                             Button(
                                 onClick = { processedBitmap?.let { shareBitmap(context, it) } }, 
                                 modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                            ) { Text("Share") }
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                            ) { Text("Share", fontWeight = FontWeight.Bold) }
 
                             Button(
                                 onClick = { processedBitmap?.let { saveImageToGallery(context, it) } }, 
                                 modifier = Modifier.weight(1f).height(56.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
-                            ) { Text("Save to Gallery") }
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
+                            ) { Text("Save to Gallery", fontWeight = FontWeight.Bold) }
                         }
                     }
                 }
