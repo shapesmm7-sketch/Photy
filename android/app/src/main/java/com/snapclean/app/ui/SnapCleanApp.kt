@@ -36,13 +36,56 @@ fun SnapCleanApp() {
     var bgColor by remember { mutableStateOf(android.graphics.Color.parseColor("#1a1a1a")) }
     
     val bgColorsList = listOf(
-        android.graphics.Color.parseColor("#1A1A1A"), // Dark
+        // Dark & Grayscale
+        android.graphics.Color.parseColor("#1A1A1A"), // Off Black
+        android.graphics.Color.parseColor("#000000"), // Pure Black
+        android.graphics.Color.parseColor("#374151"), // Dark Gray
+        android.graphics.Color.parseColor("#9CA3AF"), // Medium Gray
+        android.graphics.Color.parseColor("#E5E7EB"), // Light Gray
         android.graphics.Color.parseColor("#FFFFFF"), // White
+        
+        // Blues & Cyans
+        android.graphics.Color.parseColor("#0ea5e9"), // Sky Blue
         android.graphics.Color.parseColor("#3B82F6"), // Blue
-        android.graphics.Color.parseColor("#10B981"), // Green
+        android.graphics.Color.parseColor("#2563EB"), // Royal Blue
+        android.graphics.Color.parseColor("#1D4ED8"), // Deep Blue
+        android.graphics.Color.parseColor("#172554"), // Navy
+        android.graphics.Color.parseColor("#06B6D4"), // Cyan
+        android.graphics.Color.parseColor("#0891B2"), // Deep Cyan
+        
+        // Greens & Teals
+        android.graphics.Color.parseColor("#10B981"), // Emerald Green
+        android.graphics.Color.parseColor("#059669"), // Dark Emerald
+        android.graphics.Color.parseColor("#22c55e"), // Green
+        android.graphics.Color.parseColor("#16a34a"), // Dark Green
+        android.graphics.Color.parseColor("#14B8A6"), // Teal
+        android.graphics.Color.parseColor("#0f766e"), // Dark Teal
+        android.graphics.Color.parseColor("#84cc16"), // Lime
+        
+        // Yellows & Oranges
+        android.graphics.Color.parseColor("#F59E0B"), // Amber
+        android.graphics.Color.parseColor("#D97706"), // Dark Amber
+        android.graphics.Color.parseColor("#eab308"), // Yellow
+        android.graphics.Color.parseColor("#ca8a04"), // Dark Yellow
+        android.graphics.Color.parseColor("#f97316"), // Orange
+        android.graphics.Color.parseColor("#ea580c"), // Dark Orange
+        
+        // Reds, Pinks, & Rose
         android.graphics.Color.parseColor("#EF4444"), // Red
-        android.graphics.Color.parseColor("#F59E0B"), // Yellow
-        android.graphics.Color.parseColor("#8B5CF6")  // Purple
+        android.graphics.Color.parseColor("#DC2626"), // Crimson
+        android.graphics.Color.parseColor("#991b1b"), // Dark Red
+        android.graphics.Color.parseColor("#ec4899"), // Pink
+        android.graphics.Color.parseColor("#db2777"), // Dark Pink
+        android.graphics.Color.parseColor("#f43f5e"), // Rose
+        android.graphics.Color.parseColor("#be123c"), // Dark Rose
+        
+        // Purples & Indigos
+        android.graphics.Color.parseColor("#8B5CF6"), // Violet
+        android.graphics.Color.parseColor("#7C3AED"), // Deep Violet
+        android.graphics.Color.parseColor("#d946ef"), // Fuchsia
+        android.graphics.Color.parseColor("#a21caf"), // Deep Fuchsia
+        android.graphics.Color.parseColor("#6366f1"), // Indigo
+        android.graphics.Color.parseColor("#4338ca")  // Deep Indigo
     )
 
     val context = LocalContext.current
