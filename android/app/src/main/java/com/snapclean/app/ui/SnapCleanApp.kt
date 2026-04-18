@@ -140,7 +140,7 @@ fun SnapCleanApp() {
                             )
                         )
                         .verticalScroll(rememberScrollState())
-                        .padding(vertical = 48.dp),
+                        .padding(vertical = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Card(
@@ -154,38 +154,38 @@ fun SnapCleanApp() {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
-                            modifier = Modifier.padding(32.dp).fillMaxWidth()
+                            modifier = Modifier.padding(20.dp).fillMaxWidth()
                         ) {
                             // Artistic Hero Icon
-                            Box(modifier = Modifier.size(80.dp), contentAlignment = Alignment.Center) {
-                                Box(modifier = Modifier.size(56.dp).rotate(-12f).background(Color(0xFFE2E8F0), RoundedCornerShape(12.dp)))
-                                Box(modifier = Modifier.size(56.dp).rotate(8f).background(Color(0x33FF3366), RoundedCornerShape(12.dp)))
-                                Box(modifier = Modifier.size(56.dp).background(Color(0xFF1E293B), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                                    Text("✨", fontSize = 24.sp)
+                            Box(modifier = Modifier.size(60.dp), contentAlignment = Alignment.Center) {
+                                Box(modifier = Modifier.size(42.dp).rotate(-12f).background(Color(0xFFE2E8F0), RoundedCornerShape(10.dp)))
+                                Box(modifier = Modifier.size(42.dp).rotate(8f).background(Color(0x33FF3366), RoundedCornerShape(10.dp)))
+                                Box(modifier = Modifier.size(42.dp).background(Color(0xFF1E293B), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+                                    Text("✨", fontSize = 18.sp)
                                 }
                             }
                             
-                            Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             
                             Text(
                                 "Snap Clean", 
                                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
                                 color = Color(0xFF0F172A)
                             )
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 "Auto-crop, enhance, and beautify your screenshot or photo in milliseconds.", 
                                 color = Color(0xFF64748B),
                                 textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodySmall
                             )
-                            Spacer(modifier = Modifier.height(36.dp))
+                            Spacer(modifier = Modifier.height(24.dp))
                             
                             // Interactive Upload Zone
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(180.dp)
+                                    .height(130.dp)
                                     .clickable { launcher.launch("image/*") }
                                     .background(Color(0xFFF8FAFC), RoundedCornerShape(16.dp)),
                                 contentAlignment = Alignment.Center
@@ -202,28 +202,28 @@ fun SnapCleanApp() {
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Box(
-                                        modifier = Modifier.size(56.dp).background(Color(0xFFEFF6FF), CircleShape),
+                                        modifier = Modifier.size(44.dp).background(Color(0xFFEFF6FF), CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text("📸", fontSize = 24.sp)
+                                        Text("📸", fontSize = 18.sp)
                                     }
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Tap to Select Image", fontWeight = FontWeight.Bold, color = Color(0xFF334155))
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("PNG, JPG, WEBP", fontSize = 12.sp, color = Color(0xFF94A3B8))
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Text("Tap to Select Image", fontWeight = FontWeight.Bold, color = Color(0xFF334155), fontSize = 14.sp)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text("PNG, JPG, WEBP", fontSize = 11.sp, color = Color(0xFF94A3B8))
                                 }
                             }
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(48.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
                     
                     Text(
                         "How it works",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = Color(0xFF475569)
                     )
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -234,47 +234,47 @@ fun SnapCleanApp() {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(
                                 modifier = Modifier
-                                    .width(100.dp)
-                                    .height(180.dp)
+                                    .width(76.dp)
+                                    .height(140.dp)
                                     .background(Color.DarkGray, RoundedCornerShape(8.dp))
                                     .border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp))
                             ) {
                                 // Fake Status Bar
-                                Box(modifier = Modifier.fillMaxWidth().height(14.dp).background(Color.Black, RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)))
+                                Box(modifier = Modifier.fillMaxWidth().height(10.dp).background(Color.Black, RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)))
                                 // Fake App Bar
-                                Box(modifier = Modifier.fillMaxWidth().height(24.dp).offset(y = 14.dp).background(Color(0xFF1E293B)))
+                                Box(modifier = Modifier.fillMaxWidth().height(18.dp).offset(y = 10.dp).background(Color(0xFF1E293B)))
                                 // Unusable space
-                                Box(modifier = Modifier.fillMaxWidth().height(32.dp).offset(y = 38.dp).background(Color(0xFF334155)))
+                                Box(modifier = Modifier.fillMaxWidth().height(26.dp).offset(y = 28.dp).background(Color(0xFF334155)))
                                 // Content that user actually wants
                                 Box(
                                     modifier = Modifier
-                                        .padding(top = 70.dp, bottom = 40.dp, start = 8.dp, end = 8.dp)
+                                        .padding(top = 54.dp, bottom = 30.dp, start = 6.dp, end = 6.dp)
                                         .fillMaxSize()
                                         .background(Color.White, RoundedCornerShape(6.dp))
                                 ) {
-                                    Column(modifier = Modifier.padding(6.dp)) {
-                                        Box(modifier = Modifier.size(20.dp).background(Color(0xFFCBD5E1), CircleShape))
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(Color(0xFFE2E8F0)))
-                                        Spacer(modifier = Modifier.height(3.dp))
-                                        Box(modifier = Modifier.fillMaxWidth(0.6f).height(4.dp).background(Color(0xFFE2E8F0)))
+                                    Column(modifier = Modifier.padding(4.dp)) {
+                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFFCBD5E1), CircleShape))
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Box(modifier = Modifier.fillMaxWidth().height(3.dp).background(Color(0xFFE2E8F0)))
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Box(modifier = Modifier.fillMaxWidth(0.6f).height(3.dp).background(Color(0xFFE2E8F0)))
                                     }
                                 }
                                 // Fake Nav Bar / Ad
-                                Box(modifier = Modifier.fillMaxWidth().height(24.dp).align(Alignment.BottomCenter).background(Color.Black, RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)))
+                                Box(modifier = Modifier.fillMaxWidth().height(18.dp).align(Alignment.BottomCenter).background(Color.Black, RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)))
                             }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("Before", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Before", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = 12.sp)
                         }
                         
-                        Text("➔", fontSize = 24.sp, color = Color(0xFF94A3B8))
+                        Text("➔", fontSize = 20.sp, color = Color(0xFF94A3B8))
                         
                         // After (Cleaned and Beautified)
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(
                                 modifier = Modifier
-                                    .width(140.dp)
-                                    .height(140.dp)
+                                    .width(110.dp)
+                                    .height(110.dp)
                                     .background(
                                         androidx.compose.ui.graphics.Brush.linearGradient(
                                             colors = listOf(Color(0xFF3B82F6), Color(0xFF8B5CF6))
@@ -286,22 +286,22 @@ fun SnapCleanApp() {
                             ) {
                                 // Content perfectly cropped, scaled, and beautified
                                 Card(
-                                    modifier = Modifier.width(100.dp).height(90.dp),
+                                    modifier = Modifier.width(76.dp).height(68.dp),
                                     shape = RoundedCornerShape(8.dp),
                                     colors = CardDefaults.cardColors(containerColor = Color.White),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                                 ) {
-                                    Column(modifier = Modifier.padding(10.dp)) {
-                                        Box(modifier = Modifier.size(24.dp).background(Color(0xFFCBD5E1), CircleShape))
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Box(modifier = Modifier.fillMaxWidth().height(6.dp).background(Color(0xFFE2E8F0)))
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Box(modifier = Modifier.fillMaxWidth(0.6f).height(6.dp).background(Color(0xFFE2E8F0)))
+                                    Column(modifier = Modifier.padding(6.dp)) {
+                                        Box(modifier = Modifier.size(18.dp).background(Color(0xFFCBD5E1), CircleShape))
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(Color(0xFFE2E8F0)))
+                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Box(modifier = Modifier.fillMaxWidth(0.6f).height(4.dp).background(Color(0xFFE2E8F0)))
                                     }
                                 }
                             }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text("After", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("After", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = 12.sp)
                         }
                     }
                 }
