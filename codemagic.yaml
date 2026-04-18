@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 60
     working_directory: android
     environment:
-      java: 17
+      java: 21
       # Uncomment the following lines to use Android signing via Codemagic UI:
       # android_signing:
       #   - keystore_reference
