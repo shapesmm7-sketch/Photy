@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
@@ -19,11 +20,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.snapclean.app.processor.ImageProcessor
@@ -154,10 +158,10 @@ fun SnapCleanApp() {
                         ) {
                             // Artistic Hero Icon
                             Box(modifier = Modifier.size(80.dp), contentAlignment = Alignment.Center) {
-                                Box(modifier = Modifier.size(56.dp).androidx.compose.ui.draw.rotate(-12f).background(Color(0xFFE2E8F0), RoundedCornerShape(12.dp)))
-                                Box(modifier = Modifier.size(56.dp).androidx.compose.ui.draw.rotate(8f).background(Color(0x33FF3366), RoundedCornerShape(12.dp)))
+                                Box(modifier = Modifier.size(56.dp).rotate(-12f).background(Color(0xFFE2E8F0), RoundedCornerShape(12.dp)))
+                                Box(modifier = Modifier.size(56.dp).rotate(8f).background(Color(0x33FF3366), RoundedCornerShape(12.dp)))
                                 Box(modifier = Modifier.size(56.dp).background(Color(0xFF1E293B), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                                    Text("✨", fontSize = androidx.compose.ui.unit.sp(24))
+                                    Text("✨", fontSize = 24.sp)
                                 }
                             }
                             
@@ -172,7 +176,7 @@ fun SnapCleanApp() {
                             Text(
                                 "Auto-crop, enhance, and beautify your screenshot or photo in milliseconds.", 
                                 color = Color(0xFF64748B),
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                textAlign = TextAlign.Center,
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Spacer(modifier = Modifier.height(36.dp))
@@ -201,12 +205,12 @@ fun SnapCleanApp() {
                                         modifier = Modifier.size(56.dp).background(Color(0xFFEFF6FF), CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text("📸", fontSize = androidx.compose.ui.unit.sp(24))
+                                        Text("📸", fontSize = 24.sp)
                                     }
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text("Tap to Select Image", fontWeight = FontWeight.Bold, color = Color(0xFF334155))
                                     Spacer(modifier = Modifier.height(4.dp))
-                                    Text("PNG, JPG, WEBP", fontSize = androidx.compose.ui.unit.sp(12), color = Color(0xFF94A3B8))
+                                    Text("PNG, JPG, WEBP", fontSize = 12.sp, color = Color(0xFF94A3B8))
                                 }
                             }
                         }
@@ -260,10 +264,10 @@ fun SnapCleanApp() {
                                 Box(modifier = Modifier.fillMaxWidth().height(24.dp).align(Alignment.BottomCenter).background(Color.Black, RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)))
                             }
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("Before", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = androidx.compose.ui.unit.sp(14))
+                            Text("Before", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = 14.sp)
                         }
                         
-                        Text("➔", fontSize = androidx.compose.ui.unit.sp(24), color = Color(0xFF94A3B8))
+                        Text("➔", fontSize = 24.sp, color = Color(0xFF94A3B8))
                         
                         // After (Cleaned and Beautified)
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -297,7 +301,7 @@ fun SnapCleanApp() {
                                 }
                             }
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("After", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = androidx.compose.ui.unit.sp(14))
+                            Text("After", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = 14.sp)
                         }
                     }
                 }
