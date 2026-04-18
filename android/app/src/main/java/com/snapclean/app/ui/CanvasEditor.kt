@@ -27,16 +27,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
-data class DrawAction(val path: Path, val tool: String) // "PEN", "RUBBER"
-data class TextItem(val text: String, val offset: Offset, val color: Color = Color.White, val fontSize: Float = 32f)
+data class DrawAction(val path: Path, val tool: String, val color: Color)
+data class TextItem(val text: String, val offset: Offset, val color: Color = Color.White, val fontSize: Float = 32f, val fontName: String = "Default")
 
 @Composable
 fun CanvasEditor(
@@ -59,8 +62,24 @@ fun CanvasEditor(
     var currentTextContent by remember { mutableStateOf("") }
     var currentTextColor by remember { mutableStateOf(Color.White) }
     var currentTextSize by remember { mutableFloatStateOf(32f) }
+    var currentTextFont by remember { mutableStateOf("Default") }
     var editingTextIndex by remember { mutableIntStateOf(-1) }
-    val textColors = listOf(Color.White, Color.Black, Color.Red, Color.Blue, Color.Green, Color.Yellow, Color.Magenta, Color.Cyan)
+    var rubberColor by remember { mutableStateOf(Color.Black) }
+    var penColor by remember { mutableStateOf(Color(0xFFFF3366)) }
+    val textColors = listOf(
+        Color.White, Color.LightGray, Color.Gray, Color.DarkGray, Color.Black,
+        Color(0xFFFF3366), // Signature pink
+        Color.Red, Color(0xFFE53935), Color(0xFFB71C1C), // Reds
+        Color(0xFFFF9800), Color(0xFFF57C00), Color(0xFFE65100), // Oranges
+        Color.Yellow, Color(0xFFFFEB3B), Color(0xFFFBC02D), // Yellows
+        Color.Green, Color(0xFF4CAF50), Color(0xFF388E3C), Color(0xFF1B5E20), // Greens
+        Color.Cyan, Color(0xFF00BCD4), Color(0xFF0097A7), // Cyans
+        Color.Blue, Color(0xFF2196F3), Color(0xFF1976D2), Color(0xFF0D47A1), // Blues
+        Color.Magenta, Color(0xFF9C27B0), Color(0xFF7B1FA2), Color(0xFF4A148C), // Purples
+        Color(0xFFE91E63), Color(0xFFC2185B), // Pinks
+        Color(0xFF795548), Color(0xFF5D4037) // Browns
+    )
+    val fontNames = listOf("Default", "Serif", "SansSerif", "Monospace", "Cursive")
     val localDensity = LocalDensity.current.density
     
     // Crop state
@@ -81,7 +100,13 @@ fun CanvasEditor(
             }
             
             if (mode == "draw") {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Button(
                         onClick = { drawTool = if (drawTool == "PEN") "NONE" else "PEN" }, 
                         colors = ButtonDefaults.buttonColors(containerColor = if (drawTool == "PEN") Color.Blue else Color.DarkGray),
@@ -103,6 +128,7 @@ fun CanvasEditor(
                             currentTextContent = ""
                             currentTextColor = Color.White
                             currentTextSize = 32f
+                            currentTextFont = "Default"
                             editingTextIndex = -1
                             showTextDialog = true 
                         }, 
@@ -130,8 +156,10 @@ fun CanvasEditor(
                     }
                 }
             } else {
-                Button(onClick = { cropRect = null }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
-                    Text("Reset")
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Button(onClick = { cropRect = null }, colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)) {
+                        Text("Reset Crop")
+                    }
                 }
             }
 
@@ -167,7 +195,7 @@ fun CanvasEditor(
                         matrix.postScale(scale, scale)
                         
                         val allPaths = paths.toMutableList()
-                        currentPath?.let { allPaths.add(DrawAction(it, drawTool)) }
+                        currentPath?.let { allPaths.add(DrawAction(it, drawTool, if (drawTool == "RUBBER") rubberColor else penColor)) }
                         
                         allPaths.forEach { drawAct ->
                             val androidPath = android.graphics.Path(drawAct.path.asAndroidPath())
@@ -178,13 +206,8 @@ fun CanvasEditor(
                                 strokeCap = android.graphics.Paint.Cap.ROUND
                                 strokeJoin = android.graphics.Paint.Join.ROUND
                                 isAntiAlias = true
-                                if (drawAct.tool == "RUBBER") {
-                                    color = android.graphics.Color.BLACK
-                                    strokeWidth = 40f * scale
-                                } else {
-                                    color = android.graphics.Color.parseColor("#FF3366")
-                                    strokeWidth = 15f * scale
-                                }
+                                color = drawAct.color.toArgb()
+                                strokeWidth = if (drawAct.tool == "RUBBER") 40f * scale else 15f * scale
                             }
                             
                             androidCanvas.drawPath(androidPath, paint)
@@ -196,7 +219,13 @@ fun CanvasEditor(
                                 color = textItem.color.toArgb()
                                 textSize = textPxSize * scale
                                 isAntiAlias = true
-                                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                                typeface = when (textItem.fontName) {
+                                    "Serif" -> android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
+                                    "SansSerif" -> android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD)
+                                    "Monospace" -> android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD)
+                                    "Cursive" -> android.graphics.Typeface.create("cursive", android.graphics.Typeface.BOLD)
+                                    else -> android.graphics.Typeface.DEFAULT_BOLD
+                                }
                             }
                             val textX = (textItem.offset.x - offsetX) * scale
                             val textY = (textItem.offset.y - offsetY) * scale - textPaint.ascent()
@@ -244,6 +273,31 @@ fun CanvasEditor(
                 }
             }, colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)) {
                 Text("Done")
+            }
+        }
+        
+        if (mode == "draw" && (drawTool == "PEN" || drawTool == "RUBBER")) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items(textColors) { color ->
+                    val isSelected = if (drawTool == "RUBBER") rubberColor == color else penColor == color
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(color, CircleShape)
+                            .border(
+                                width = if (isSelected) 3.dp else 1.dp,
+                                color = if (isSelected) Color.Gray else Color.DarkGray,
+                                shape = CircleShape
+                            )
+                            .clickable {
+                                if (drawTool == "RUBBER") rubberColor = color else penColor = color
+                            }
+                    )
+                }
             }
         }
         
@@ -344,7 +398,7 @@ fun CanvasEditor(
                     },
                     onDragEnd = {
                         if (mode == "draw" && drawTool != "NONE") {
-                            currentPath?.let { paths = paths + DrawAction(it, drawTool) }
+                            currentPath?.let { paths = paths + DrawAction(it, drawTool, if (drawTool == "RUBBER") rubberColor else penColor) }
                             currentPath = null
                         }
                         cropDragTarget = "NONE"
@@ -379,14 +433,13 @@ fun CanvasEditor(
                 // Draw manual paths
                 if (mode == "draw") {
                     paths.forEach { drawAct ->
-                        val color = if (drawAct.tool == "RUBBER") Color.Black else Color(0xFFFF3366)
                         val thick = if (drawAct.tool == "RUBBER") 40f else 15f
-                        drawPath(path = drawAct.path, color = color, style = Stroke(width = thick, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                        drawPath(path = drawAct.path, color = drawAct.color, style = Stroke(width = thick, cap = StrokeCap.Round, join = StrokeJoin.Round))
                     }
                     currentPath?.let { path ->
-                        val color = if (drawTool == "RUBBER") Color.Black else Color(0xFFFF3366)
+                        val c = if (drawTool == "RUBBER") rubberColor else penColor
                         val thick = if (drawTool == "RUBBER") 40f else 15f
-                        drawPath(path = path, color = color, style = Stroke(width = thick, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                        drawPath(path = path, color = c, style = Stroke(width = thick, cap = StrokeCap.Round, join = StrokeJoin.Round))
                     }
                 } else if (mode == "crop" && cropRect != null) {
                     val cr = cropRect!!
@@ -427,6 +480,13 @@ fun CanvasEditor(
                         color = textItem.color,
                         fontSize = textItem.fontSize.sp,
                         fontWeight = FontWeight.Bold,
+                        fontFamily = when (textItem.fontName) {
+                            "Serif" -> FontFamily.Serif
+                            "SansSerif" -> FontFamily.SansSerif
+                            "Monospace" -> FontFamily.Monospace
+                            "Cursive" -> FontFamily.Cursive
+                            else -> FontFamily.Default
+                        },
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .offset { IntOffset(textItem.offset.x.toInt(), textItem.offset.y.toInt()) }
@@ -436,6 +496,7 @@ fun CanvasEditor(
                                         currentTextContent = textItem.text
                                         currentTextColor = textItem.color
                                         currentTextSize = textItem.fontSize
+                                        currentTextFont = textItem.fontName
                                         editingTextIndex = index
                                         showTextDialog = true
                                     }
@@ -477,6 +538,19 @@ fun CanvasEditor(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(fontNames) { font ->
+                                Button(
+                                    onClick = { currentTextFont = font },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (currentTextFont == font) Color.Blue else Color.DarkGray
+                                    )
+                                ) {
+                                    Text(font)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(textColors) { color ->
                                 Box(
                                     modifier = Modifier
@@ -498,12 +572,12 @@ fun CanvasEditor(
                         if (currentTextContent.isNotBlank()) {
                             if (editingTextIndex >= 0) {
                                 val newTexts = texts.toMutableList()
-                                newTexts[editingTextIndex] = newTexts[editingTextIndex].copy(text = currentTextContent, color = currentTextColor, fontSize = currentTextSize)
+                                newTexts[editingTextIndex] = newTexts[editingTextIndex].copy(text = currentTextContent, color = currentTextColor, fontSize = currentTextSize, fontName = currentTextFont)
                                 texts = newTexts
                             } else {
                                 val centerX = if (boxSize.width > 0) boxSize.width / 2f - 50f else 100f
                                 val centerY = if (boxSize.height > 0) boxSize.height / 2f else 100f
-                                texts = texts + TextItem(currentTextContent, Offset(centerX, centerY), currentTextColor, currentTextSize)
+                                texts = texts + TextItem(currentTextContent, Offset(centerX, centerY), currentTextColor, currentTextSize, currentTextFont)
                             }
                         } else if (editingTextIndex >= 0) {
                             val newTexts = texts.toMutableList()
