@@ -10,6 +10,10 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,9 +30,21 @@ import com.snapclean.app.processor.ImageProcessor
 @Composable
 fun SnapCleanApp() {
     var state by remember { mutableStateOf("upload") } // upload, processing, preview, edit
-    var originalBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var processedBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var originalBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Untouched
+    var activeBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Cropped & Drawn (raw)
+    var processedBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Styled with corners
+    var bgColor by remember { mutableStateOf(android.graphics.Color.parseColor("#1a1a1a")) }
     
+    val bgColorsList = listOf(
+        android.graphics.Color.parseColor("#1A1A1A"), // Dark
+        android.graphics.Color.parseColor("#FFFFFF"), // White
+        android.graphics.Color.parseColor("#3B82F6"), // Blue
+        android.graphics.Color.parseColor("#10B981"), // Green
+        android.graphics.Color.parseColor("#EF4444"), // Red
+        android.graphics.Color.parseColor("#F59E0B"), // Yellow
+        android.graphics.Color.parseColor("#8B5CF6")  // Purple
+    )
+
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     
@@ -47,7 +63,9 @@ fun SnapCleanApp() {
                 
                 coroutineScope.launch {
                     delay(1000)
-                    processedBitmap = ImageProcessor.autoProcess(softBitmap)
+                    val cropped = ImageProcessor.autoCrop(softBitmap)
+                    activeBitmap = cropped
+                    processedBitmap = ImageProcessor.applyStyle(cropped, bgColor)
                     state = "preview"
                 }
             } catch (e: Exception) {
@@ -106,6 +124,29 @@ fun SnapCleanApp() {
                         )
                     }
                     
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 24.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        bgColorsList.forEach { colorInt ->
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .padding(4.dp)
+                                    .background(Color(colorInt), CircleShape)
+                                    .clickable {
+                                        bgColor = colorInt
+                                        activeBitmap?.let { bmp ->
+                                            processedBitmap = ImageProcessor.applyStyle(bmp, colorInt)
+                                        }
+                                    }
+                            )
+                        }
+                    }
+                    
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -147,11 +188,13 @@ fun SnapCleanApp() {
                 }
             }
             "edit" -> {
-                processedBitmap?.let { bmp ->
+                if (activeBitmap != null && originalBitmap != null) {
                     CanvasEditor(
-                        bitmap = bmp,
+                        activeBitmap = activeBitmap!!,
+                        originalBitmap = originalBitmap!!,
                         onDone = { editedBmp -> 
-                            processedBitmap = editedBmp
+                            activeBitmap = editedBmp
+                            processedBitmap = ImageProcessor.applyStyle(editedBmp, bgColor)
                             state = "preview"
                         },
                         onCancel = { state = "preview" }
