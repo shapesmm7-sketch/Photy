@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.*
@@ -127,26 +128,177 @@ fun SnapCleanApp() {
         when (state) {
             "upload" -> {
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                colors = listOf(Color(0xFFF8FAFC), Color(0xFFE2E8F0))
+                            )
+                        )
+                        .verticalScroll(rememberScrollState())
+                        .padding(vertical = 48.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        "Snap Clean", 
-                        style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold),
-                        color = Color.Black
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Auto-crop, enhance, and beautify your screenshot.", color = Color.Gray)
-                    Spacer(modifier = Modifier.height(32.dp))
-                    
-                    Button(
-                        onClick = { launcher.launch("image/*") },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().height(56.dp)
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        shape = RoundedCornerShape(28.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
                     ) {
-                        Text("Select Image")
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(32.dp).fillMaxWidth()
+                        ) {
+                            // Artistic Hero Icon
+                            Box(modifier = Modifier.size(80.dp), contentAlignment = Alignment.Center) {
+                                Box(modifier = Modifier.size(56.dp).androidx.compose.ui.draw.rotate(-12f).background(Color(0xFFE2E8F0), RoundedCornerShape(12.dp)))
+                                Box(modifier = Modifier.size(56.dp).androidx.compose.ui.draw.rotate(8f).background(Color(0x33FF3366), RoundedCornerShape(12.dp)))
+                                Box(modifier = Modifier.size(56.dp).background(Color(0xFF1E293B), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                                    Text("✨", fontSize = androidx.compose.ui.unit.sp(24))
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(24.dp))
+                            
+                            Text(
+                                "Snap Clean", 
+                                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                color = Color(0xFF0F172A)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Auto-crop, enhance, and beautify your screenshot or photo in milliseconds.", 
+                                color = Color(0xFF64748B),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(modifier = Modifier.height(36.dp))
+                            
+                            // Interactive Upload Zone
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                                    .clickable { launcher.launch("image/*") }
+                                    .background(Color(0xFFF8FAFC), RoundedCornerShape(16.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                                    drawRoundRect(
+                                        color = Color(0xFFCBD5E1),
+                                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                                            width = 6f,
+                                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f)
+                                        ),
+                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(16.dp.toPx())
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(
+                                        modifier = Modifier.size(56.dp).background(Color(0xFFEFF6FF), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("📸", fontSize = androidx.compose.ui.unit.sp(24))
+                                    }
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Tap to Select Image", fontWeight = FontWeight.Bold, color = Color(0xFF334155))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("PNG, JPG, WEBP", fontSize = androidx.compose.ui.unit.sp(12), color = Color(0xFF94A3B8))
+                                }
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(48.dp))
+                    
+                    Text(
+                        "How it works",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = Color(0xFF475569)
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Before (Messy Screenshot)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(
+                                modifier = Modifier
+                                    .width(100.dp)
+                                    .height(180.dp)
+                                    .background(Color.DarkGray, RoundedCornerShape(8.dp))
+                                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp))
+                            ) {
+                                // Fake Status Bar
+                                Box(modifier = Modifier.fillMaxWidth().height(14.dp).background(Color.Black, RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)))
+                                // Fake App Bar
+                                Box(modifier = Modifier.fillMaxWidth().height(24.dp).offset(y = 14.dp).background(Color(0xFF1E293B)))
+                                // Unusable space
+                                Box(modifier = Modifier.fillMaxWidth().height(32.dp).offset(y = 38.dp).background(Color(0xFF334155)))
+                                // Content that user actually wants
+                                Box(
+                                    modifier = Modifier
+                                        .padding(top = 70.dp, bottom = 40.dp, start = 8.dp, end = 8.dp)
+                                        .fillMaxSize()
+                                        .background(Color.White, RoundedCornerShape(6.dp))
+                                ) {
+                                    Column(modifier = Modifier.padding(6.dp)) {
+                                        Box(modifier = Modifier.size(20.dp).background(Color(0xFFCBD5E1), CircleShape))
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(Color(0xFFE2E8F0)))
+                                        Spacer(modifier = Modifier.height(3.dp))
+                                        Box(modifier = Modifier.fillMaxWidth(0.6f).height(4.dp).background(Color(0xFFE2E8F0)))
+                                    }
+                                }
+                                // Fake Nav Bar / Ad
+                                Box(modifier = Modifier.fillMaxWidth().height(24.dp).align(Alignment.BottomCenter).background(Color.Black, RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)))
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("Before", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = androidx.compose.ui.unit.sp(14))
+                        }
+                        
+                        Text("➔", fontSize = androidx.compose.ui.unit.sp(24), color = Color(0xFF94A3B8))
+                        
+                        // After (Cleaned and Beautified)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(
+                                modifier = Modifier
+                                    .width(140.dp)
+                                    .height(140.dp)
+                                    .background(
+                                        androidx.compose.ui.graphics.Brush.linearGradient(
+                                            colors = listOf(Color(0xFF3B82F6), Color(0xFF8B5CF6))
+                                        ),
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // Content perfectly cropped, scaled, and beautified
+                                Card(
+                                    modifier = Modifier.width(100.dp).height(90.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Box(modifier = Modifier.size(24.dp).background(Color(0xFFCBD5E1), CircleShape))
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Box(modifier = Modifier.fillMaxWidth().height(6.dp).background(Color(0xFFE2E8F0)))
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Box(modifier = Modifier.fillMaxWidth(0.6f).height(6.dp).background(Color(0xFFE2E8F0)))
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("After", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = androidx.compose.ui.unit.sp(14))
+                        }
                     }
                 }
             }

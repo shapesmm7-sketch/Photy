@@ -95,7 +95,7 @@ export default function App() {
             <div>
               <h1 className="text-2xl font-semibold mb-2">Snap Clean</h1>
               <p className="text-gray-500 text-sm">
-                Auto-crop, enhance, and beautify your Android screenshots instantly.
+                Auto-crop, enhance, and beautify your screenshots or photos instantly.
               </p>
             </div>
             
