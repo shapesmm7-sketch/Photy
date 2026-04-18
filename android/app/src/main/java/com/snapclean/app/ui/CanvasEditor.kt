@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
 data class DrawAction(val path: Path, val tool: String) // "PEN", "RUBBER"
-data class TextItem(val text: String, val offset: Offset, val color: Color = Color.White)
+data class TextItem(val text: String, val offset: Offset, val color: Color = Color.White, val fontSize: Float = 32f)
 
 @Composable
 fun CanvasEditor(
@@ -58,6 +58,7 @@ fun CanvasEditor(
     var showTextDialog by remember { mutableStateOf(false) }
     var currentTextContent by remember { mutableStateOf("") }
     var currentTextColor by remember { mutableStateOf(Color.White) }
+    var currentTextSize by remember { mutableFloatStateOf(32f) }
     var editingTextIndex by remember { mutableIntStateOf(-1) }
     val textColors = listOf(Color.White, Color.Black, Color.Red, Color.Blue, Color.Green, Color.Yellow, Color.Magenta, Color.Cyan)
     val localDensity = LocalDensity.current.density
@@ -101,6 +102,7 @@ fun CanvasEditor(
                         onClick = { 
                             currentTextContent = ""
                             currentTextColor = Color.White
+                            currentTextSize = 32f
                             editingTextIndex = -1
                             showTextDialog = true 
                         }, 
@@ -109,6 +111,14 @@ fun CanvasEditor(
                         modifier = Modifier.width(48.dp)
                     ) {
                         Text("🔤")
+                    }
+                    Button(
+                        onClick = { if (paths.isNotEmpty()) paths = paths.dropLast(1) }, 
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.width(48.dp)
+                    ) {
+                        Text("↩️")
                     }
                     Button(
                         onClick = { paths = emptyList(); texts = emptyList() }, 
@@ -180,8 +190,8 @@ fun CanvasEditor(
                             androidCanvas.drawPath(androidPath, paint)
                         }
                         
-                        val textPxSize = 32f * localDensity
                         texts.forEach { textItem ->
+                            val textPxSize = textItem.fontSize * localDensity
                             val textPaint = android.graphics.Paint().apply {
                                 color = textItem.color.toArgb()
                                 textSize = textPxSize * scale
@@ -415,15 +425,17 @@ fun CanvasEditor(
                     Text(
                         text = textItem.text,
                         color = textItem.color,
-                        fontSize = 32.sp,
+                        fontSize = textItem.fontSize.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
+                            .align(Alignment.TopStart)
                             .offset { IntOffset(textItem.offset.x.toInt(), textItem.offset.y.toInt()) }
                             .pointerInput(Unit) {
                                 detectTapGestures(
                                     onTap = {
                                         currentTextContent = textItem.text
                                         currentTextColor = textItem.color
+                                        currentTextSize = textItem.fontSize
                                         editingTextIndex = index
                                         showTextDialog = true
                                     }
@@ -457,6 +469,13 @@ fun CanvasEditor(
                             label = { Text("Text") }
                         )
                         Spacer(modifier = Modifier.height(16.dp))
+                        Text("Size: ${currentTextSize.toInt()}")
+                        Slider(
+                            value = currentTextSize,
+                            onValueChange = { currentTextSize = it },
+                            valueRange = 12f..100f
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(textColors) { color ->
                                 Box(
@@ -479,13 +498,17 @@ fun CanvasEditor(
                         if (currentTextContent.isNotBlank()) {
                             if (editingTextIndex >= 0) {
                                 val newTexts = texts.toMutableList()
-                                newTexts[editingTextIndex] = newTexts[editingTextIndex].copy(text = currentTextContent, color = currentTextColor)
+                                newTexts[editingTextIndex] = newTexts[editingTextIndex].copy(text = currentTextContent, color = currentTextColor, fontSize = currentTextSize)
                                 texts = newTexts
                             } else {
                                 val centerX = if (boxSize.width > 0) boxSize.width / 2f - 50f else 100f
                                 val centerY = if (boxSize.height > 0) boxSize.height / 2f else 100f
-                                texts = texts + TextItem(currentTextContent, Offset(centerX, centerY), currentTextColor)
+                                texts = texts + TextItem(currentTextContent, Offset(centerX, centerY), currentTextColor, currentTextSize)
                             }
+                        } else if (editingTextIndex >= 0) {
+                            val newTexts = texts.toMutableList()
+                            newTexts.removeAt(editingTextIndex)
+                            texts = newTexts
                         }
                         currentTextContent = ""
                         showTextDialog = false
@@ -493,10 +516,24 @@ fun CanvasEditor(
                     }) { Text(if (editingTextIndex >= 0) "Save" else "Add") }
                 },
                 dismissButton = {
-                    Button(onClick = { 
-                        showTextDialog = false
-                        editingTextIndex = -1
-                    }) { Text("Cancel") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (editingTextIndex >= 0) {
+                            Button(
+                                onClick = {
+                                    val newTexts = texts.toMutableList()
+                                    newTexts.removeAt(editingTextIndex)
+                                    texts = newTexts
+                                    showTextDialog = false
+                                    editingTextIndex = -1
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                            ) { Text("Delete") }
+                        }
+                        Button(onClick = { 
+                            showTextDialog = false
+                            editingTextIndex = -1
+                        }) { Text("Cancel") }
+                    }
                 }
             )
         }
