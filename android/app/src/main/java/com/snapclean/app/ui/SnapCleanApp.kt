@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.snapclean.app.processor.ImageProcessor
+import com.snapclean.app.utils.SmartScanner
 
 data class SensitiveArea(
     val rect: androidx.compose.ui.geometry.Rect,
@@ -77,19 +78,6 @@ fun SmartActionButton(
     }
 }
 
-fun detectSensitiveInfo(bitmap: android.graphics.Bitmap): List<SensitiveArea> {
-    // Simulated Smart Scanner
-    // Finds generic textual information areas based on image composition
-    val w = bitmap.width.toFloat()
-    val h = bitmap.height.toFloat()
-    return listOf(
-        SensitiveArea(androidx.compose.ui.geometry.Rect(w * 0.1f, h * 0.2f, w * 0.6f, h * 0.25f), "Name"),
-        SensitiveArea(androidx.compose.ui.geometry.Rect(w * 0.1f, h * 0.45f, w * 0.8f, h * 0.52f), "Email"),
-        SensitiveArea(androidx.compose.ui.geometry.Rect(w * 0.1f, h * 0.65f, w * 0.5f, h * 0.72f), "Phone"),
-        SensitiveArea(androidx.compose.ui.geometry.Rect(w * 0.7f, h * 0.8f, w * 0.95f, h * 0.85f), "Amount")
-    )
-}
-
 @Composable
 fun SnapCleanApp() {
     var state by remember { mutableStateOf("upload") } // upload, processing, preview, edit
@@ -100,12 +88,21 @@ fun SnapCleanApp() {
     var selectedStyle by remember { mutableStateOf("Minimal") }
     var showOriginal by remember { mutableStateOf(false) }
     var isPrivacyScanning by remember { mutableStateOf(false) }
-    var blurStrength by remember { mutableStateOf(15f) }
+    var blurStrength by remember { mutableFloatStateOf(15f) }
     var sensitiveAreas by remember { mutableStateOf<List<SensitiveArea>>(emptyList()) }
+    var memeTopText by remember { mutableStateOf("Top Text") }
+    var memeBottomText by remember { mutableStateOf("Bottom Text") }
+    
+    // Side effect to update processedBitmap when parameters change
+    LaunchedEffect(activeBitmap, selectedStyle, sensitiveAreas, blurStrength, memeTopText, memeBottomText) {
+        activeBitmap?.let {
+            processedBitmap = ImageProcessor.applyStyle(it, selectedStyle, sensitiveAreas = sensitiveAreas, blurStrength = blurStrength, memeTop = memeTopText, memeBottom = memeBottomText)
+        }
+    }
     var paths by remember { mutableStateOf(emptyList<com.snapclean.app.ui.DrawAction>()) }
     var texts by remember { mutableStateOf(emptyList<com.snapclean.app.ui.TextItem>()) }
     
-    val stylePresets = listOf("Original", "Minimal", "Dark", "Instagram", "Shadow", "Meme")
+    val stylePresets = listOf("Original", "Minimal", "Dark", "Instagram", "Shadow", "Meme", "Money", "Viral", "Focus", "Chat")
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -130,7 +127,6 @@ fun SnapCleanApp() {
                     activeBitmap = cropped
                     paths = emptyList()
                     texts = emptyList()
-                    processedBitmap = ImageProcessor.applyStyle(cropped, selectedStyle)
                     state = "preview"
                 }
             } catch (e: Exception) {
@@ -324,7 +320,7 @@ fun SnapCleanApp() {
                 ) {
                     CircularProgressIndicator(color = Color.Blue)
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("Polishing Pixels...", color = Color.Black)
+                    Text("Enhancing screenshot...", color = Color.Black)
                 }
             }
             "preview" -> {
@@ -348,11 +344,13 @@ fun SnapCleanApp() {
                         )
                         SmartActionButton(
                             onClick = {
-                                isPrivacyScanning = true
-                                coroutineScope.launch {
-                                    delay(1500) // Simulation of AI processing
-                                    activeBitmap?.let { sensitiveAreas = detectSensitiveInfo(it) }
-                                    isPrivacyScanning = false
+                                activeBitmap?.let { bmp ->
+                                    isPrivacyScanning = true
+                                    coroutineScope.launch {
+                                        val detected = SmartScanner.scan(bmp)
+                                        sensitiveAreas = detected
+                                        isPrivacyScanning = false
+                                    }
                                 }
                             },
                             label = "Hide Info",
@@ -464,16 +462,10 @@ fun SnapCleanApp() {
                                             val scaleX = size.width / itBmp.width
                                             val scaleY = size.height / itBmp.height
                                             
-                                            // Stylized Blur Effect (Mosaic/Frosted Glass)
-                                            drawRect(
-                                                color = Color.Black.copy(alpha = (blurStrength / 100f).coerceIn(0.1f, 0.95f)),
-                                                topLeft = androidx.compose.ui.geometry.Offset(area.rect.left * scaleX, area.rect.top * scaleY),
-                                                size = androidx.compose.ui.geometry.Size(area.rect.width * scaleX, area.rect.height * scaleY)
-                                            )
-                                            
+                                            // Draw detection box feedback
                                             // Add a subtle border to indicate it's a hidden area
                                             drawRect(
-                                                color = Color.White.copy(alpha = 0.3f),
+                                                color = Color.White.copy(alpha = 0.5f),
                                                 topLeft = androidx.compose.ui.geometry.Offset(area.rect.left * scaleX, area.rect.top * scaleY),
                                                 size = androidx.compose.ui.geometry.Size(area.rect.width * scaleX, area.rect.height * scaleY),
                                                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
@@ -505,32 +497,78 @@ fun SnapCleanApp() {
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         stylePresets.forEach { style ->
+                            val config = ImageProcessor.Styles[style]
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier.clickable { 
                                     selectedStyle = style
-                                    activeBitmap?.let { processedBitmap = ImageProcessor.applyStyle(it, style) }
                                 }
                             ) {
                                 val isSelected = selectedStyle == style
+                                val bgColor = animateColorAsState(if (config?.bgColor != null) Color(config.bgColor) else Color.White).value
+                                
                                 Box(
                                     modifier = Modifier
                                         .size(68.dp)
+                                        .scale(if (isSelected) 1.1f else 1f)
                                         .clip(RoundedCornerShape(16.dp))
-                                        .background(if (isSelected) Color(0xFF3B82F6) else Color.White)
-                                        .border(2.dp, if (isSelected) Color(0xFF3B82F6) else Color(0xFFE2E8F0), RoundedCornerShape(16.dp))
-                                        .padding(4.dp),
+                                        .then(
+                                            if (config?.bgGradient != null) {
+                                                Modifier.background(
+                                                    androidx.compose.ui.graphics.Brush.linearGradient(
+                                                        config.bgGradient.map { Color(it) }
+                                                    )
+                                                )
+                                            } else {
+                                                Modifier.background(bgColor)
+                                            }
+                                        )
+                                        .border(
+                                            width = if (isSelected) 3.dp else 1.dp, 
+                                            color = if (isSelected) Color(0xFF3B82F6) else Color(0xFFE2E8F0), 
+                                            shape = RoundedCornerShape(16.dp)
+                                        )
+                                        .shadow(if (isSelected) 8.dp else 0.dp, RoundedCornerShape(16.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         style.first().toString(), 
                                         fontWeight = FontWeight.Black, 
                                         fontSize = 20.sp,
-                                        color = if (isSelected) Color.White else Color(0xFF1E293B)
+                                        color = if (style == "Dark" || style == "Meme" || style == "Money" || style == "Focus" || style == "Instagram") Color.White else Color(0xFF1E293B),
+                                        modifier = Modifier.shadow(if (style == "Dark" || style == "Meme" || style == "Instagram") 2.dp else 0.dp)
                                     )
                                 }
-                                Text(style, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, color = if (isSelected) Color(0xFF3B82F6) else Color.Gray, modifier = Modifier.padding(top = 6.dp))
+                                Text(
+                                    style, 
+                                    fontSize = 11.sp, 
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, 
+                                    color = if (isSelected) Color(0xFF3B82F6) else Color.Gray, 
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
                             }
+                        }
+                    }
+
+                    if (selectedStyle == "Meme") {
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
+                            OutlinedTextField(
+                                value = memeTopText,
+                                onValueChange = { memeTopText = it },
+                                label = { Text("Meme Top Text") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color(0xFF3B82F6))
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = memeBottomText,
+                                onValueChange = { memeBottomText = it },
+                                label = { Text("Meme Bottom Text") },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color(0xFF3B82F6))
+                            )
                         }
                     }
 
