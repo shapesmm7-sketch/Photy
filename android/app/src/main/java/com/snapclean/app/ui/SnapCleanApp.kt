@@ -106,27 +106,43 @@ fun SnapCleanApp() {
                         )
                     }
                     
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Button(
-                            onClick = { state = "upload" }, 
-                            modifier = Modifier.weight(1f).height(56.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                        ) { Text("Start Over") }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Button(
+                                onClick = { state = "upload" }, 
+                                modifier = Modifier.weight(1f).height(56.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                            ) { Text("Start Over") }
+                            
+                            Button(
+                                onClick = { state = "edit" }, 
+                                modifier = Modifier.weight(1f).height(56.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                            ) { Text("Edit (Draw)") }
+                        }
                         
-                        Button(
-                            onClick = { state = "edit" }, 
-                            modifier = Modifier.weight(1f).height(56.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
-                        ) { Text("Edit (Draw)") }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Button(
+                                onClick = { processedBitmap?.let { shareBitmap(context, it) } }, 
+                                modifier = Modifier.weight(1f).height(56.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                            ) { Text("Share") }
 
-                        Button(
-                            onClick = { /* Share */ }, 
-                            modifier = Modifier.weight(1f).height(56.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
-                        ) { Text("Save") }
+                            Button(
+                                onClick = { processedBitmap?.let { saveImageToGallery(context, it) } }, 
+                                modifier = Modifier.weight(1f).height(56.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Blue)
+                            ) { Text("Save to Gallery") }
+                        }
                     }
                 }
             }
@@ -134,10 +150,70 @@ fun SnapCleanApp() {
                 processedBitmap?.let { bmp ->
                     CanvasEditor(
                         bitmap = bmp,
+                        onDone = { editedBmp -> 
+                            processedBitmap = editedBmp
+                            state = "preview"
+                        },
                         onCancel = { state = "preview" }
                     )
                 }
             }
         }
+    }
+}
+
+fun shareBitmap(context: android.content.Context, bitmap: android.graphics.Bitmap) {
+    try {
+        val cachePath = java.io.File(context.cacheDir, "images")
+        cachePath.mkdirs()
+        val file = java.io.File(cachePath, "shared_image.png")
+        java.io.FileOutputStream(file).use { stream ->
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+        }
+        val uri = androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+        
+        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(android.content.Intent.createChooser(intent, "Share Image"))
+    } catch (e: Exception) {
+        e.printStackTrace()
+        android.widget.Toast.makeText(context, "Failed to share: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+    }
+}
+
+fun saveImageToGallery(context: android.content.Context, bitmap: android.graphics.Bitmap) {
+    val filename = "SnapClean_${System.currentTimeMillis()}.png"
+    try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val contentValues = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/SnapClean")
+            }
+            context.contentResolver?.also { resolver ->
+                val imageUri = resolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                imageUri?.let { uri ->
+                    resolver.openOutputStream(uri)?.use { fos ->
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, fos)
+                    }
+                }
+            }
+        } else {
+            val imagesDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_PICTURES)
+            val appDir = java.io.File(imagesDir, "SnapClean").apply { if (!exists()) mkdirs() }
+            val image = java.io.File(appDir, filename)
+            java.io.FileOutputStream(image).use { fos ->
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, fos)
+            }
+            // For older devices, ping the media scanner
+            android.media.MediaScannerConnection.scanFile(context, arrayOf(image.absolutePath), arrayOf("image/png"), null)
+        }
+        android.widget.Toast.makeText(context, "Saved to Gallery!", android.widget.Toast.LENGTH_SHORT).show()
+    } catch (e: Exception) {
+        e.printStackTrace()
+        android.widget.Toast.makeText(context, "Failed to save: requires storage permissions on older devices.", android.widget.Toast.LENGTH_LONG).show()
     }
 }
