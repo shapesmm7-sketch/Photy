@@ -1,0 +1,6 @@
+{
+  "name": "Snap Clean",
+  "description": "Android-style screenshot auto-editor with smart crop, beautify features, and manual drawing tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
