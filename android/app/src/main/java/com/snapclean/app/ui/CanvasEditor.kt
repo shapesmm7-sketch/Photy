@@ -50,7 +50,7 @@ fun CanvasEditor(
     var texts by remember { mutableStateOf(listOf<TextItem>()) }
     var showTextDialog by remember { mutableStateOf(false) }
     var currentTextContent by remember { mutableStateOf("") }
-    val localDensity = LocalDensity.current.scaledDensity
+    val localDensity = LocalDensity.current.density
     
     // Crop state
     var cropRect by remember { mutableStateOf<Rect?>(null) }
