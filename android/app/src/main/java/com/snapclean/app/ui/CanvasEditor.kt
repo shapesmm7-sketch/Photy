@@ -21,6 +21,13 @@ import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -29,7 +36,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
 data class DrawAction(val path: Path, val tool: String) // "PEN", "RUBBER"
-data class TextItem(val text: String, val offset: Offset)
+data class TextItem(val text: String, val offset: Offset, val color: Color = Color.White)
 
 @Composable
 fun CanvasEditor(
@@ -50,6 +57,9 @@ fun CanvasEditor(
     var texts by remember { mutableStateOf(listOf<TextItem>()) }
     var showTextDialog by remember { mutableStateOf(false) }
     var currentTextContent by remember { mutableStateOf("") }
+    var currentTextColor by remember { mutableStateOf(Color.White) }
+    var editingTextIndex by remember { mutableIntStateOf(-1) }
+    val textColors = listOf(Color.White, Color.Black, Color.Red, Color.Blue, Color.Green, Color.Yellow, Color.Magenta, Color.Cyan)
     val localDensity = LocalDensity.current.density
     
     // Crop state
@@ -88,7 +98,12 @@ fun CanvasEditor(
                         Text("⬛")
                     }
                     Button(
-                        onClick = { showTextDialog = true }, 
+                        onClick = { 
+                            currentTextContent = ""
+                            currentTextColor = Color.White
+                            editingTextIndex = -1
+                            showTextDialog = true 
+                        }, 
                         colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                         contentPadding = PaddingValues(0.dp),
                         modifier = Modifier.width(48.dp)
@@ -168,7 +183,7 @@ fun CanvasEditor(
                         val textPxSize = 32f * localDensity
                         texts.forEach { textItem ->
                             val textPaint = android.graphics.Paint().apply {
-                                color = android.graphics.Color.WHITE
+                                color = textItem.color.toArgb()
                                 textSize = textPxSize * scale
                                 isAntiAlias = true
                                 typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -236,7 +251,7 @@ fun CanvasEditor(
             
             var dragStart by remember { mutableStateOf(Offset.Zero) }
             
-            Canvas(modifier = Modifier.fillMaxSize().pointerInput(Triple(mode, drawTool, refreshTick)) {
+            Canvas(modifier = Modifier.fillMaxSize().pointerInput(mode, drawTool) {
                 detectDragGestures(
                     onDragStart = { offset ->
                         if (mode == "draw" && drawTool != "NONE") {
@@ -246,7 +261,7 @@ fun CanvasEditor(
                                 val cr = cropRect!!
                                 val x = offset.x
                                 val y = offset.y
-                                val threshold = 70f
+                                val threshold = 40f
                                 
                                 val isLeft = kotlin.math.abs(x - cr.left) < threshold
                                 val isRight = kotlin.math.abs(x - cr.right) < threshold
@@ -257,6 +272,7 @@ fun CanvasEditor(
                                 val isInsideY = y > cr.top + threshold && y < cr.bottom - threshold
 
                                 cropDragTarget = when {
+                                    cr.width < 100f && cr.height < 100f && cr.contains(offset) -> "CENTER"
                                     isTop && isLeft -> "TOP_LEFT"
                                     isTop && isRight -> "TOP_RIGHT"
                                     isBottom && isLeft -> "BOTTOM_LEFT"
@@ -282,7 +298,8 @@ fun CanvasEditor(
                             }
                         }
                     },
-                    onDrag = { change, _ ->
+                    onDrag = { change, dragAmount ->
+                        change.consume()
                         if (mode == "draw" && drawTool != "NONE") {
                             currentPath?.lineTo(change.position.x, change.position.y)
                             refreshTick++
@@ -301,10 +318,7 @@ fun CanvasEditor(
                                     )
                                 }
                                 "CENTER" -> {
-                                    val dx = x - dragStart.x
-                                    val dy = y - dragStart.y
-                                    cropRect = Rect(cr.left + dx, cr.top + dy, cr.right + dx, cr.bottom + dy)
-                                    dragStart = change.position
+                                    cropRect = Rect(cr.left + dragAmount.x, cr.top + dragAmount.y, cr.right + dragAmount.x, cr.bottom + dragAmount.y)
                                 }
                                 "TOP_LEFT" -> cropRect = Rect(minOf(x, cr.right - 50f), minOf(y, cr.bottom - 50f), cr.right, cr.bottom)
                                 "TOP_RIGHT" -> cropRect = Rect(cr.left, minOf(y, cr.bottom - 50f), maxOf(x, cr.left + 50f), cr.bottom)
@@ -400,11 +414,21 @@ fun CanvasEditor(
                 texts.forEachIndexed { index, textItem ->
                     Text(
                         text = textItem.text,
-                        color = Color.White,
+                        color = textItem.color,
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
                             .offset { IntOffset(textItem.offset.x.toInt(), textItem.offset.y.toInt()) }
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = {
+                                        currentTextContent = textItem.text
+                                        currentTextColor = textItem.color
+                                        editingTextIndex = index
+                                        showTextDialog = true
+                                    }
+                                )
+                            }
                             .pointerInput(Unit) {
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
@@ -420,28 +444,59 @@ fun CanvasEditor(
         
         if (showTextDialog) {
             AlertDialog(
-                onDismissRequest = { showTextDialog = false },
-                title = { Text("Add Text") },
+                onDismissRequest = { 
+                    showTextDialog = false
+                    editingTextIndex = -1 
+                },
+                title = { Text(if (editingTextIndex >= 0) "Edit Text" else "Add Text") },
                 text = {
-                    OutlinedTextField(
-                        value = currentTextContent,
-                        onValueChange = { currentTextContent = it },
-                        label = { Text("Text") }
-                    )
+                    Column {
+                        OutlinedTextField(
+                            value = currentTextContent,
+                            onValueChange = { currentTextContent = it },
+                            label = { Text("Text") }
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(textColors) { color ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .background(color, CircleShape)
+                                        .border(
+                                            width = if (currentTextColor == color) 3.dp else 1.dp,
+                                            color = if (currentTextColor == color) Color.Gray else Color.LightGray,
+                                            shape = CircleShape
+                                        )
+                                        .clickable { currentTextColor = color }
+                                )
+                            }
+                        }
+                    }
                 },
                 confirmButton = {
                     Button(onClick = {
                         if (currentTextContent.isNotBlank()) {
-                            val centerX = if (boxSize.width > 0) boxSize.width / 2f - 50f else 100f
-                            val centerY = if (boxSize.height > 0) boxSize.height / 2f else 100f
-                            texts = texts + TextItem(currentTextContent, Offset(centerX, centerY))
+                            if (editingTextIndex >= 0) {
+                                val newTexts = texts.toMutableList()
+                                newTexts[editingTextIndex] = newTexts[editingTextIndex].copy(text = currentTextContent, color = currentTextColor)
+                                texts = newTexts
+                            } else {
+                                val centerX = if (boxSize.width > 0) boxSize.width / 2f - 50f else 100f
+                                val centerY = if (boxSize.height > 0) boxSize.height / 2f else 100f
+                                texts = texts + TextItem(currentTextContent, Offset(centerX, centerY), currentTextColor)
+                            }
                         }
                         currentTextContent = ""
                         showTextDialog = false
-                    }) { Text("Add") }
+                        editingTextIndex = -1
+                    }) { Text(if (editingTextIndex >= 0) "Save" else "Add") }
                 },
                 dismissButton = {
-                    Button(onClick = { showTextDialog = false }) { Text("Cancel") }
+                    Button(onClick = { 
+                        showTextDialog = false
+                        editingTextIndex = -1
+                    }) { Text("Cancel") }
                 }
             )
         }
