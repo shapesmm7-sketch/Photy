@@ -101,7 +101,7 @@ fun SnapCleanApp() {
     var memeBottomText by remember { mutableStateOf("Bottom Text") }
     
     // Side effect to update processedBitmap when parameters change
-    LaunchedEffect(activeBitmap, selectedStyle, sensitiveAreas, blurStrength, memeTopText, memeBottomText) {
+    LaunchedEffect(activeBitmap, selectedStyle, selectedLayout, sensitiveAreas, blurStrength, memeTopText, memeBottomText) {
         activeBitmap?.let { bmp ->
             // Debounce to avoid flooding memory during slider changes
             delay(150)
