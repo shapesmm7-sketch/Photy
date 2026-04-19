@@ -108,7 +108,7 @@ fun SnapCleanApp() {
             // Move processing to background thread to keep UI smooth
             val newBitmap = withContext(kotlinx.coroutines.Dispatchers.Default) {
                 try {
-                    if (!kotlinx.coroutines.isActive) return@withContext null
+                    if (!isActive) return@withContext null
                     
                     val result = ImageProcessor.applyStyle(
                         bmp, 
@@ -119,7 +119,7 @@ fun SnapCleanApp() {
                         memeBottom = memeBottomText
                     )
                     
-                    if (!kotlinx.coroutines.isActive) {
+                    if (!isActive) {
                         result.recycle()
                         return@withContext null
                     }
@@ -686,7 +686,7 @@ fun SnapCleanApp() {
                         onCancel = { state = "preview" }
                     )
                 }
-            }        }
+            } 
         }
     }
 }
