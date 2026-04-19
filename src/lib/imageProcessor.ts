@@ -39,23 +39,28 @@ export interface LayoutConfig {
   isLandscape?: boolean;
   premium?: boolean;
   themeColor: string; // Background color for this layout
+  deviceType?: 'iphone' | 'samsung' | 'ipad';
 }
 
 export const PhoneLayouts: Record<string, LayoutConfig> = {
   "None": { name: "None", deviceX: 0.5, deviceY: 0.5, deviceScale: 1, themeColor: "#f3f4f6" },
-  "Standard": { name: "Standard", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.85, themeColor: "#3b82f6" },
-  "Bottom View": { name: "Bottom View", deviceX: 0.5, deviceY: 0.65, deviceScale: 0.7, themeColor: "#8b5cf6" },
-  "Forest View": { name: "Forest View", deviceX: 0.5, deviceY: 0.65, deviceScale: 0.7, themeColor: "#10b981" },
-  "Top View": { name: "Top View", deviceX: 0.5, deviceY: 0.35, deviceScale: 0.7, themeColor: "#f59e0b" },
-  "Elevated": { name: "Elevated", deviceX: 0.5, deviceY: 0.3, deviceScale: 0.8, themeColor: "#06b6d4" },
-  "Split Right": { name: "Split Right", deviceX: 0.75, deviceY: 0.5, deviceScale: 0.8, premium: true, themeColor: "#ec4899" },
-  "Split Left": { name: "Split Left", deviceX: 0.25, deviceY: 0.5, deviceScale: 0.8, premium: true, themeColor: "#6366f1" },
-  "Tilted": { name: "Tilted", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.8, rotation: 15, premium: true, themeColor: "#f97316" },
-  "Cinema Center": { name: "Cinema Center", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.85, isLandscape: true, premium: true, themeColor: "#14b8a6" },
-  "Cinema Top": { name: "Cinema Top", deviceX: 0.5, deviceY: 0.3, deviceScale: 0.7, isLandscape: true, premium: true, themeColor: "#ef4444" },
-  "Cinema Btm": { name: "Cinema Btm", deviceX: 0.5, deviceY: 0.7, deviceScale: 0.7, isLandscape: true, premium: true, themeColor: "#4f46e5" },
-  "Cinema Left": { name: "Cinema Left", deviceX: 0.25, deviceY: 0.6, deviceScale: 0.8, isLandscape: true, premium: true, themeColor: "#84cc16" },
-  "Cinema Right": { name: "Cinema Right", deviceX: 0.75, deviceY: 0.6, deviceScale: 0.8, isLandscape: true, premium: true, themeColor: "#a855f7" }
+  "iPhone 15": { name: "iPhone 15", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.85, themeColor: "#3b82f6", deviceType: 'iphone' },
+  "Samsung S24": { name: "Samsung S24", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.85, themeColor: "#10b981", deviceType: 'samsung' },
+  "iPad Pro": { name: "iPad Pro", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.8, themeColor: "#6366f1", deviceType: 'ipad' },
+  "Bottom View": { name: "Bottom View", deviceX: 0.5, deviceY: 0.65, deviceScale: 0.7, themeColor: "#8b5cf6", deviceType: 'iphone' },
+  "Forest View": { name: "Forest View", deviceX: 0.5, deviceY: 0.65, deviceScale: 0.7, themeColor: "#10b981", deviceType: 'iphone' },
+  "Top View": { name: "Top View", deviceX: 0.5, deviceY: 0.35, deviceScale: 0.7, themeColor: "#f59e0b", deviceType: 'iphone' },
+  "Elevated": { name: "Elevated", deviceX: 0.5, deviceY: 0.3, deviceScale: 0.8, themeColor: "#06b6d4", deviceType: 'iphone' },
+  "Split Right": { name: "Split Right", deviceX: 0.75, deviceY: 0.5, deviceScale: 0.8, premium: true, themeColor: "#ec4899", deviceType: 'iphone' },
+  "Split Left": { name: "Split Left", deviceX: 0.25, deviceY: 0.5, deviceScale: 0.8, premium: true, themeColor: "#6366f1", deviceType: 'iphone' },
+  "Tilted": { name: "Tilted", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.8, rotation: 15, premium: true, themeColor: "#f97316", deviceType: 'iphone' },
+  "Cinema Center": { name: "Cinema Center", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.85, isLandscape: true, premium: true, themeColor: "#14b8a6", deviceType: 'iphone' },
+  "Cinema Top": { name: "Cinema Top", deviceX: 0.5, deviceY: 0.3, deviceScale: 0.7, isLandscape: true, premium: true, themeColor: "#ef4444", deviceType: 'iphone' },
+  "Cinema Btm": { name: "Cinema Btm", deviceX: 0.5, deviceY: 0.7, deviceScale: 0.7, isLandscape: true, premium: true, themeColor: "#4f46e5", deviceType: 'iphone' },
+  "Cinema Left": { name: "Cinema Left", deviceX: 0.25, deviceY: 0.6, deviceScale: 0.8, isLandscape: true, premium: true, themeColor: "#84cc16", deviceType: 'iphone' },
+  "Cinema Right": { name: "Cinema Right", deviceX: 0.75, deviceY: 0.6, deviceScale: 0.8, isLandscape: true, premium: true, themeColor: "#a855f7", deviceType: 'iphone' },
+  "iPad Hero": { name: "iPad Hero", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.7, themeColor: "#1e293b", deviceType: 'ipad', premium: true },
+  "Samsung Tilted": { name: "Samsung Tilted", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.8, rotation: 15, themeColor: "#f97316", deviceType: 'samsung', premium: true }
 };
 
 function drawDevice(ctx: CanvasRenderingContext2D, img: HTMLCanvasElement | HTMLImageElement, x: number, y: number, width: number, height: number, layout: LayoutConfig) {
@@ -66,7 +71,13 @@ function drawDevice(ctx: CanvasRenderingContext2D, img: HTMLCanvasElement | HTML
   }
 
   // Calculate device dimensions based on aspect ratio
-  const ratio = layout.isLandscape ? (19.5/9) : (9/19.5);
+  let ratio = layout.isLandscape ? (19.5/9) : (9/19.5);
+  if (layout.deviceType === 'ipad') {
+    ratio = layout.isLandscape ? (4/3) : (3/4);
+  } else if (layout.deviceType === 'samsung') {
+    ratio = layout.isLandscape ? (20/9) : (9/20);
+  }
+
   let devW = width;
   let devH = width / ratio;
   
@@ -80,22 +91,28 @@ function drawDevice(ctx: CanvasRenderingContext2D, img: HTMLCanvasElement | HTML
   ctx.shadowBlur = devW * 0.1;
   ctx.shadowOffsetY = devW * 0.05;
 
-  // Draw Frame (iPhone-like)
-  const radius = devW * 0.12;
+  // Draw Frame
+  let radius = devW * 0.12;
+  if (layout.deviceType === 'ipad') radius = devW * 0.06;
+  if (layout.deviceType === 'samsung') radius = devW * 0.08;
+
   ctx.beginPath();
   ctx.roundRect(-devW/2, -devH/2, devW, devH, radius);
   ctx.fillStyle = "#1a1a1a"; // Device frame color
   ctx.fill();
   
   // Outer border
-  ctx.strokeStyle = "#333";
+  ctx.strokeStyle = "#444";
   ctx.lineWidth = devW * 0.02;
   ctx.stroke();
 
   ctx.shadowColor = "transparent";
 
   // Clip content inside screen
-  const screenMargin = devW * 0.04;
+  let screenMargin = devW * 0.04;
+  if (layout.deviceType === 'ipad') screenMargin = devW * 0.05;
+  if (layout.deviceType === 'samsung') screenMargin = devW * 0.03;
+
   const screenRadius = radius * 0.8;
   ctx.save();
   ctx.beginPath();
@@ -116,24 +133,49 @@ function drawDevice(ctx: CanvasRenderingContext2D, img: HTMLCanvasElement | HTML
 
   let drawW, drawH;
   if (imgRatio > screenRatio) {
-    drawH = screenH;
-    drawW = screenH * imgRatio;
-  } else {
     drawW = screenW;
     drawH = screenW / imgRatio;
+    // ensure fits vertically
+    if (drawH < screenH) {
+        drawH = screenH;
+        drawW = screenH * imgRatio;
+    }
+  } else {
+    drawH = screenH;
+    drawW = screenH * imgRatio;
+    // ensure fits horizontally
+    if (drawW < screenW) {
+        drawW = screenW;
+        drawH = screenW / imgRatio;
+    }
   }
   
   ctx.drawImage(img, -drawW/2, -drawH/2, drawW, drawH);
   ctx.restore();
 
-  // Draw Dynamic Island / Notch
+  // Draw Dynamic Island / Camera
   if (!layout.isLandscape) {
     ctx.fillStyle = "#000";
-    const islandW = devW * 0.25;
-    const islandH = devH * 0.025;
-    ctx.beginPath();
-    ctx.roundRect(-islandW/2, -devH/2 + screenMargin + devH * 0.015, islandW, islandH, islandH/2);
-    ctx.fill();
+    if (layout.deviceType === 'samsung') {
+        // Punch hole
+        const holeSize = devW * 0.03;
+        ctx.beginPath();
+        ctx.arc(0, -devH/2 + screenMargin + devH * 0.02, holeSize, 0, Math.PI * 2);
+        ctx.fill();
+    } else if (layout.deviceType === 'ipad') {
+        // Minimal bezel camera
+        const holeSize = devW * 0.015;
+        ctx.beginPath();
+        ctx.arc(0, -devH/2 + screenMargin/2, holeSize, 0, Math.PI * 2);
+        ctx.fill();
+    } else {
+        // iPhone Dynamic Island
+        const islandW = devW * 0.25;
+        const islandH = devH * 0.025;
+        ctx.beginPath();
+        ctx.roundRect(-islandW/2, -devH/2 + screenMargin + devH * 0.015, islandW, islandH, islandH/2);
+        ctx.fill();
+    }
   }
 
   ctx.restore();
@@ -233,7 +275,10 @@ export async function applyStyle(
       }
 
       // 3. Final Canvas Setup
-      const padding = Math.max(croppedWidth, croppedHeight) * config.paddingFactor;
+      // For Phone Layouts, we need much more padding to see the background and motifs
+      const basePaddingFactor = layout.name !== "None" ? Math.max(config.paddingFactor, 0.2) : config.paddingFactor;
+      const padding = Math.max(croppedWidth, croppedHeight) * basePaddingFactor;
+      
       canvas.width = croppedWidth + padding * 2;
       canvas.height = croppedHeight + padding * 2;
 

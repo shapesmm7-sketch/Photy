@@ -59,24 +59,29 @@ object ImageProcessor {
         val rotation: Float = 0f,
         val isLandscape: Boolean = false,
         val premium: Boolean = false,
-        val themeColor: Int
+        val themeColor: Int,
+        val deviceType: String = "iphone"
     )
 
     val PhoneLayouts = mapOf(
         "None" to LayoutConfig("None", 0.5f, 0.5f, 1f, themeColor = Color.parseColor("#f3f4f6")),
-        "Standard" to LayoutConfig("Standard", 0.5f, 0.5f, 0.85f, themeColor = Color.parseColor("#3b82f6")),
-        "Bottom View" to LayoutConfig("Bottom View", 0.5f, 0.65f, 0.7f, themeColor = Color.parseColor("#8b5cf6")),
-        "Forest View" to LayoutConfig("Forest View", 0.5f, 0.65f, 0.7f, themeColor = Color.parseColor("#10b981")),
-        "Top View" to LayoutConfig("Top View", 0.5f, 0.35f, 0.7f, themeColor = Color.parseColor("#f59e0b")),
-        "Elevated" to LayoutConfig("Elevated", 0.5f, 0.3f, 0.8f, themeColor = Color.parseColor("#06b6d4")),
-        "Split Right" to LayoutConfig("Split Right", 0.75f, 0.5f, 0.8f, premium = true, themeColor = Color.parseColor("#ec4899")),
-        "Split Left" to LayoutConfig("Split Left", 0.25f, 0.5f, 0.8f, premium = true, themeColor = Color.parseColor("#6366f1")),
-        "Tilted" to LayoutConfig("Tilted", 0.5f, 0.5f, 0.8f, rotation = 15f, premium = true, themeColor = Color.parseColor("#f97316")),
-        "Cinema Center" to LayoutConfig("Cinema Center", 0.5f, 0.5f, 0.85f, isLandscape = true, premium = true, themeColor = Color.parseColor("#14b8a6")),
-        "Cinema Top" to LayoutConfig("Cinema Top", 0.5f, 0.3f, 0.7f, isLandscape = true, premium = true, themeColor = Color.parseColor("#ef4444")),
-        "Cinema Btm" to LayoutConfig("Cinema Btm", 0.5f, 0.7f, 0.7f, isLandscape = true, premium = true, themeColor = Color.parseColor("#4f46e5")),
-        "Cinema Left" to LayoutConfig("Cinema Left", 0.25f, 0.6f, 0.8f, isLandscape = true, premium = true, themeColor = Color.parseColor("#84cc16")),
-        "Cinema Right" to LayoutConfig("Cinema Right", 0.75f, 0.6f, 0.8f, isLandscape = true, premium = true, themeColor = Color.parseColor("#a855f7"))
+        "iPhone 15" to LayoutConfig("iPhone 15", 0.5f, 0.5f, 0.85f, themeColor = Color.parseColor("#3b82f6"), deviceType = "iphone"),
+        "Samsung S24" to LayoutConfig("Samsung S24", 0.5f, 0.5f, 0.85f, themeColor = Color.parseColor("#10b981"), deviceType = "samsung"),
+        "iPad Pro" to LayoutConfig("iPad Pro", 0.5f, 0.5f, 0.8f, themeColor = Color.parseColor("#6366f1"), deviceType = "ipad"),
+        "Bottom View" to LayoutConfig("Bottom View", 0.5f, 0.65f, 0.7f, themeColor = Color.parseColor("#8b5cf6"), deviceType = "iphone"),
+        "Forest View" to LayoutConfig("Forest View", 0.5f, 0.65f, 0.7f, themeColor = Color.parseColor("#065f46"), deviceType = "iphone"),
+        "Top View" to LayoutConfig("Top View", 0.5f, 0.35f, 0.7f, themeColor = Color.parseColor("#f59e0b"), deviceType = "iphone"),
+        "Elevated" to LayoutConfig("Elevated", 0.5f, 0.3f, 0.8f, themeColor = Color.parseColor("#06b6d4"), deviceType = "iphone"),
+        "Split Right" to LayoutConfig("Split Right", 0.75f, 0.5f, 0.8f, premium = true, themeColor = Color.parseColor("#ec4899"), deviceType = "iphone"),
+        "Split Left" to LayoutConfig("Split Left", 0.25f, 0.5f, 0.8f, premium = true, themeColor = Color.parseColor("#6366f1"), deviceType = "iphone"),
+        "Tilted" to LayoutConfig("Tilted", 0.5f, 0.5f, 0.8f, rotation = 15f, premium = true, themeColor = Color.parseColor("#f97316"), deviceType = "iphone"),
+        "Cinema Center" to LayoutConfig("Cinema Center", 0.5f, 0.5f, 0.85f, isLandscape = true, premium = true, themeColor = Color.parseColor("#14b8a6"), deviceType = "iphone"),
+        "Cinema Top" to LayoutConfig("Cinema Top", 0.5f, 0.3f, 0.7f, isLandscape = true, premium = true, themeColor = Color.parseColor("#ef4444"), deviceType = "iphone"),
+        "Cinema Btm" to LayoutConfig("Cinema Btm", 0.5f, 0.7f, 0.7f, isLandscape = true, premium = true, themeColor = Color.parseColor("#4f46e5"), deviceType = "iphone"),
+        "Cinema Left" to LayoutConfig("Cinema Left", 0.25f, 0.6f, 0.8f, isLandscape = true, premium = true, themeColor = Color.parseColor("#84cc16"), deviceType = "iphone"),
+        "Cinema Right" to LayoutConfig("Cinema Right", 0.75f, 0.6f, 0.8f, isLandscape = true, premium = true, themeColor = Color.parseColor("#a855f7"), deviceType = "iphone"),
+        "iPad Hero" to LayoutConfig("iPad Hero", 0.5f, 0.5f, 0.7f, themeColor = Color.parseColor("#1e293b"), deviceType = "ipad", premium = true),
+        "Samsung Tilted" to LayoutConfig("Samsung Tilted", 0.5f, 0.5f, 0.8f, rotation = 15f, themeColor = Color.parseColor("#f97316"), deviceType = "samsung", premium = true)
     )
 
     fun applyStyle(
@@ -152,7 +157,9 @@ object ImageProcessor {
         }
 
         // 2. Padding dimensions
-        val padding = (maxOf(baseImage.width, baseImage.height) * config.paddingFactor).toInt()
+        // For Phone Layouts, we need much more padding to see the background and motifs
+        val basePaddingFactor = if (layout.name != "None") Math.max(config.paddingFactor, 0.2f) else config.paddingFactor
+        val padding = (maxOf(baseImage.width, baseImage.height) * basePaddingFactor).toInt()
         val finalWidth = baseImage.width + padding * 2
         val finalHeight = baseImage.height + padding * 2
         
@@ -163,6 +170,7 @@ object ImageProcessor {
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
         if (layout.name != "None") {
             bgPaint.color = layout.themeColor
+            bgPaint.shader = null // Ensure no style gradient overrides layout theme
         } else if (config.bgGradient != null) {
             bgPaint.shader = android.graphics.LinearGradient(
                 0f, 0f, finalWidth.toFloat(), finalHeight.toFloat(),
@@ -170,6 +178,7 @@ object ImageProcessor {
             )
         } else {
             bgPaint.color = customColor ?: config.bgColor
+            bgPaint.shader = null
         }
         canvas.drawRect(0f, 0f, finalWidth.toFloat(), finalHeight.toFloat(), bgPaint)
         
@@ -374,7 +383,13 @@ object ImageProcessor {
             canvas.rotate(layout.rotation)
         }
 
-        val ratio = if (layout.isLandscape) (19.5f / 9f) else (9f / 19.5f)
+        var ratio = if (layout.isLandscape) (19.5f / 9f) else (9f / 19.5f)
+        if (layout.deviceType == "ipad") {
+            ratio = if (layout.isLandscape) (4f/3f) else (3f/4f)
+        } else if (layout.deviceType == "samsung") {
+            ratio = if (layout.isLandscape) (20f/9f) else (9f/20f)
+        }
+
         var devW = maxWidth
         var devH = maxWidth / ratio
 
@@ -383,7 +398,10 @@ object ImageProcessor {
             devW = maxHeight * ratio
         }
 
-        val radius = devW * 0.12f
+        var radius = devW * 0.12f
+        if (layout.deviceType == "ipad") radius = devW * 0.06f
+        if (layout.deviceType == "samsung") radius = devW * 0.08f
+
         val rect = RectF(-devW / 2, -devH / 2, devW / 2, devH / 2)
 
         // Draw Shadow
@@ -397,9 +415,19 @@ object ImageProcessor {
         val framePaint = Paint(Paint.ANTI_ALIAS_FLAG)
         framePaint.color = Color.parseColor("#1a1a1a")
         canvas.drawRoundRect(rect, radius, radius, framePaint)
+        
+        // Border
+        framePaint.style = Paint.Style.STROKE
+        framePaint.strokeWidth = devW * 0.02f
+        framePaint.color = Color.parseColor("#444444")
+        canvas.drawRoundRect(rect, radius, radius, framePaint)
+        framePaint.style = Paint.Style.FILL
 
         // Screen clipping
-        val margin = devW * 0.04f
+        var margin = devW * 0.04f
+        if (layout.deviceType == "ipad") margin = devW * 0.05f
+        if (layout.deviceType == "samsung") margin = devW * 0.03f
+
         val screenRadius = radius * 0.8f
         val screenRect = RectF(rect.left + margin, rect.top + margin, rect.right - margin, rect.bottom - margin)
         
@@ -425,23 +453,58 @@ object ImageProcessor {
         val drawW: Float
         val drawH: Float
         if (imgRatio > screenRatio) {
-            drawH = screenH
-            drawW = screenH * imgRatio
-        } else {
             drawW = screenW
             drawH = screenW / imgRatio
+            // Fills Vertically?
+            if (drawH < screenH) {
+                // re-scale to fit height instead
+                // ... logic handled by drawH = screenH
+            }
+        } else {
+            // ... logic for fitting ...
         }
 
-        val destRect = RectF(-drawW / 2, -drawH / 2, drawW / 2, drawH / 2)
+        // Updated fit logic to match web perfectly
+        val finalDrawW: Float
+        val finalDrawH: Float
+        if (imgRatio > screenRatio) {
+            val h = screenW / imgRatio
+            if (h >= screenH) {
+                finalDrawW = screenW
+                finalDrawH = h
+            } else {
+                finalDrawH = screenH
+                finalDrawW = screenH * imgRatio
+            }
+        } else {
+            val w = screenH * imgRatio
+            if (w >= screenW) {
+                finalDrawH = screenH
+                finalDrawW = w
+            } else {
+                finalDrawW = screenW
+                finalDrawH = screenW / imgRatio
+            }
+        }
+
+        val destRect = RectF(-finalDrawW / 2, -finalDrawH / 2, finalDrawW / 2, finalDrawH / 2)
         canvas.drawBitmap(bitmap, null, destRect, paint)
         canvas.restore()
 
-        // Notch / Dynamic Island
+        // Notch / Dynamic Island / Camera
         if (!layout.isLandscape) {
-            val islandW = devW * 0.25f
-            val islandH = devH * 0.025f
-            val islandRect = RectF(-islandW / 2, rect.top + margin + devH * 0.015f, islandW / 2, rect.top + margin + devH * 0.015f + islandH)
-            canvas.drawRoundRect(islandRect, islandH / 2, islandH / 2, blackPaint)
+            if (layout.deviceType == "samsung") {
+                val holeSize = devW * 0.03f
+                canvas.drawCircle(0f, rect.top + margin + devH * 0.02f, holeSize, blackPaint)
+            } else if (layout.deviceType == "ipad") {
+                val holeSize = devW * 0.015f
+                canvas.drawCircle(0f, rect.top + margin / 2f, holeSize, blackPaint)
+            } else {
+                val islandW = devW * 0.25f
+                val islandH = devH * 0.025f
+                val islandRect = RectF(-islandW / 2, rect.top + margin + devH * 0.015f, islandW / 2, rect.top + margin + devH * 0.015f + islandH)
+                canvas.drawRoundRect(islandRect, islandH / 2, islandH / 2, blackPaint)
+            }
         }
 
         canvas.restore()
