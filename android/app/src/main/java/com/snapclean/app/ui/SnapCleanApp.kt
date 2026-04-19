@@ -574,28 +574,6 @@ fun SnapCleanApp() {
                         }
                     }
 
-                    if (selectedStyle == "Meme") {
-                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)) {
-                            OutlinedTextField(
-                                value = memeTopText,
-                                onValueChange = { memeTopText = it },
-                                label = { Text("Meme Top Text") },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color(0xFF3B82F6))
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            OutlinedTextField(
-                                value = memeBottomText,
-                                onValueChange = { memeBottomText = it },
-                                label = { Text("Meme Bottom Text") },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Color(0xFF3B82F6))
-                            )
-                        }
-                    }
-
                     Spacer(modifier = Modifier.height(24.dp))
                     
                     Column(

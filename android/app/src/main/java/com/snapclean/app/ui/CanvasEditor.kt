@@ -229,34 +229,26 @@ fun CanvasEditor(
                         val offsetY = (canvasHeight - destHeight) / 2
                         val scale = activeBitmap.width.toFloat() / destWidth
                         
-                        val hasTopText = texts.any { it.position == "Top" }
-                        val hasBottomText = texts.any { it.position == "Bottom" }
+                        val topTextSize = texts.filter { it.position == "Top" }.maxOfOrNull { it.fontSize } ?: 0f
+                        val bottomTextSize = texts.filter { it.position == "Bottom" }.maxOfOrNull { it.fontSize } ?: 0f
                         
-                        var offsetY_preview = (canvasHeight - destHeight) / 2
-                        if (hasTopText && !hasBottomText) {
-                            offsetY_preview = (canvasHeight - destHeight) * 0.7f 
-                        } else if (!hasTopText && hasBottomText) {
-                            offsetY_preview = (canvasHeight - destHeight) * 0.3f
-                        }
-                        
-                        val topPad = if (hasTopText) (120f * scale).toInt() else 0
-                        val botPad = if (hasBottomText) (120f * scale).toInt() else 0
+                        val topPadPx = (topTextSize * 1.5f * localDensity * scale).toInt()
+                        val botPadPx = (bottomTextSize * 1.5f * localDensity * scale).toInt()
                         
                         val finalWidth = activeBitmap.width
-                        val finalHeight = activeBitmap.height + topPad + botPad
+                        val finalHeight = activeBitmap.height + topPadPx + botPadPx
                         
                         val finalBitmap = Bitmap.createBitmap(finalWidth, finalHeight, Bitmap.Config.ARGB_8888)
                         val androidCanvas = android.graphics.Canvas(finalBitmap)
-                        androidCanvas.drawColor(android.graphics.Color.BLACK) 
+                        androidCanvas.drawColor(android.graphics.Color.BLACK)
                         
                         // Draw screenshot into final bitmap
-                        androidCanvas.drawBitmap(activeBitmap, 0f, topPad.toFloat(), null)
+                        androidCanvas.drawBitmap(activeBitmap, 0f, topPadPx.toFloat(), null)
                         
                         val matrix = android.graphics.Matrix()
-                        // Use offsetY_preview to match where the path was actually drawn on screen
-                        matrix.postTranslate(-offsetX, -offsetY_preview)
+                        matrix.postTranslate(-offsetX, -offsetY)
                         matrix.postScale(scale, scale)
-                        matrix.postTranslate(0f, topPad.toFloat())
+                        matrix.postTranslate(0f, topPadPx.toFloat())
                         
                         val allPaths = paths.toMutableList()
                         currentPath?.let { allPaths.add(DrawAction(it, drawTool, if (drawTool == "RUBBER") rubberColor else penColor)) }
@@ -299,7 +291,7 @@ fun CanvasEditor(
                             
                             // Offset by 16dp vertically to account for the Box padding added for hit bounds
                             val yOffsetFix = 16f * localDensity
-                            val textY = (textItem.offset.y + yOffsetFix - offsetY_preview) * scale - textPaint.ascent() + topPad
+                            val textY = (textItem.offset.y + yOffsetFix - offsetY) * scale - textPaint.ascent() + topPadPx
                             
                             androidCanvas.drawText(textItem.text, textX, textY, textPaint)
                         }
@@ -498,24 +490,28 @@ fun CanvasEditor(
                 }
                 
                 val destWidth = destHeight * imgRatio
+                
+                val topTextSize = texts.filter { it.position == "Top" }.maxOfOrNull { it.fontSize } ?: 0f
+                val bottomTextSize = texts.filter { it.position == "Bottom" }.maxOfOrNull { it.fontSize } ?: 0f
+                
+                val topPad = if (topTextSize > 20f) (topTextSize * 1.2f).dpToPx() else 0f
+                val bottomPad = if (bottomTextSize > 20f) (bottomTextSize * 1.2f).dpToPx() else 0f
 
-                val hasTopText = texts.any { it.position == "Top" }
-                val hasBottomText = texts.any { it.position == "Bottom" }
+                val availableHeight = canvasHeight - topPad - bottomPad
+                val adjustedDestHeight = if (imgRatio > canvasRatio) {
+                    canvasWidth / imgRatio
+                } else {
+                    availableHeight
+                }.coerceAtMost(availableHeight)
                 
-                val paddingPx = 80f * localDensity
-                
-                var offsetY = (canvasHeight - destHeight) / 2
-                if (hasTopText && !hasBottomText) {
-                    offsetY = (canvasHeight - destHeight) * 0.7f 
-                } else if (!hasTopText && hasBottomText) {
-                    offsetY = (canvasHeight - destHeight) * 0.3f
-                }
-                
-                val offsetX = (canvasWidth - destWidth) / 2
+                val adjustedDestWidth = adjustedDestHeight * imgRatio
+
+                val offsetX = (canvasWidth - adjustedDestWidth) / 2
+                val offsetY = topPad + (availableHeight - adjustedDestHeight) / 2
                 
                 drawImage(
                     image = imgBitmap,
-                    dstSize = IntSize(destWidth.toInt(), destHeight.toInt()),
+                    dstSize = IntSize(adjustedDestWidth.toInt(), adjustedDestHeight.toInt()),
                     dstOffset = androidx.compose.ui.unit.IntOffset(offsetX.toInt(), offsetY.toInt())
                 )
                 
@@ -838,8 +834,8 @@ fun CanvasEditor(
                                             
                                             val centerX = 0f // 0 is exactly center with Alignment.TopCenter
                                             val centerY = when (currentTextPosition) {
-                                                "Top" -> offsetYPreview - 90f
-                                                "Bottom" -> offsetYPreview + destHeight + 40f
+                                                "Top" -> offsetY - 40f
+                                                "Bottom" -> offsetY + destHeight - 40f
                                                 else -> if (boxSize.height > 0) boxSize.height / 2f else 100f
                                             }
                                             texts = texts + TextItem(currentTextContent, Offset(centerX, centerY), currentTextColor, currentTextSize, currentTextFont, currentTextPosition)

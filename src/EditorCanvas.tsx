@@ -107,12 +107,15 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     const cw = container.clientWidth - padding * 2;
     const ch = container.clientHeight - padding * 2;
     
-    const padVal = rect.h * 0.15;
-    let virtualH = rect.h;
-    if (hasTop) virtualH += padVal;
-    if (hasBottom) virtualH += padVal;
+    const topTextSize = Math.max(0, ...texts.filter(t => t.positionMode === 'Top').map(t => t.size), (showTextModal && textPositionMode === 'Top') ? currentTextSize : 0);
+    const bottomTextSize = Math.max(0, ...texts.filter(t => t.positionMode === 'Bottom').map(t => t.size), (showTextModal && textPositionMode === 'Bottom') ? currentTextSize : 0);
+    
+    const topPad = topTextSize > 24 ? topTextSize * 1.2 : 0;
+    const bottomPad = bottomTextSize > 24 ? bottomTextSize * 1.2 : 0;
 
-    // Calculate aspect ratios based on current crop rect + padding
+    const virtualH = rect.h + topPad + bottomPad;
+
+    // Calculate aspect ratios based on current crop rect + pads
     const imageAspect = rect.w / virtualH;
     const containerAspect = cw / ch;
     
@@ -136,13 +139,12 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
 
     setCanvasSize({ width: destW, height: destH });
     
-    // Re-prepare blurred version (mapped to screenshot area)
+    // Re-prepare blurred version
     const bCtx = blurCanvasObj.getContext('2d');
     if (bCtx) {
-      const imgY = hasTop ? padVal : 0;
       bCtx.clearRect(0, 0, blurCanvasObj.width, blurCanvasObj.height);
       bCtx.filter = 'blur(15px)';
-      bCtx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, imgY, rect.w, rect.h);
+      bCtx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, topPad, rect.w, rect.h);
       bCtx.filter = 'none';
     }
 
@@ -156,18 +158,16 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const hasTop = texts.some(t => t.positionMode === 'Top') || (showTextModal && textPositionMode === 'Top');
-    const padVal = currentCrop.h * 0.15;
-    const imgY = hasTop ? padVal : 0;
+    const topTextSize = Math.max(0, ...texts.filter(t => t.positionMode === 'Top').map(t => t.size), (showTextModal && textPositionMode === 'Top') ? currentTextSize : 0);
+    const topPad = topTextSize > 24 ? topTextSize * 1.2 : 0;
 
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     // Base image (cropped region)
-    ctx.drawImage(img, currentCrop.x, currentCrop.y, currentCrop.w, currentCrop.h, 0, imgY, currentCrop.w, currentCrop.h);
+    ctx.drawImage(img, currentCrop.x, currentCrop.y, currentCrop.w, currentCrop.h, 0, topPad, currentCrop.w, currentCrop.h);
 
     ctx.save();
-    ctx.translate(0, imgY);
+    ctx.translate(0, topPad);
 
     // Draw paths
     ctx.lineCap = 'round';
@@ -178,7 +178,7 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
         ctx.save();
         ctx.clip(p.path);
         if (blurCanvasRef.current) {
-          ctx.drawImage(blurCanvasRef.current, 0, -imgY);
+          ctx.drawImage(blurCanvasRef.current, 0, 0);
         }
         ctx.restore();
       } else {
@@ -208,8 +208,8 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
       const x = canvas.width / 2;
       let y = currentCrop.h / 2;
       
-      if (textPositionMode === 'Top') y = - (padVal / 2) + (size / 2);
-      if (textPositionMode === 'Bottom') y = currentCrop.h + (padVal / 2) + (size / 2);
+      if (textPositionMode === 'Top') y = size + 20;
+      if (textPositionMode === 'Bottom') y = currentCrop.h - 40;
 
       ctx.fillStyle = currentTextColor;
       ctx.globalAlpha = 0.8;
@@ -399,16 +399,15 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     if (!canvasRef.current || !currentText.trim() || !cropRect) return;
     const canvas = canvasRef.current;
     
-    const hasTop = texts.some(t => t.positionMode === 'Top') || (showTextModal && textPositionMode === 'Top');
-    const imgY = hasTop ? (cropRect.h * 0.15) : 0;
-
-    const padVal = cropRect.h * 0.15;
-    const size = canvas.width * 0.05;
+    const size = currentTextSize;
     const x = canvas.width / 2;
-    let y = cropRect.h / 2;
+    let y = canvas.height / 2;
 
-    if (textPositionMode === 'Top') y = - (padVal / 2) + (size / 2);
-    if (textPositionMode === 'Bottom') y = cropRect.h + (padVal / 2) + (size / 2);
+    const topTextSize = Math.max(0, ...texts.filter(t => t.positionMode === 'Top').map(t => t.size), (showTextModal && textPositionMode === 'Top') ? currentTextSize : 0);
+    const topPad = topTextSize > 24 ? topTextSize * 1.2 : 0;
+
+    if (textPositionMode === 'Top') y = size;
+    if (textPositionMode === 'Bottom') y = canvas.height - 20;
 
     const newText: TextItem = {
       text: currentText,

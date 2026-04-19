@@ -227,26 +227,7 @@ object ImageProcessor {
         // 4. Style-Specific Overlays
         when (styleName) {
             "Meme" -> {
-                val memePaint = Paint(Paint.ANTI_ALIAS_FLAG)
-                memePaint.color = Color.WHITE
-                memePaint.textSize = finalWidth * 0.07f
-                memePaint.textAlign = Paint.Align.CENTER
-                memePaint.typeface = android.graphics.Typeface.DEFAULT_BOLD
-                
-                // Add black stroke
-                val strokePaint = Paint(memePaint)
-                strokePaint.style = Paint.Style.STROKE
-                strokePaint.strokeWidth = 8f
-                strokePaint.color = Color.BLACK
-                
-                if (memeTop.isNotEmpty()) {
-                    canvas.drawText(memeTop.uppercase(), finalWidth / 2f, padding * 0.7f, strokePaint)
-                    canvas.drawText(memeTop.uppercase(), finalWidth / 2f, padding * 0.7f, memePaint)
-                }
-                if (memeBottom.isNotEmpty()) {
-                    canvas.drawText(memeBottom.uppercase(), finalWidth / 2f, finalHeight - (padding * 0.3f), strokePaint)
-                    canvas.drawText(memeBottom.uppercase(), finalWidth / 2f, finalHeight - (padding * 0.3f), memePaint)
-                }
+                // Meme style now just has black background and specific padding
             }
             "Chat" -> {
                 // Add a "Chat" accent - maybe a status bar or something

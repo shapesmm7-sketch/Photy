@@ -243,23 +243,6 @@ export default function App() {
                    );
                  })}
               </div>
-
-              {selectedStyle === 'Meme' && (
-                <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-bottom-2">
-                  <input 
-                    value={memeTopText}
-                    onChange={e => setMemeTopText(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 rounded-xl text-sm border-2 border-transparent focus:border-blue-500 outline-none transition-all"
-                    placeholder="Top Text"
-                  />
-                  <input 
-                    value={memeBottomText}
-                    onChange={e => setMemeBottomText(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 rounded-xl text-sm border-2 border-transparent focus:border-blue-500 outline-none transition-all"
-                    placeholder="Bottom Text"
-                  />
-                </div>
-              )}
             </div>
 
             {/* Bottom Actions */}

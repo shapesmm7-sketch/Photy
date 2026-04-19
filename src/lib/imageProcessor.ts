@@ -202,20 +202,7 @@ export async function applyStyle(
 
       // 4. Overlays
       if (styleName === "Meme") {
-          ctx.fillStyle = "white";
-          ctx.strokeStyle = "black";
-          ctx.lineWidth = canvas.width * 0.01;
-          ctx.font = `bold ${canvas.width * 0.07}px Impact, sans-serif`;
-          ctx.textAlign = "center";
-          
-          if (memeTop) {
-            ctx.strokeText(memeTop.toUpperCase(), canvas.width / 2, padding * 0.7);
-            ctx.fillText(memeTop.toUpperCase(), canvas.width / 2, padding * 0.7);
-          }
-          if (memeBottom) {
-            ctx.strokeText(memeBottom.toUpperCase(), canvas.width / 2, canvas.height - (padding * 0.3));
-            ctx.fillText(memeBottom.toUpperCase(), canvas.width / 2, canvas.height - (padding * 0.3));
-          }
+          // Meme style now just has black background and specific padding
       }
 
       // Watermark
