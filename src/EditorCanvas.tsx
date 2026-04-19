@@ -70,6 +70,7 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
   // Text state
   const [texts, setTexts] = useState<TextItem[]>([]);
   const [showTextModal, setShowTextModal] = useState(false);
+  const [editingTextIndex, setEditingTextIndex] = useState<number>(-1);
   const [currentText, setCurrentText] = useState('');
   const [textPositionMode, setTextPositionMode] = useState<'Top' | 'Default' | 'Bottom'>('Default');
   const [currentTextSize, setCurrentTextSize] = useState(32);
@@ -292,9 +293,31 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
   };
 
   const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
-    if (activeTool === 'none') return;
-    setIsDrawing(true);
     const pt = getCanvasPoint(e);
+
+    // Hit test for texts (even if activeTool !== 'text', allow tapping to edit)
+    const clickedTextIndex = texts.findIndex(t => {
+      // Approximation of font bounds. t.x is center, t.y is baseline
+      const height = t.size * 1.5; // add padding
+      const width = Math.max(t.text.length * (t.size * 0.7), 40) + 40; // approx width with generous padding
+      return pt.x > t.x - width/2 && pt.x < t.x + width/2 && pt.y < t.y + 20 && pt.y > t.y - height;
+    });
+
+    if (clickedTextIndex >= 0) {
+      const t = texts[clickedTextIndex];
+      setEditingTextIndex(clickedTextIndex);
+      setCurrentText(t.text);
+      setCurrentTextColor(t.color);
+      setCurrentTextSize(t.size);
+      setCurrentTextFont(t.fontName);
+      setTextPositionMode(t.positionMode);
+      setActiveTool('text');
+      setShowTextModal(true);
+      return;
+    }
+
+    if (activeTool === 'none' || activeTool === 'text') return;
+    setIsDrawing(true);
 
     if (activeTool === 'crop') {
        cropStartRef.current = pt;
@@ -397,7 +420,27 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
       fontName: currentTextFont
     };
 
-    setTexts([...texts, newText]);
+    if (editingTextIndex >= 0) {
+      const newTexts = [...texts];
+      newTexts[editingTextIndex] = newText;
+      setTexts(newTexts);
+    } else {
+      setTexts([...texts, newText]);
+    }
+    
+    setEditingTextIndex(-1);
+    setShowTextModal(false);
+    setCurrentText('');
+    redraw();
+  };
+
+  const handleDeleteText = () => {
+    if (editingTextIndex >= 0) {
+      const newTexts = [...texts];
+      newTexts.splice(editingTextIndex, 1);
+      setTexts(newTexts);
+    }
+    setEditingTextIndex(-1);
     setShowTextModal(false);
     setCurrentText('');
     redraw();
@@ -618,8 +661,19 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
                 </div>
 
                 <div className="flex gap-3 pt-2">
+                  {editingTextIndex >= 0 && (
+                    <button 
+                      onClick={handleDeleteText}
+                      className="py-2 px-4 bg-red-100 text-red-600 hover:bg-red-200 rounded-xl font-bold text-sm transition-colors"
+                    >
+                      Delete
+                    </button>
+                  )}
                   <button 
-                    onClick={() => setShowTextModal(false)}
+                    onClick={() => {
+                      setShowTextModal(false);
+                      setEditingTextIndex(-1);
+                    }}
                     className="flex-1 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded-xl font-bold text-sm"
                   >
                     Cancel
@@ -629,7 +683,7 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
                     onClick={handleAddText}
                     className="flex-[2] py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 text-white rounded-xl font-bold text-sm shadow-md transition-all active:scale-95"
                   >
-                    Add
+                    {editingTextIndex >= 0 ? "Save" : "Add"}
                   </button>
                 </div>
               </div>

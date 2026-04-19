@@ -283,6 +283,7 @@ fun CanvasEditor(
                                 color = textItem.color.toArgb()
                                 textSize = textPxSize * scale
                                 isAntiAlias = true
+                                textAlign = android.graphics.Paint.Align.CENTER
                                 typeface = when (textItem.fontName) {
                                     "Serif" -> android.graphics.Typeface.create(android.graphics.Typeface.SERIF, android.graphics.Typeface.BOLD)
                                     "SansSerif" -> android.graphics.Typeface.create(android.graphics.Typeface.SANS_SERIF, android.graphics.Typeface.BOLD)
@@ -292,8 +293,13 @@ fun CanvasEditor(
                                 }
                             }
                             
-                            val textX = (textItem.offset.x - offsetX) * scale
-                            val textY = (textItem.offset.y - offsetY_preview) * scale - textPaint.ascent() + topPad
+                            // textItem.offset.x is relative to the center since we use Alignment.TopCenter
+                            val viewX = (canvasWidth / 2f) + textItem.offset.x
+                            val textX = (viewX - offsetX) * scale
+                            
+                            // Offset by 16dp vertically to account for the Box padding added for hit bounds
+                            val yOffsetFix = 16f * localDensity
+                            val textY = (textItem.offset.y + yOffsetFix - offsetY_preview) * scale - textPaint.ascent() + topPad
                             
                             androidCanvas.drawText(textItem.text, textX, textY, textPaint)
                         }
@@ -559,21 +565,11 @@ fun CanvasEditor(
             if (mode == "draw") {
                 texts.forEachIndexed { index, textItem ->
                     if (index != editingTextIndex) {
-                        Text(
-                            text = textItem.text,
-                            color = textItem.color,
-                            fontSize = textItem.fontSize.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = when (textItem.fontName) {
-                                "Serif" -> FontFamily.Serif
-                                "SansSerif" -> FontFamily.SansSerif
-                                "Monospace" -> FontFamily.Monospace
-                                "Cursive" -> FontFamily.Cursive
-                                else -> FontFamily.Default
-                            },
+                        Box(
                             modifier = Modifier
-                                .align(Alignment.TopStart)
+                                .align(Alignment.TopCenter)
                                 .offset { IntOffset(textItem.offset.x.toInt(), textItem.offset.y.toInt()) }
+                                .padding(16.dp)
                                 .pointerInput(Unit) {
                                     detectTapGestures(
                                         onTap = {
@@ -581,6 +577,7 @@ fun CanvasEditor(
                                             currentTextColor = textItem.color
                                             currentTextSize = textItem.fontSize
                                             currentTextFont = textItem.fontName
+                                            currentTextPosition = textItem.position
                                             editingTextIndex = index
                                             showTextDialog = true
                                         }
@@ -594,7 +591,21 @@ fun CanvasEditor(
                                         texts = newTexts
                                     }
                                 }
-                        )
+                        ) {
+                            Text(
+                                text = textItem.text,
+                                color = textItem.color,
+                                fontSize = textItem.fontSize.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = when (textItem.fontName) {
+                                    "Serif" -> FontFamily.Serif
+                                    "SansSerif" -> FontFamily.SansSerif
+                                    "Monospace" -> FontFamily.Monospace
+                                    "Cursive" -> FontFamily.Cursive
+                                    else -> FontFamily.Default
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -602,7 +613,7 @@ fun CanvasEditor(
                     val previewX = if (editingTextIndex >= 0) {
                         texts[editingTextIndex].offset.x
                     } else {
-                        if (boxSize.width > 0) boxSize.width / 2f - (currentTextContent.length * currentTextSize / 4f) else 100f
+                        0f
                     }
                     val previewY = if (editingTextIndex >= 0) {
                         texts[editingTextIndex].offset.y
@@ -614,22 +625,26 @@ fun CanvasEditor(
                         }
                     }
 
-                    Text(
-                        text = currentTextContent,
-                        color = currentTextColor,
-                        fontSize = currentTextSize.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = when (currentTextFont) {
-                            "Serif" -> FontFamily.Serif
-                            "SansSerif" -> FontFamily.SansSerif
-                            "Monospace" -> FontFamily.Monospace
-                            "Cursive" -> FontFamily.Cursive
-                            else -> FontFamily.Default
-                        },
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.TopStart)
+                            .align(Alignment.TopCenter)
                             .offset { IntOffset(previewX.toInt(), previewY.toInt()) }
-                    )
+                            .padding(16.dp)
+                    ) {
+                        Text(
+                            text = currentTextContent,
+                            color = currentTextColor,
+                            fontSize = currentTextSize.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = when (currentTextFont) {
+                                "Serif" -> FontFamily.Serif
+                                "SansSerif" -> FontFamily.SansSerif
+                                "Monospace" -> FontFamily.Monospace
+                                "Cursive" -> FontFamily.Cursive
+                                else -> FontFamily.Default
+                            }
+                        )
+                    }
                 }
             }
 
@@ -812,6 +827,7 @@ fun CanvasEditor(
                                             val imgRatio = activeBitmap.width.toFloat() / activeBitmap.height
                                             val canvasRatio = if (canvasHeight > 0) canvasWidth / canvasHeight else 1f
                                             val destHeight = if (imgRatio > canvasRatio) (if (imgRatio > 0) canvasWidth / imgRatio else 0f) else canvasHeight
+                                            val destWidth = if (imgRatio > canvasRatio) canvasWidth else destHeight * imgRatio
                                             
                                             var offsetYPreview = (canvasHeight - destHeight) / 2
                                             if (hasTopText && !hasBottomText) {
@@ -819,8 +835,8 @@ fun CanvasEditor(
                                             } else if (!hasTopText && hasBottomText) {
                                                 offsetYPreview = (canvasHeight - destHeight) * 0.3f
                                             }
-
-                                            val centerX = if (boxSize.width > 0) boxSize.width / 2f - (currentTextContent.length * currentTextSize / 4f) else 100f
+                                            
+                                            val centerX = 0f // 0 is exactly center with Alignment.TopCenter
                                             val centerY = when (currentTextPosition) {
                                                 "Top" -> offsetYPreview - 90f
                                                 "Bottom" -> offsetYPreview + destHeight + 40f
