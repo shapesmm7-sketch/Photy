@@ -24,6 +24,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -33,6 +34,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import kotlin.math.pow
+import kotlin.math.sqrt
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
@@ -99,13 +102,13 @@ fun CanvasEditor(
         
         val start = points.first()
         val end = points.last()
-        val directDist = kotlin.math.sqrt((end.x - start.x).pow(2) + (end.y - start.y).pow(2))
+        val directDist = sqrt((end.x - start.x).pow(2) + (end.y - start.y).pow(2))
         
         var pathDist = 0f
         for (i in 0 until points.size - 1) {
             val p1 = points[i]
             val p2 = points[i+1]
-            pathDist += kotlin.math.sqrt((p2.x - p1.x).pow(2) + (p2.y - p1.y).pow(2))
+            pathDist += sqrt((p2.x - p1.x).pow(2) + (p2.y - p1.y).pow(2))
         }
         
         // Line detection
@@ -115,10 +118,10 @@ fun CanvasEditor(
         if (directDist < pathDist * 0.3f) {
             val centerX = points.map { it.x }.average().toFloat()
             val centerY = points.map { it.y }.average().toFloat()
-            val radii = points.map { kotlin.math.sqrt((it.x - centerX).pow(2) + (it.y - centerY).pow(2)) }
+            val radii = points.map { sqrt((it.x - centerX).pow(2) + (it.y - centerY).pow(2)) }
             val avgRadius = radii.average().toFloat()
             val variance = radii.map { (it - avgRadius).pow(2) }.average()
-            val stdDev = kotlin.math.sqrt(variance)
+            val stdDev = sqrt(variance)
             if (stdDev < avgRadius * 0.25f) return "CIRCLE"
         }
         return null
