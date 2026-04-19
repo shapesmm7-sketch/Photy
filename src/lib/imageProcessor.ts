@@ -176,9 +176,6 @@ export async function applyStyle(
           ctx.strokeStyle = "red";
           ctx.lineWidth = canvas.width * 0.015;
           const cx = canvas.width / 2, cy = canvas.height / 2;
-          ctx.beginPath();
-          ctx.arc(cx, cy, canvas.width * 0.15, 0, Math.PI * 2);
-          ctx.stroke();
 
           ctx.beginPath();
           ctx.moveTo(cx + 50, cy - 150);

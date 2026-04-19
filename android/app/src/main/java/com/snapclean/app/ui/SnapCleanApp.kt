@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import com.snapclean.app.processor.ImageProcessor
 import com.snapclean.app.utils.BitmapUtils
 import com.snapclean.app.utils.SmartScanner
@@ -98,8 +100,34 @@ fun SnapCleanApp() {
     
     // Side effect to update processedBitmap when parameters change
     LaunchedEffect(activeBitmap, selectedStyle, sensitiveAreas, blurStrength, memeTopText, memeBottomText) {
-        activeBitmap?.let {
-            processedBitmap = ImageProcessor.applyStyle(it, selectedStyle, sensitiveAreas = sensitiveAreas, blurStrength = blurStrength, memeTop = memeTopText, memeBottom = memeBottomText)
+        activeBitmap?.let { bmp ->
+            // Debounce to avoid flooding memory during slider changes
+            delay(150)
+            
+            // Move processing to background thread to keep UI smooth
+            val newBitmap = withContext(kotlinx.coroutines.Dispatchers.Default) {
+                try {
+                    ImageProcessor.applyStyle(
+                        bmp, 
+                        selectedStyle, 
+                        sensitiveAreas = sensitiveAreas, 
+                        blurStrength = blurStrength, 
+                        memeTop = memeTopText, 
+                        memeBottom = memeBottomText
+                    )
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            
+            if (newBitmap != null) {
+                // Recycle the previous processed bitmap if it exists
+                val oldBitmap = processedBitmap
+                processedBitmap = newBitmap
+                if (oldBitmap != null && oldBitmap != newBitmap && oldBitmap != activeBitmap && oldBitmap != originalBitmap && !oldBitmap.isRecycled) {
+                    try { oldBitmap.recycle() } catch (e: Exception) {}
+                }
+            }
         }
     }
     var paths by remember { mutableStateOf(emptyList<com.snapclean.app.ui.DrawAction>()) }
@@ -118,6 +146,13 @@ fun SnapCleanApp() {
                 
                 sampledBitmap?.let { bitmap ->
                     val softBitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, true)
+                    
+        // Recycle old bitmaps
+        if (originalBitmap != null && originalBitmap?.isRecycled == false) originalBitmap?.recycle()
+        if (baseBitmap != null && baseBitmap?.isRecycled == false) baseBitmap?.recycle()
+        if (activeBitmap != null && activeBitmap?.isRecycled == false) activeBitmap?.recycle()
+        if (processedBitmap != null && processedBitmap?.isRecycled == false) processedBitmap?.recycle()
+                    
                     originalBitmap = softBitmap
                     state = "processing"
                     
@@ -129,6 +164,9 @@ fun SnapCleanApp() {
                         paths = emptyList()
                         texts = emptyList()
                         state = "preview"
+                        
+                        // Recycle temporary sampled bitmap
+                        bitmap.recycle()
                     }
                 }
             } catch (e: Exception) {
@@ -148,14 +186,14 @@ fun SnapCleanApp() {
                                 colors = listOf(Color(0xFFF8FAFC), Color(0xFFE2E8F0))
                             )
                         )
-                        .verticalScroll(rememberScrollState())
-                        .padding(vertical = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(bottom = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.SpaceEvenly
                 ) {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp),
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
                         shape = RoundedCornerShape(28.dp),
                         colors = CardDefaults.cardColors(containerColor = Color.White),
                         elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
@@ -174,27 +212,27 @@ fun SnapCleanApp() {
                                 }
                             }
                             
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                             
                             Text(
                                 "Snap Clean", 
-                                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
                                 color = Color(0xFF0F172A)
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                "Auto-crop, enhance, and beautify your screenshot or photo in milliseconds.", 
+                                "Auto-crop, enhance, and beautify your screenshot in milliseconds.", 
                                 color = Color(0xFF64748B),
                                 textAlign = TextAlign.Center,
                                 style = MaterialTheme.typography.bodySmall
                             )
-                            Spacer(modifier = Modifier.height(24.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
                             
                             // Interactive Upload Zone
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(130.dp)
+                                    .height(115.dp)
                                     .clickable { launcher.launch("image/*") }
                                     .background(Color(0xFFF8FAFC), RoundedCornerShape(16.dp)),
                                 contentAlignment = Alignment.Center
@@ -225,92 +263,92 @@ fun SnapCleanApp() {
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    Text(
-                        "How it works",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color(0xFF475569)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Before (Messy Screenshot)
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(
-                                modifier = Modifier
-                                    .width(76.dp)
-                                    .height(140.dp)
-                                    .background(Color.DarkGray, RoundedCornerShape(8.dp))
-                                    .border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp))
-                            ) {
-                                // Fake Status Bar
-                                Box(modifier = Modifier.fillMaxWidth().height(10.dp).background(Color.Black, RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)))
-                                // Fake App Bar
-                                Box(modifier = Modifier.fillMaxWidth().height(18.dp).offset(y = 10.dp).background(Color(0xFF1E293B)))
-                                // Unusable space
-                                Box(modifier = Modifier.fillMaxWidth().height(26.dp).offset(y = 28.dp).background(Color(0xFF334155)))
-                                // Content that user actually wants
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "How it works",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color(0xFF475569)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Before (Messy Screenshot)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Box(
                                     modifier = Modifier
-                                        .padding(top = 54.dp, bottom = 30.dp, start = 6.dp, end = 6.dp)
-                                        .fillMaxSize()
-                                        .background(Color.White, RoundedCornerShape(6.dp))
+                                        .width(60.dp)
+                                        .height(100.dp)
+                                        .background(Color.DarkGray, RoundedCornerShape(6.dp))
+                                        .border(1.dp, Color(0xFF334155), RoundedCornerShape(6.dp))
                                 ) {
-                                    Column(modifier = Modifier.padding(4.dp)) {
-                                        Box(modifier = Modifier.size(16.dp).background(Color(0xFFCBD5E1), CircleShape))
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Box(modifier = Modifier.fillMaxWidth().height(3.dp).background(Color(0xFFE2E8F0)))
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Box(modifier = Modifier.fillMaxWidth(0.6f).height(3.dp).background(Color(0xFFE2E8F0)))
+                                    // Fake Status Bar
+                                    Box(modifier = Modifier.fillMaxWidth().height(8.dp).background(Color.Black, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)))
+                                    // Fake App Bar
+                                    Box(modifier = Modifier.fillMaxWidth().height(14.dp).offset(y = 8.dp).background(Color(0xFF1E293B)))
+                                    // Unusable space
+                                    Box(modifier = Modifier.fillMaxWidth().height(20.dp).offset(y = 22.dp).background(Color(0xFF334155)))
+                                    // Content that user actually wants
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(top = 44.dp, bottom = 22.dp, start = 4.dp, end = 4.dp)
+                                            .fillMaxSize()
+                                            .background(Color.White, RoundedCornerShape(4.dp))
+                                    ) {
+                                        Column(modifier = Modifier.padding(3.dp)) {
+                                            Box(modifier = Modifier.size(12.dp).background(Color(0xFFCBD5E1), CircleShape))
+                                            Spacer(modifier = Modifier.height(3.dp))
+                                            Box(modifier = Modifier.fillMaxWidth().height(2.dp).background(Color(0xFFE2E8F0)))
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Box(modifier = Modifier.fillMaxWidth(0.6f).height(2.dp).background(Color(0xFFE2E8F0)))
+                                        }
+                                    }
+                                    // Fake Nav Bar / Ad
+                                    Box(modifier = Modifier.fillMaxWidth().height(14.dp).align(Alignment.BottomCenter).background(Color.Black, RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp)))
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Original", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = 10.sp)
+                            }
+                            
+                            Text("➔", fontSize = 16.sp, color = Color(0xFF94A3B8))
+                            
+                            // After (Cleaned and Beautified)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(85.dp)
+                                        .height(85.dp)
+                                        .background(
+                                            androidx.compose.ui.graphics.Brush.linearGradient(
+                                                colors = listOf(Color(0xFF3B82F6), Color(0xFF8B5CF6))
+                                            ),
+                                            RoundedCornerShape(10.dp)
+                                        )
+                                        .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(10.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // Content perfectly cropped, scaled, and beautified
+                                    Card(
+                                        modifier = Modifier.width(58.dp).height(52.dp),
+                                        shape = RoundedCornerShape(6.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                                        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+                                    ) {
+                                        Column(modifier = Modifier.padding(4.dp)) {
+                                            Box(modifier = Modifier.size(14.dp).background(Color(0xFFCBD5E1), CircleShape))
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Box(modifier = Modifier.fillMaxWidth().height(3.dp).background(Color(0xFFE2E8F0)))
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Box(modifier = Modifier.fillMaxWidth(0.6f).height(3.dp).background(Color(0xFFE2E8F0)))
+                                        }
                                     }
                                 }
-                                // Fake Nav Bar / Ad
-                                Box(modifier = Modifier.fillMaxWidth().height(18.dp).align(Alignment.BottomCenter).background(Color.Black, RoundedCornerShape(bottomStart = 8.dp, bottomEnd = 8.dp)))
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Snap Clean", color = Color(0xFF3B82F6), fontWeight = FontWeight.Bold, fontSize = 10.sp)
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Before", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = 12.sp)
-                        }
-                        
-                        Text("➔", fontSize = 20.sp, color = Color(0xFF94A3B8))
-                        
-                        // After (Cleaned and Beautified)
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(
-                                modifier = Modifier
-                                    .width(110.dp)
-                                    .height(110.dp)
-                                    .background(
-                                        androidx.compose.ui.graphics.Brush.linearGradient(
-                                            colors = listOf(Color(0xFF3B82F6), Color(0xFF8B5CF6))
-                                        ),
-                                        RoundedCornerShape(12.dp)
-                                    )
-                                    .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                // Content perfectly cropped, scaled, and beautified
-                                Card(
-                                    modifier = Modifier.width(76.dp).height(68.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                                ) {
-                                    Column(modifier = Modifier.padding(6.dp)) {
-                                        Box(modifier = Modifier.size(18.dp).background(Color(0xFFCBD5E1), CircleShape))
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(Color(0xFFE2E8F0)))
-                                        Spacer(modifier = Modifier.height(3.dp))
-                                        Box(modifier = Modifier.fillMaxWidth(0.6f).height(4.dp).background(Color(0xFFE2E8F0)))
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("After", color = Color(0xFF64748B), fontWeight = FontWeight.Medium, fontSize = 12.sp)
                         }
                     }
                 }
@@ -335,47 +373,18 @@ fun SnapCleanApp() {
                     // TOP ACTION BAR
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.Center
                     ) {
                         SmartActionButton(
                             onClick = { /* Scroll can be added if needed, styles are below */ },
                             label = "Styles",
                             icon = "✨",
                             containerColor = Color(0xFF8B5CF6),
-                            modifier = Modifier.weight(1f)
-                        )
-                        SmartActionButton(
-                            onClick = {
-                                activeBitmap?.let { bmp ->
-                                    isPrivacyScanning = true
-                                    coroutineScope.launch {
-                                        val detected = SmartScanner.scan(bmp)
-                                        sensitiveAreas = detected
-                                        isPrivacyScanning = false
-                                    }
-                                }
-                            },
-                            label = "Hide Info",
-                            icon = "🔒",
-                            containerColor = Color(0xFF10B981),
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.width(160.dp)
                         )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
-
-                    if (isPrivacyScanning) {
-                        Card(
-                            modifier = Modifier.padding(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9))
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(12.dp)) {
-                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text("Detecting private info...", fontSize = 14.sp)
-                            }
-                        }
-                    }
 
                     // Before / After Toggle
                     Row(
@@ -590,7 +599,31 @@ fun SnapCleanApp() {
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Button(
-                                onClick = { state = "edit" }, 
+                                onClick = { 
+                                    processedBitmap?.let { styled ->
+                                        // "Bake" the style so editor sees it
+                                        val oldActive = activeBitmap
+                                        val oldBase = baseBitmap
+                                        
+                                        val newBitmap = styled.copy(styled.config, true)
+                                        activeBitmap = newBitmap
+                                        baseBitmap = newBitmap.copy(newBitmap.config, true)
+                                        
+                                        // Cleanup old memory
+                                        if (oldActive != null && oldActive != originalBitmap && !oldActive.isRecycled) {
+                                            try { oldActive.recycle() } catch (e: Exception) {}
+                                        }
+                                        if (oldBase != null && oldBase != originalBitmap && oldBase != oldActive && !oldBase.isRecycled) {
+                                            try { oldBase.recycle() } catch (e: Exception) {}
+                                        }
+                                        
+                                        // Reset style to None since it's now part of the pixels
+                                        selectedStyle = "None"
+                                        memeTopText = ""
+                                        memeBottomText = ""
+                                    }
+                                    state = "edit" 
+                                }, 
                                 modifier = Modifier.weight(1f).height(56.dp),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF3F4F6), contentColor = Color(0xFF475569))
@@ -616,7 +649,18 @@ fun SnapCleanApp() {
                             ) { Text("Save", fontWeight = FontWeight.Bold) }
 
                             Button(
-                                onClick = { state = "upload" }, 
+                onClick = { 
+                    if (originalBitmap != null && originalBitmap?.isRecycled == false) originalBitmap?.recycle()
+                    if (baseBitmap != null && baseBitmap?.isRecycled == false) baseBitmap?.recycle()
+                    if (activeBitmap != null && activeBitmap?.isRecycled == false) activeBitmap?.recycle()
+                    if (processedBitmap != null && processedBitmap?.isRecycled == false) processedBitmap?.recycle()
+                    
+                    originalBitmap = null
+                    baseBitmap = null
+                                    activeBitmap = null
+                                    processedBitmap = null
+                                    state = "upload" 
+                                }, 
                                 modifier = Modifier.weight(1f).height(56.dp),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = Color(0xFF94A3B8))
@@ -633,11 +677,22 @@ fun SnapCleanApp() {
                         initialPaths = paths,
                         initialTexts = texts,
                         onDone = { bakedBmp, newBaseBmp, newPaths, newTexts -> 
+                            val oldActive = activeBitmap
+                            val oldBase = baseBitmap
+                            
                             activeBitmap = bakedBmp
                             baseBitmap = newBaseBmp
                             paths = newPaths
                             texts = newTexts
-                            processedBitmap = ImageProcessor.applyStyle(bakedBmp, selectedStyle)
+                            
+    // Recycle previous if they were different
+    if (oldActive != null && oldActive != bakedBmp && oldActive != originalBitmap && !oldActive.isRecycled) {
+        try { oldActive.recycle() } catch (e: Exception) {}
+    }
+    if (oldBase != null && oldBase != newBaseBmp && oldBase != originalBitmap && oldBase != oldActive && !oldBase.isRecycled) {
+        try { oldBase.recycle() } catch (e: Exception) {}
+    }
+                            
                             state = "preview"
                         },
                         onCancel = { state = "preview" }

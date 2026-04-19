@@ -1,8 +1,17 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Share2, Download, Edit2, Crop, PenTool, Droplets, X, Check, Save } from 'lucide-react';
+import { Share2, Download, Edit2, Crop, PenTool, Droplets, X, Check, Save, Type } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-type Tool = 'none' | 'crop' | 'draw' | 'blur';
+type Tool = 'none' | 'crop' | 'draw' | 'blur' | 'text';
+
+interface TextItem {
+  text: string;
+  x: number;
+  y: number;
+  color: string;
+  size: number;
+  positionMode: 'Top' | 'Default' | 'Bottom';
+}
 
 interface EditorCanvasProps {
   imageSrc: string;
@@ -27,6 +36,38 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
   // Drawing state
   const [paths, setPaths] = useState<{ path: Path2D, color: string, width: number, isBlur: boolean }[]>([]);
   const currentPathRef = useRef<Path2D | null>(null);
+  const drawingPointsRef = useRef<{x: number, y: number}[]>([]);
+  const [suggestedShape, setSuggestedShape] = useState<'Line' | 'Circle' | null>(null);
+
+  const detectShapeWeb = (points: {x: number, y: number}[]) => {
+    if (points.length < 10) return null;
+    const start = points[0];
+    const end = points[points.length - 1];
+    const directDist = Math.sqrt(Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2));
+    
+    let pathDist = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+      pathDist += Math.sqrt(Math.pow(points[i+1].x - points[i].x, 2) + Math.pow(points[i+1].y - points[i].y, 2));
+    }
+    
+    if (directDist > 0.9 * pathDist) return 'Line';
+    
+    if (directDist < pathDist * 0.3) {
+       const avgX = points.reduce((s, p) => s + p.x, 0) / points.length;
+       const avgY = points.reduce((s, p) => s + p.y, 0) / points.length;
+       const radii = points.map(p => Math.sqrt(Math.pow(p.x - avgX, 2) + Math.pow(p.y - avgY, 2)));
+       const avgRadius = radii.reduce((s, r) => s + r, 0) / radii.length;
+       const variance = radii.reduce((s, r) => s + Math.pow(r - avgRadius, 2), 0) / radii.length;
+       if (Math.sqrt(variance) < avgRadius * 0.25) return 'Circle';
+    }
+    return null;
+  };
+
+  // Text state
+  const [texts, setTexts] = useState<TextItem[]>([]);
+  const [showTextModal, setShowTextModal] = useState(false);
+  const [currentText, setCurrentText] = useState('');
+  const [textPositionMode, setTextPositionMode] = useState<'Top' | 'Default' | 'Bottom'>('Default');
 
   // Initialize and load image
   useEffect(() => {
@@ -121,6 +162,28 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
       }
     });
 
+    // Draw texts
+    texts.forEach(t => {
+      ctx.fillStyle = t.color;
+      ctx.font = `bold ${t.size}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(t.text, t.x, t.y);
+    });
+
+    // Draw temporary preview text if modal is open
+    if (showTextModal && currentText.trim()) {
+      const size = canvas.width * 0.05;
+      const x = canvas.width / 2;
+      let y = canvas.height / 2;
+      if (textPositionMode === 'Top') y = size * 2;
+      if (textPositionMode === 'Bottom') y = canvas.height - size;
+
+      ctx.fillStyle = 'rgba(255,255,255,0.8)'; // Slightly transparent for preview
+      ctx.font = `bold ${size}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(currentText, x, y);
+    }
+
     if (activeTool === 'crop' && cropStartRef.current && cropEndRef.current) {
        // Draw crop overlay
        ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -150,6 +213,11 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
        }
     }
   };
+
+  // Trigger redraw when state changes for live preview
+  useEffect(() => {
+    redraw();
+  }, [currentText, textPositionMode, texts, showTextModal]);
 
   const getCanvasPoint = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
@@ -187,6 +255,8 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
        path.moveTo(pt.x, pt.y);
        path.lineTo(pt.x + 0.1, pt.y + 0.1); 
        currentPathRef.current = path;
+       drawingPointsRef.current = [pt];
+       setSuggestedShape(null);
     }
     redraw();
   };
@@ -200,6 +270,7 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
        cropEndRef.current = pt;
     } else if (currentPathRef.current) {
        currentPathRef.current.lineTo(pt.x, pt.y);
+       drawingPointsRef.current.push(pt);
     }
     redraw();
   };
@@ -233,15 +304,48 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
        cropEndRef.current = null;
        setActiveTool('none'); // Reset tool after crop
     } else if (currentPathRef.current && canvasRef.current) {
-       setPaths([...paths, { 
-         path: currentPathRef.current, 
-         color: '#FF3366', 
-         width: canvasRef.current.width * 0.01,
-         isBlur: activeTool === 'blur'
-       }]);
-       currentPathRef.current = null;
+        const color = activeTool === 'draw' ? '#FF3366' : 'transparent';
+        const width = canvasRef.current.width * 0.01;
+        setPaths([...paths, { 
+          path: currentPathRef.current, 
+          color, 
+          width: activeTool === 'blur' ? 30 : width, 
+          isBlur: activeTool === 'blur' 
+        }]);
+
+        if (activeTool === 'draw') {
+          const shape = detectShapeWeb(drawingPointsRef.current);
+          setSuggestedShape(shape);
+        }
+        currentPathRef.current = null;
     }
     
+    redraw();
+  };
+
+  const handleAddText = () => {
+    if (!canvasRef.current || !currentText.trim()) return;
+    const canvas = canvasRef.current;
+    
+    const size = canvas.width * 0.05;
+    const x = canvas.width / 2;
+    let y = canvas.height / 2;
+
+    if (textPositionMode === 'Top') y = size * 2;
+    if (textPositionMode === 'Bottom') y = canvas.height - size;
+
+    const newText: TextItem = {
+      text: currentText,
+      x,
+      y,
+      color: 'white',
+      size,
+      positionMode: textPositionMode
+    };
+
+    setTexts([...texts, newText]);
+    setShowTextModal(false);
+    setCurrentText('');
     redraw();
   };
 
@@ -288,6 +392,48 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
               onTouchEnd={handlePointerUp}
             />
         )}
+
+        {/* Refinement Prompt */}
+        {suggestedShape && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30">
+             <button 
+               onClick={() => {
+                 if (paths.length === 0 || drawingPointsRef.current.length === 0) return;
+                 const newRefined = new Path2D();
+                 if (suggestedShape === 'Line') {
+                   const s = drawingPointsRef.current[0];
+                   const e = drawingPointsRef.current[drawingPointsRef.current.length - 1];
+                   newRefined.moveTo(s.x, s.y);
+                   newRefined.lineTo(e.x, e.y);
+                 } else {
+                   const points = drawingPointsRef.current;
+                   const minX = Math.min(...points.map(p => p.x));
+                   const maxX = Math.max(...points.map(p => p.x));
+                   const minY = Math.min(...points.map(p => p.y));
+                   const maxY = Math.max(...points.map(p => p.y));
+                   const w = maxX - minX;
+                   const h = maxY - minY;
+                   const cx = minX + w/2;
+                   const cy = minY + h/2;
+                   const r = (w + h) / 4;
+                   newRefined.arc(cx, cy, r, 0, Math.PI * 2);
+                 }
+                 setPaths(prev => {
+                   const next = [...prev];
+                   const last = next[next.length - 1];
+                   if (!last) return prev;
+                   next[next.length - 1] = { ...last, path: newRefined };
+                   return next;
+                 });
+                 setSuggestedShape(null);
+                 setTimeout(() => redraw(), 0);
+               }}
+               className="bg-blue-600 shadow-xl shadow-blue-900/40 text-white px-6 py-3 rounded-full font-bold animate-pulse flex items-center gap-2 border border-white/20 whitespace-nowrap"
+             >
+               ✨ Perfect to {suggestedShape}?
+             </button>
+          </div>
+        )}
       </div>
 
       <div className="flex justify-around items-center p-4 bg-[#111] pb-safe z-10 border-t border-white/10">
@@ -309,10 +455,22 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
            icon={<Droplets />} 
            label="Blur" 
         />
+        <ToolButton 
+           active={activeTool === 'text'} 
+           onClick={() => {
+             setActiveTool('text');
+             setCurrentText('');
+             setTextPositionMode('Default');
+             setShowTextModal(true);
+           }} 
+           icon={<Type />} 
+           label="Text" 
+        />
         <div className="w-[1px] h-8 bg-white/10 mx-2" />
         <button 
            onClick={() => {
               setPaths([]);
+              setTexts([]);
               if (originalImageRef.current) {
                  const rect = { x: 0, y: 0, w: originalImageRef.current.width, h: originalImageRef.current.height };
                  setCropRect(rect);
@@ -325,6 +483,65 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
           <span className="text-[10px] font-medium tracking-wide uppercase">Reset</span>
         </button>
       </div>
+
+      <AnimatePresence>
+        {showTextModal && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="absolute inset-0 z-[60] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+          >
+            <div className="bg-[#1a1a1a] w-full max-w-sm rounded-[32px] p-8 border border-white/10 shadow-2xl">
+              <h3 className="text-xl font-bold mb-6 text-center">Add Text</h3>
+              
+              <div className="space-y-6">
+                <input 
+                  autoFocus
+                  className="w-full bg-[#2a2a2a] rounded-2xl px-6 py-4 outline-none focus:ring-2 ring-blue-500 transition-all font-medium"
+                  placeholder="Enter text here..."
+                  value={currentText}
+                  onChange={e => setCurrentText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && currentText && handleAddText()}
+                />
+
+                <div className="space-y-3">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-1">Position</label>
+                  <div className="flex gap-2">
+                    {(['Top', 'Default', 'Bottom'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setTextPositionMode(mode)}
+                        className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${
+                          textPositionMode === mode ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#333]'
+                        }`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-4 pt-4">
+                  <button 
+                    onClick={() => setShowTextModal(false)}
+                    className="flex-1 py-4 bg-transparent text-gray-400 font-bold"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    disabled={!currentText.trim()}
+                    onClick={handleAddText}
+                    className="flex-1 py-4 bg-blue-600 rounded-2xl font-bold shadow-xl shadow-blue-900/20 disabled:opacity-50 transition-all active:scale-95"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

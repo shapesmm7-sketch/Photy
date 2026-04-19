@@ -65,6 +65,7 @@ fun CanvasEditor(
     var currentTextColor by remember { mutableStateOf(Color.White) }
     var currentTextSize by remember { mutableFloatStateOf(32f) }
     var currentTextFont by remember { mutableStateOf("Default") }
+    var currentTextPosition by remember { mutableStateOf("Default") } // "Default", "Top", "Bottom"
     var editingTextIndex by remember { mutableIntStateOf(-1) }
     var rubberColor by remember { mutableStateOf(Color.Black) }
     var penColor by remember { mutableStateOf(Color(0xFFFF3366)) }
@@ -90,6 +91,39 @@ fun CanvasEditor(
     
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
     
+    var currentPoints by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    var lastSuggestedShape by remember { mutableStateOf<String?>(null) } // "LINE", "CIRCLE", null
+
+    fun detectShape(points: List<Offset>): String? {
+        if (points.size < 10) return null
+        
+        val start = points.first()
+        val end = points.last()
+        val directDist = kotlin.math.sqrt((end.x - start.x).pow(2) + (end.y - start.y).pow(2))
+        
+        var pathDist = 0f
+        for (i in 0 until points.size - 1) {
+            val p1 = points[i]
+            val p2 = points[i+1]
+            pathDist += kotlin.math.sqrt((p2.x - p1.x).pow(2) + (p2.y - p1.y).pow(2))
+        }
+        
+        // Line detection
+        if (directDist > 0.9f * pathDist) return "LINE"
+        
+        // Circle detection
+        if (directDist < pathDist * 0.3f) {
+            val centerX = points.map { it.x }.average().toFloat()
+            val centerY = points.map { it.y }.average().toFloat()
+            val radii = points.map { kotlin.math.sqrt((it.x - centerX).pow(2) + (it.y - centerY).pow(2)) }
+            val avgRadius = radii.average().toFloat()
+            val variance = radii.map { (it - avgRadius).pow(2) }.average()
+            val stdDev = kotlin.math.sqrt(variance)
+            if (stdDev < avgRadius * 0.25f) return "CIRCLE"
+        }
+        return null
+    }
+
     Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         // App Bar
         Row(
@@ -131,6 +165,7 @@ fun CanvasEditor(
                             currentTextColor = Color.White
                             currentTextSize = 32f
                             currentTextFont = "Default"
+                            currentTextPosition = "Default"
                             editingTextIndex = -1
                             showTextDialog = true 
                         }, 
@@ -322,6 +357,8 @@ fun CanvasEditor(
                     onDragStart = { offset ->
                         if (mode == "draw" && drawTool != "NONE") {
                             currentPath = Path().apply { moveTo(offset.x, offset.y) }
+                            currentPoints = listOf(offset)
+                            lastSuggestedShape = null
                         } else if (mode == "crop") {
                             if (cropRect != null) {
                                 val cr = cropRect!!
@@ -368,6 +405,7 @@ fun CanvasEditor(
                         change.consume()
                         if (mode == "draw" && drawTool != "NONE") {
                             currentPath?.lineTo(change.position.x, change.position.y)
+                            currentPoints = currentPoints + change.position
                             refreshTick++
                         } else if (mode == "crop" && cropRect != null) {
                             val cr = cropRect!!
@@ -400,7 +438,10 @@ fun CanvasEditor(
                     },
                     onDragEnd = {
                         if (mode == "draw" && drawTool != "NONE") {
-                            currentPath?.let { paths = paths + DrawAction(it, drawTool, if (drawTool == "RUBBER") rubberColor else penColor) }
+                            currentPath?.let { 
+                                paths = paths + DrawAction(it, drawTool, if (drawTool == "RUBBER") rubberColor else penColor) 
+                            }
+                            lastSuggestedShape = detectShape(currentPoints)
                             currentPath = null
                         }
                         cropDragTarget = "NONE"
@@ -477,12 +518,68 @@ fun CanvasEditor(
             
             if (mode == "draw") {
                 texts.forEachIndexed { index, textItem ->
+                    if (index != editingTextIndex) {
+                        Text(
+                            text = textItem.text,
+                            color = textItem.color,
+                            fontSize = textItem.fontSize.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = when (textItem.fontName) {
+                                "Serif" -> FontFamily.Serif
+                                "SansSerif" -> FontFamily.SansSerif
+                                "Monospace" -> FontFamily.Monospace
+                                "Cursive" -> FontFamily.Cursive
+                                else -> FontFamily.Default
+                            },
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .offset { IntOffset(textItem.offset.x.toInt(), textItem.offset.y.toInt()) }
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onTap = {
+                                            currentTextContent = textItem.text
+                                            currentTextColor = textItem.color
+                                            currentTextSize = textItem.fontSize
+                                            currentTextFont = textItem.fontName
+                                            editingTextIndex = index
+                                            showTextDialog = true
+                                        }
+                                    )
+                                }
+                                .pointerInput(Unit) {
+                                    detectDragGestures { change, dragAmount ->
+                                        change.consume()
+                                        val newTexts = texts.toMutableList()
+                                        newTexts[index] = newTexts[index].copy(offset = newTexts[index].offset + dragAmount)
+                                        texts = newTexts
+                                    }
+                                }
+                        )
+                    }
+                }
+
+                if (showTextDialog && currentTextContent.isNotBlank()) {
+                    val previewX = if (editingTextIndex >= 0) {
+                        texts[editingTextIndex].offset.x
+                    } else {
+                        if (boxSize.width > 0) boxSize.width / 2f - (currentTextContent.length * currentTextSize / 4f) else 100f
+                    }
+                    val previewY = if (editingTextIndex >= 0) {
+                        texts[editingTextIndex].offset.y
+                    } else {
+                        when (currentTextPosition) {
+                            "Top" -> 50f
+                            "Bottom" -> if (boxSize.height > 0) boxSize.height - 100f else 400f
+                            else -> if (boxSize.height > 0) boxSize.height / 2f else 100f
+                        }
+                    }
+
                     Text(
-                        text = textItem.text,
-                        color = textItem.color,
-                        fontSize = textItem.fontSize.sp,
+                        text = currentTextContent,
+                        color = currentTextColor,
+                        fontSize = currentTextSize.sp,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = when (textItem.fontName) {
+                        fontFamily = when (currentTextFont) {
                             "Serif" -> FontFamily.Serif
                             "SansSerif" -> FontFamily.SansSerif
                             "Monospace" -> FontFamily.Monospace
@@ -491,27 +588,56 @@ fun CanvasEditor(
                         },
                         modifier = Modifier
                             .align(Alignment.TopStart)
-                            .offset { IntOffset(textItem.offset.x.toInt(), textItem.offset.y.toInt()) }
-                            .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onTap = {
-                                        currentTextContent = textItem.text
-                                        currentTextColor = textItem.color
-                                        currentTextSize = textItem.fontSize
-                                        currentTextFont = textItem.fontName
-                                        editingTextIndex = index
-                                        showTextDialog = true
+                            .offset { IntOffset(previewX.toInt(), previewY.toInt()) }
+                    )
+                }
+            }
+
+            // Shape Conversion Prompt
+            if (lastSuggestedShape != null && mode == "draw") {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 16.dp)
+                        .background(Color(0xE62196F3), RoundedCornerShape(24.dp))
+                        .clickable {
+                            if (paths.isNotEmpty() && currentPoints.isNotEmpty()) {
+                                val lastTool = paths.last().tool
+                                val lastColor = paths.last().color
+                                val refinedPath = Path()
+                                
+                                when (lastSuggestedShape) {
+                                    "LINE" -> {
+                                        val s = currentPoints.first()
+                                        val e = currentPoints.last()
+                                        refinedPath.moveTo(s.x, s.y)
+                                        refinedPath.lineTo(e.x, e.y)
                                     }
-                                )
-                            }
-                            .pointerInput(Unit) {
-                                detectDragGestures { change, dragAmount ->
-                                    change.consume()
-                                    val newTexts = texts.toMutableList()
-                                    newTexts[index] = newTexts[index].copy(offset = newTexts[index].offset + dragAmount)
-                                    texts = newTexts
+                                    "CIRCLE" -> {
+                                        val minX = currentPoints.minOf { it.x }
+                                        val maxX = currentPoints.maxOf { it.x }
+                                        val minY = currentPoints.minOf { it.y }
+                                        val maxY = currentPoints.maxOf { it.y }
+                                        val centerX = (minX + maxX) / 2
+                                        val centerY = (minY + maxY) / 2
+                                        val radius = (maxX - minX + maxY - minY) / 4
+                                        refinedPath.addOval(Rect(centerX - radius, centerY - radius, centerX + radius, centerY + radius))
+                                    }
                                 }
+                                
+                                val newPaths = paths.toMutableList()
+                                newPaths[newPaths.size - 1] = DrawAction(refinedPath, lastTool, lastColor)
+                                paths = newPaths
+                                lastSuggestedShape = null
                             }
+                        }
+                        .padding(horizontal = 20.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        text = "✨ Perfect to ${lastSuggestedShape!!.lowercase()}?",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
                     )
                 }
             }
@@ -538,6 +664,35 @@ fun CanvasEditor(
                             onValueChange = { currentTextSize = it },
                             valueRange = 12f..100f
                         )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Position", style = MaterialTheme.typography.labelMedium)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+                            item {
+                                Button(
+                                    onClick = { currentTextPosition = "Top" },
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Top") Color.Blue else Color.DarkGray),
+                                    modifier = Modifier.height(36.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp)
+                                ) { Text("Top", fontSize = 12.sp) }
+                            }
+                            item {
+                                Button(
+                                    onClick = { currentTextPosition = "Default" },
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Default") Color.Blue else Color.DarkGray),
+                                    modifier = Modifier.height(36.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp)
+                                ) { Text("Default", fontSize = 12.sp) }
+                            }
+                            item {
+                                Button(
+                                    onClick = { currentTextPosition = "Bottom" },
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Bottom") Color.Blue else Color.DarkGray),
+                                    modifier = Modifier.height(36.dp),
+                                    contentPadding = PaddingValues(horizontal = 12.dp)
+                                ) { Text("Bottom", fontSize = 12.sp) }
+                            }
+                        }
+                        
                         Spacer(modifier = Modifier.height(16.dp))
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(fontNames) { font ->
@@ -577,8 +732,12 @@ fun CanvasEditor(
                                 newTexts[editingTextIndex] = newTexts[editingTextIndex].copy(text = currentTextContent, color = currentTextColor, fontSize = currentTextSize, fontName = currentTextFont)
                                 texts = newTexts
                             } else {
-                                val centerX = if (boxSize.width > 0) boxSize.width / 2f - 50f else 100f
-                                val centerY = if (boxSize.height > 0) boxSize.height / 2f else 100f
+                                val centerX = if (boxSize.width > 0) boxSize.width / 2f - (currentTextContent.length * currentTextSize / 4f) else 100f
+                                val centerY = when (currentTextPosition) {
+                                    "Top" -> 50f
+                                    "Bottom" -> if (boxSize.height > 0) boxSize.height - 100f else 400f
+                                    else -> if (boxSize.height > 0) boxSize.height / 2f else 100f
+                                }
                                 texts = texts + TextItem(currentTextContent, Offset(centerX, centerY), currentTextColor, currentTextSize, currentTextFont)
                             }
                         } else if (editingTextIndex >= 0) {

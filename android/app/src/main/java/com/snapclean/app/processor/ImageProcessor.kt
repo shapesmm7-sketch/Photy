@@ -216,9 +216,6 @@ object ImageProcessor {
                 arrowPaint.strokeWidth = minOf(finalWidth, finalHeight) * 0.02f
                 arrowPaint.style = Paint.Style.STROKE
                 
-                // Draw Circle
-                canvas.drawCircle(midX, midY, importantArea.width * 1.5f, arrowPaint)
-                
                 // Draw Arrow
                 val arrowPath = Path()
                 arrowPath.moveTo(midX + finalWidth * 0.1f, midY - finalHeight * 0.2f)
@@ -250,7 +247,9 @@ object ImageProcessor {
                 
                 // Auto-blur names for Chat style
                 if (nameBlurAreas.isNotEmpty()) {
-                    baseImage = blurRegions(baseImage, nameBlurAreas, 25f)
+                    val nextBaseImage = blurRegions(baseImage, nameBlurAreas, 25f, recycleSource = isBaseImageACopy)
+                    baseImage = nextBaseImage
+                    isBaseImageACopy = true
                 }
             }
         }
@@ -269,12 +268,11 @@ object ImageProcessor {
         return output
     }
 
-    private fun blurRegions(source: Bitmap, areas: List<SensitiveArea>, strength: Float): Bitmap {
+    private fun blurRegions(source: Bitmap, areas: List<SensitiveArea>, strength: Float, recycleSource: Boolean = false): Bitmap {
         val result = source.copy(source.config, true)
         val canvas = Canvas(result)
         
         // Higher Strength -> more pixelated (less detail)
-        // blurStrength in UI is 0-100.
         val downscaleFactor = (strength / 5f).coerceIn(1f, 50f).toInt()
         
         for (area in areas) {
@@ -306,6 +304,10 @@ object ImageProcessor {
             sub.recycle()
             scaledDown.recycle()
             pixelated.recycle()
+        }
+        
+        if (recycleSource) {
+            try { source.recycle() } catch (e: Exception) {}
         }
         
         return result

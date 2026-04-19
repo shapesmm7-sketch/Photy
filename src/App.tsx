@@ -129,7 +129,7 @@ export default function App() {
             <div>
               <h1 className="text-3xl font-bold mb-2 tracking-tight">SnapClean</h1>
               <p className="text-gray-500 text-sm">
-                Viral screenshots, one tap away. Auto-blur, styles, and memes.
+                Viral screenshots, one tap away. Professional styles and memes.
               </p>
             </div>
             
@@ -148,16 +148,11 @@ export default function App() {
               onChange={handleFileUpload}
             />
 
-            <div className="grid grid-cols-2 gap-3 w-full">
-              <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm text-left">
-                <Shield className="w-5 h-5 text-green-500 mb-2" />
-                <h3 className="text-xs font-bold">Privacy First</h3>
-                <p className="text-[10px] text-gray-400">Auto-blur PII</p>
-              </div>
-              <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm text-left">
-                <Palette className="w-5 h-5 text-purple-500 mb-2" />
+            <div className="grid grid-cols-1 gap-3 w-full">
+              <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm text-center">
+                <Palette className="w-5 h-5 text-purple-500 mb-2 mx-auto" />
                 <h3 className="text-xs font-bold">Viral Styles</h3>
-                <p className="text-[10px] text-gray-400">Card & Meme</p>
+                <p className="text-[10px] text-gray-400">Professional Card & Meme Layouts</p>
               </div>
             </div>
           </motion.div>
@@ -180,7 +175,7 @@ export default function App() {
              </div>
              <div className="text-center">
                 <h2 className="text-xl font-bold">Enhancing screenshot...</h2>
-                <p className="text-sm text-gray-400">Detecting sensitive info</p>
+                <p className="text-sm text-gray-400">Perfecting your layout</p>
              </div>
           </motion.div>
         )}
@@ -202,24 +197,7 @@ export default function App() {
                 <X className="w-5 h-5" />
               </button>
               <div className="flex gap-2">
-                 <button 
-                  onClick={() => {
-                    if (isPrivacyScanning) return;
-                    setIsPrivacyScanning(true);
-                    setTimeout(() => {
-                      // Mock detection areas for the web preview
-                      setSensitiveAreas([
-                        { rect: { x: 50, y: 100, width: 200, height: 30 }, type: 'Name', isBlurred: true },
-                        { rect: { x: 50, y: 300, width: 300, height: 40 }, type: 'Amount', isBlurred: true },
-                        { rect: { x: 50, y: 500, width: 150, height: 25 }, type: 'Phone', isBlurred: true }
-                      ]);
-                      setIsPrivacyScanning(false);
-                    }, 1500);
-                  }}
-                  className="px-4 py-2 bg-green-500 text-white rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-green-100"
-                 >
-                   <Shield className="w-3.5 h-3.5" /> Hide Info
-                 </button>
+                 {/* Secondary actions can go here */}
               </div>
             </div>
 
@@ -231,20 +209,8 @@ export default function App() {
                     className="max-h-[60vh] rounded-xl shadow-2xl transition-transform duration-300 group-hover:scale-[1.02]" 
                     alt="Preview" 
                   />
-                  {isPrivacyScanning && (
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="absolute inset-0 bg-white/40 backdrop-blur-sm flex items-center justify-center rounded-xl"
-                    >
-                      <div className="bg-white px-6 py-3 rounded-2xl shadow-xl flex items-center gap-3">
-                         <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent animate-spin rounded-full" />
-                         <span className="text-xs font-bold text-gray-900">Scanning...</span>
-                      </div>
-                    </motion.div>
-                  )}
-               </div>
-            </div>
+                </div>
+             </div>
 
             {/* Style Selector */}
             <div className="bg-white p-4">
@@ -297,18 +263,35 @@ export default function App() {
             </div>
 
             {/* Bottom Actions */}
-            <div className="p-6 bg-white border-t border-gray-100 flex gap-3">
-               <button 
-                onClick={shareImage}
-                className="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors"
-               >
-                 <Share2 className="w-5 h-5" /> Share
-               </button>
+            <div className="p-6 bg-white border-t border-gray-100 flex flex-col gap-3">
+               <div className="flex gap-3">
+                  <button 
+                    onClick={shareImage}
+                    className="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <Share2 className="w-5 h-5" /> Share
+                  </button>
+                  <button 
+                    onClick={() => {
+                      if (processedImage) {
+                        setOriginalImage(processedImage);
+                        setSelectedStyle('Original');
+                        setSensitiveAreas([]);
+                        setMemeTopText('');
+                        setMemeBottomText('');
+                      }
+                      setShowEditor(true);
+                    }}
+                    className="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <Edit2 className="w-5 h-5" /> Edit
+                  </button>
+               </div>
                <button 
                 onClick={downloadImage}
-                className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-100"
+                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-100"
                >
-                 <Download className="w-5 h-5" /> Save
+                 <Download className="w-5 h-5" /> Save to Gallery
                </button>
             </div>
           </motion.div>
