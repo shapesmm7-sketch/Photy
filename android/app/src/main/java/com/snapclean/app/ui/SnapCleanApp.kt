@@ -133,7 +133,7 @@ fun SnapCleanApp() {
     var paths by remember { mutableStateOf(emptyList<com.snapclean.app.ui.DrawAction>()) }
     var texts by remember { mutableStateOf(emptyList<com.snapclean.app.ui.TextItem>()) }
     
-    val stylePresets = listOf("Original", "Minimal", "Dark", "Instagram", "Shadow", "Meme", "Money", "Viral", "Focus", "Chat")
+    val stylePresets = listOf("Original", "Minimal", "Dark", "Instagram", "Shadow", "Meme", "Money", "Viral", "Focus", "Chat", "Stacked")
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -600,33 +600,11 @@ fun SnapCleanApp() {
                         ) {
                             Button(
                                 onClick = { 
-                                    processedBitmap?.let { styled ->
-                                        // "Bake" the style so editor sees it
-                                        val oldActive = activeBitmap
-                                        val oldBase = baseBitmap
-                                        
-                                        val newBitmap = styled.copy(styled.config, true)
-                                        activeBitmap = newBitmap
-                                        baseBitmap = newBitmap.copy(newBitmap.config, true)
-                                        
-                                        // Cleanup old memory
-                                        if (oldActive != null && oldActive != originalBitmap && !oldActive.isRecycled) {
-                                            try { oldActive.recycle() } catch (e: Exception) {}
-                                        }
-                                        if (oldBase != null && oldBase != originalBitmap && oldBase != oldActive && !oldBase.isRecycled) {
-                                            try { oldBase.recycle() } catch (e: Exception) {}
-                                        }
-                                        
-                                        // Reset style to None since it's now part of the pixels
-                                        selectedStyle = "None"
-                                        memeTopText = ""
-                                        memeBottomText = ""
-                                    }
                                     state = "edit" 
                                 }, 
                                 modifier = Modifier.weight(1f).height(56.dp),
                                 shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF3F4F6), contentColor = Color(0xFF475569))
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1), contentColor = Color.White)
                             ) { Text("Edit", fontWeight = FontWeight.Bold) }
                             
                             Button(
@@ -663,8 +641,8 @@ fun SnapCleanApp() {
                                 }, 
                                 modifier = Modifier.weight(1f).height(56.dp),
                                 shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF1F5F9), contentColor = Color(0xFF94A3B8))
-                            ) { Text("Start Over", fontWeight = FontWeight.Medium) }
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF87171), contentColor = Color.White)
+                            ) { Text("Start Over", fontWeight = FontWeight.Bold) }
                         }
                     }
                 }

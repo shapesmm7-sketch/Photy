@@ -91,13 +91,21 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     if (!containerRef.current || !canvasRef.current || !blurCanvasRef.current) return;
     const container = containerRef.current;
     
+    const hasTop = texts.some(t => t.positionMode === 'Top') || (showTextModal && textPositionMode === 'Top');
+    const hasBottom = texts.some(t => t.positionMode === 'Bottom') || (showTextModal && textPositionMode === 'Bottom');
+    
     // Fit logic
     const padding = 32;
     const cw = container.clientWidth - padding * 2;
     const ch = container.clientHeight - padding * 2;
     
-    // Calculate aspect ratios based on current crop rect
-    const imageAspect = rect.w / rect.h;
+    const padVal = rect.h * 0.15;
+    let virtualH = rect.h;
+    if (hasTop) virtualH += padVal;
+    if (hasBottom) virtualH += padVal;
+
+    // Calculate aspect ratios based on current crop rect + padding
+    const imageAspect = rect.w / virtualH;
     const containerAspect = cw / ch;
     
     let destW, destH;
@@ -109,22 +117,24 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
       destW = ch * imageAspect;
     }
 
-    // Set canvas resolution strictly to crop size for quality
+    // Set canvas resolution strictly to crop size + padding for quality
     const canvasObj = canvasRef.current;
     const blurCanvasObj = blurCanvasRef.current;
     
     canvasObj.width = rect.w;
-    canvasObj.height = rect.h;
+    canvasObj.height = virtualH;
     blurCanvasObj.width = rect.w;
-    blurCanvasObj.height = rect.h;
+    blurCanvasObj.height = virtualH;
 
     setCanvasSize({ width: destW, height: destH });
     
-    // Re-prepare blurred version for the blur tool (from original image cropped area)
+    // Re-prepare blurred version (mapped to screenshot area)
     const bCtx = blurCanvasObj.getContext('2d');
     if (bCtx) {
+      const imgY = hasTop ? padVal : 0;
+      bCtx.clearRect(0, 0, blurCanvasObj.width, blurCanvasObj.height);
       bCtx.filter = 'blur(15px)';
-      bCtx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h);
+      bCtx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, imgY, rect.w, rect.h);
       bCtx.filter = 'none';
     }
 
@@ -138,10 +148,18 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const hasTop = texts.some(t => t.positionMode === 'Top') || (showTextModal && textPositionMode === 'Top');
+    const padVal = currentCrop.h * 0.15;
+    const imgY = hasTop ? padVal : 0;
+
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Base image (cropped region)
-    ctx.drawImage(img, currentCrop.x, currentCrop.y, currentCrop.w, currentCrop.h, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, currentCrop.x, currentCrop.y, currentCrop.w, currentCrop.h, 0, imgY, currentCrop.w, currentCrop.h);
+
+    ctx.save();
+    ctx.translate(0, imgY);
 
     // Draw paths
     ctx.lineCap = 'round';
@@ -152,7 +170,7 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
         ctx.save();
         ctx.clip(p.path);
         if (blurCanvasRef.current) {
-          ctx.drawImage(blurCanvasRef.current, 0, 0);
+          ctx.drawImage(blurCanvasRef.current, 0, -imgY);
         }
         ctx.restore();
       } else {
@@ -174,15 +192,17 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     if (showTextModal && currentText.trim()) {
       const size = canvas.width * 0.05;
       const x = canvas.width / 2;
-      let y = canvas.height / 2;
-      if (textPositionMode === 'Top') y = size * 2;
-      if (textPositionMode === 'Bottom') y = canvas.height - size;
+      let y = (canvas.height / 2) - imgY;
+      if (textPositionMode === 'Top') y = size - imgY;
+      if (textPositionMode === 'Bottom') y = (canvas.height - size) - imgY;
 
       ctx.fillStyle = 'rgba(255,255,255,0.8)'; // Slightly transparent for preview
       ctx.font = `bold ${size}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.fillText(currentText, x, y);
     }
+    
+    ctx.restore();
 
     if (activeTool === 'crop' && cropStartRef.current && cropEndRef.current) {
        // Draw crop overlay
@@ -216,12 +236,16 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
 
   // Trigger redraw when state changes for live preview
   useEffect(() => {
-    redraw();
+    if (originalImageRef.current && cropRect) {
+        fitImageToContainer(originalImageRef.current, cropRect);
+    } else {
+        redraw();
+    }
   }, [currentText, textPositionMode, texts, showTextModal]);
 
   const getCanvasPoint = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
+    if (!canvas || !cropRect) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
     
     let clientX, clientY;
@@ -236,9 +260,12 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
 
+    const hasTop = texts.some(t => t.positionMode === 'Top') || (showTextModal && textPositionMode === 'Top');
+    const imgY = hasTop ? (cropRect.h * 0.15) : 0;
+
     return {
       x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY
+      y: ((clientY - rect.top) * scaleY) - (activeTool === 'crop' ? 0 : imgY)
     };
   };
 
@@ -324,15 +351,18 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
   };
 
   const handleAddText = () => {
-    if (!canvasRef.current || !currentText.trim()) return;
+    if (!canvasRef.current || !currentText.trim() || !cropRect) return;
     const canvas = canvasRef.current;
     
+    const hasTop = texts.some(t => t.positionMode === 'Top') || (showTextModal && textPositionMode === 'Top');
+    const imgY = hasTop ? (cropRect.h * 0.15) : 0;
+
     const size = canvas.width * 0.05;
     const x = canvas.width / 2;
-    let y = canvas.height / 2;
+    let y = (canvas.height / 2) - imgY;
 
-    if (textPositionMode === 'Top') y = size * 2;
-    if (textPositionMode === 'Bottom') y = canvas.height - size;
+    if (textPositionMode === 'Top') y = size - imgY;
+    if (textPositionMode === 'Bottom') y = (canvas.height - size) - imgY;
 
     const newText: TextItem = {
       text: currentText,
@@ -487,32 +517,32 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
       <AnimatePresence>
         {showTextModal && (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="absolute inset-0 z-[60] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="absolute inset-x-0 bottom-0 z-[60] flex items-end justify-center p-4 bg-black/10"
           >
-            <div className="bg-[#1a1a1a] w-full max-w-sm rounded-[32px] p-8 border border-white/10 shadow-2xl">
-              <h3 className="text-xl font-bold mb-6 text-center">Add Text</h3>
+            <div className="bg-[#1a1a1a]/90 backdrop-blur-md w-full max-w-sm rounded-[24px] p-6 border border-white/10 shadow-2xl mb-24">
+              <h3 className="text-lg font-bold mb-4 text-center">Add Text</h3>
               
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <input 
                   autoFocus
-                  className="w-full bg-[#2a2a2a] rounded-2xl px-6 py-4 outline-none focus:ring-2 ring-blue-500 transition-all font-medium"
+                  className="w-full bg-[#2a2a2a] rounded-xl px-4 py-3 outline-none focus:ring-2 ring-blue-500 transition-all font-medium text-sm"
                   placeholder="Enter text here..."
                   value={currentText}
                   onChange={e => setCurrentText(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && currentText && handleAddText()}
                 />
 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-1">Position</label>
                   <div className="flex gap-2">
                     {(['Top', 'Default', 'Bottom'] as const).map(mode => (
                       <button
                         key={mode}
                         onClick={() => setTextPositionMode(mode)}
-                        className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all ${
+                        className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all ${
                           textPositionMode === mode ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#333]'
                         }`}
                       >
@@ -522,17 +552,17 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
                   </div>
                 </div>
 
-                <div className="flex gap-4 pt-4">
+                <div className="flex gap-3 pt-2">
                   <button 
                     onClick={() => setShowTextModal(false)}
-                    className="flex-1 py-4 bg-transparent text-gray-400 font-bold"
+                    className="flex-1 py-3 bg-transparent text-gray-400 font-bold text-sm"
                   >
                     Cancel
                   </button>
                   <button 
                     disabled={!currentText.trim()}
                     onClick={handleAddText}
-                    className="flex-1 py-4 bg-blue-600 rounded-2xl font-bold shadow-xl shadow-blue-900/20 disabled:opacity-50 transition-all active:scale-95"
+                    className="flex-[2] py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95"
                   >
                     Add
                   </button>

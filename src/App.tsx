@@ -266,33 +266,34 @@ export default function App() {
             <div className="p-6 bg-white border-t border-gray-100 flex flex-col gap-3">
                <div className="flex gap-3">
                   <button 
-                    onClick={shareImage}
-                    className="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <Share2 className="w-5 h-5" /> Share
-                  </button>
-                  <button 
                     onClick={() => {
-                      if (processedImage) {
-                        setOriginalImage(processedImage);
-                        setSelectedStyle('Original');
-                        setSensitiveAreas([]);
-                        setMemeTopText('');
-                        setMemeBottomText('');
-                      }
                       setShowEditor(true);
                     }}
-                    className="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors"
+                    className="flex-1 py-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-indigo-100"
                   >
                     <Edit2 className="w-5 h-5" /> Edit
                   </button>
+                  <button 
+                    onClick={shareImage}
+                    className="flex-[2] py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-100"
+                  >
+                    <Share2 className="w-5 h-5" /> Share to Viral
+                  </button>
                </div>
-               <button 
-                onClick={downloadImage}
-                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-100"
-               >
-                 <Download className="w-5 h-5" /> Save to Gallery
-               </button>
+               <div className="flex gap-3">
+                  <button 
+                    onClick={downloadImage}
+                    className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-100"
+                  >
+                    <Download className="w-5 h-5" /> Save
+                  </button>
+                  <button 
+                    onClick={() => setAppState('upload')}
+                    className="flex-1 py-4 bg-red-400 hover:bg-red-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-100"
+                  >
+                    <X className="w-5 h-5" /> Start Over
+                  </button>
+               </div>
             </div>
           </motion.div>
         )}
@@ -300,7 +301,7 @@ export default function App() {
 
       {/* MANUAL EDITOR MODAL */}
       <AnimatePresence>
-        {showEditor && processedImage && (
+        {showEditor && originalImage && (
            <motion.div
               initial={{ y: '100%', opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -309,10 +310,10 @@ export default function App() {
               className="absolute inset-0 z-50 md:rounded-3xl overflow-hidden bg-black md:inset-auto md:w-[480px] md:h-[90vh]"
            >
               <EditorCanvas 
-                imageSrc={processedImage} 
+                imageSrc={originalImage} 
                 onCancel={() => setShowEditor(false)}
                 onSave={(newImgDataUrl) => {
-                   setProcessedImage(newImgDataUrl);
+                   setOriginalImage(newImgDataUrl);
                    setShowEditor(false);
                 }}
               />

@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
 data class DrawAction(val path: Path, val tool: String, val color: Color)
-data class TextItem(val text: String, val offset: Offset, val color: Color = Color.White, val fontSize: Float = 32f, val fontName: String = "Default")
+data class TextItem(val text: String, val offset: Offset, val color: Color = Color.White, val fontSize: Float = 32f, val fontName: String = "Default", val position: String = "Default")
 
 @Composable
 fun CanvasEditor(
@@ -228,11 +228,34 @@ fun CanvasEditor(
                         val offsetY = (canvasHeight - destHeight) / 2
                         val scale = activeBitmap.width.toFloat() / destWidth
                         
-                        val finalBitmap = activeBitmap.copy(Bitmap.Config.ARGB_8888, true)
+                        val hasTopText = texts.any { it.position == "Top" }
+                        val hasBottomText = texts.any { it.position == "Bottom" }
+                        
+                        var offsetY_preview = (canvasHeight - destHeight) / 2
+                        if (hasTopText && !hasBottomText) {
+                            offsetY_preview = (canvasHeight - destHeight) * 0.7f 
+                        } else if (!hasTopText && hasBottomText) {
+                            offsetY_preview = (canvasHeight - destHeight) * 0.3f
+                        }
+                        
+                        val topPad = if (hasTopText) (120f * scale).toInt() else 0
+                        val botPad = if (hasBottomText) (120f * scale).toInt() else 0
+                        
+                        val finalWidth = activeBitmap.width
+                        val finalHeight = activeBitmap.height + topPad + botPad
+                        
+                        val finalBitmap = Bitmap.createBitmap(finalWidth, finalHeight, Bitmap.Config.ARGB_8888)
                         val androidCanvas = android.graphics.Canvas(finalBitmap)
+                        androidCanvas.drawColor(android.graphics.Color.BLACK) 
+                        
+                        // Draw screenshot into final bitmap
+                        androidCanvas.drawBitmap(activeBitmap, 0f, topPad.toFloat(), null)
+                        
                         val matrix = android.graphics.Matrix()
-                        matrix.postTranslate(-offsetX, -offsetY)
+                        // Use offsetY_preview to match where the path was actually drawn on screen
+                        matrix.postTranslate(-offsetX, -offsetY_preview)
                         matrix.postScale(scale, scale)
+                        matrix.postTranslate(0f, topPad.toFloat())
                         
                         val allPaths = paths.toMutableList()
                         currentPath?.let { allPaths.add(DrawAction(it, drawTool, if (drawTool == "RUBBER") rubberColor else penColor)) }
@@ -267,8 +290,9 @@ fun CanvasEditor(
                                     else -> android.graphics.Typeface.DEFAULT_BOLD
                                 }
                             }
+                            
                             val textX = (textItem.offset.x - offsetX) * scale
-                            val textY = (textItem.offset.y - offsetY) * scale - textPaint.ascent()
+                            val textY = (textItem.offset.y - offsetY_preview) * scale - textPaint.ascent() + topPad
                             
                             androidCanvas.drawText(textItem.text, textX, textY, textPaint)
                         }
@@ -459,16 +483,27 @@ fun CanvasEditor(
                 val imgRatio = imgBitmap.width.toFloat() / imgBitmap.height
                 val canvasRatio = canvasWidth / canvasHeight
                 
-                var destWidth = canvasWidth
-                var destHeight = canvasHeight
-                if (imgRatio > canvasRatio) {
-                    destHeight = canvasWidth / imgRatio
+                val destHeight = if (imgRatio > canvasRatio) {
+                    canvasWidth / imgRatio
                 } else {
-                    destWidth = canvasHeight * imgRatio
+                    canvasHeight
+                }
+                
+                val destWidth = destHeight * imgRatio
+
+                val hasTopText = texts.any { it.position == "Top" }
+                val hasBottomText = texts.any { it.position == "Bottom" }
+                
+                val paddingPx = 80f * localDensity
+                
+                var offsetY = (canvasHeight - destHeight) / 2
+                if (hasTopText && !hasBottomText) {
+                    offsetY = (canvasHeight - destHeight) * 0.7f 
+                } else if (!hasTopText && hasBottomText) {
+                    offsetY = (canvasHeight - destHeight) * 0.3f
                 }
                 
                 val offsetX = (canvasWidth - destWidth) / 2
-                val offsetY = (canvasHeight - destHeight) / 2
                 
                 drawImage(
                     image = imgBitmap,
@@ -652,72 +687,71 @@ fun CanvasEditor(
                     showTextDialog = false
                     editingTextIndex = -1 
                 },
-                title = { Text(if (editingTextIndex >= 0) "Edit Text" else "Add Text") },
+                containerColor = Color(0xF2FFFFFF), // Semi-transparent white
+                title = { Text(if (editingTextIndex >= 0) "Edit Text" else "Add Text", fontSize = 18.sp) },
                 text = {
-                    Column {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                         OutlinedTextField(
                             value = currentTextContent,
                             onValueChange = { currentTextContent = it },
-                            label = { Text("Text") }
+                            label = { Text("Text") },
+                            modifier = Modifier.fillMaxWidth().height(80.dp)
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Size: ${currentTextSize.toInt()}")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Size: ${currentTextSize.toInt()}", fontSize = 12.sp)
                         Slider(
                             value = currentTextSize,
                             onValueChange = { currentTextSize = it },
-                            valueRange = 12f..100f
+                            valueRange = 12f..100f,
+                            modifier = Modifier.height(32.dp)
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text("Position", style = MaterialTheme.typography.labelMedium)
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
-                            item {
-                                Button(
-                                    onClick = { currentTextPosition = "Top" },
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Top") Color.Blue else Color.DarkGray),
-                                    modifier = Modifier.height(36.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp)
-                                ) { Text("Top", fontSize = 12.sp) }
-                            }
-                            item {
-                                Button(
-                                    onClick = { currentTextPosition = "Default" },
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Default") Color.Blue else Color.DarkGray),
-                                    modifier = Modifier.height(36.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp)
-                                ) { Text("Default", fontSize = 12.sp) }
-                            }
-                            item {
-                                Button(
-                                    onClick = { currentTextPosition = "Bottom" },
-                                    colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Bottom") Color.Blue else Color.DarkGray),
-                                    modifier = Modifier.height(36.dp),
-                                    contentPadding = PaddingValues(horizontal = 12.dp)
-                                ) { Text("Bottom", fontSize = 12.sp) }
-                            }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Position", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Button(
+                                onClick = { currentTextPosition = "Top" },
+                                colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Top") Color.Blue else Color.DarkGray),
+                                modifier = Modifier.height(32.dp).weight(1f),
+                                contentPadding = PaddingValues(0.dp)
+                            ) { Text("Top", fontSize = 11.sp) }
+                            Button(
+                                onClick = { currentTextPosition = "Default" },
+                                colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Default") Color.Blue else Color.DarkGray),
+                                modifier = Modifier.height(32.dp).weight(1f),
+                                contentPadding = PaddingValues(0.dp)
+                            ) { Text("Default", fontSize = 11.sp) }
+                            Button(
+                                onClick = { currentTextPosition = "Bottom" },
+                                colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Bottom") Color.Blue else Color.DarkGray),
+                                modifier = Modifier.height(32.dp).weight(1f),
+                                contentPadding = PaddingValues(0.dp)
+                            ) { Text("Bottom", fontSize = 11.sp) }
                         }
                         
-                        Spacer(modifier = Modifier.height(16.dp))
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             items(fontNames) { font ->
                                 Button(
                                     onClick = { currentTextFont = font },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = if (currentTextFont == font) Color.Blue else Color.DarkGray
-                                    )
+                                    ),
+                                    modifier = Modifier.height(32.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp)
                                 ) {
-                                    Text(font)
+                                    Text(font, fontSize = 11.sp)
                                 }
                             }
                         }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             items(textColors) { color ->
                                 Box(
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(28.dp)
                                         .background(color, CircleShape)
                                         .border(
-                                            width = if (currentTextColor == color) 3.dp else 1.dp,
+                                            width = if (currentTextColor == color) 2.dp else 1.dp,
                                             color = if (currentTextColor == color) Color.Gray else Color.LightGray,
                                             shape = CircleShape
                                         )
@@ -737,11 +771,11 @@ fun CanvasEditor(
                             } else {
                                 val centerX = if (boxSize.width > 0) boxSize.width / 2f - (currentTextContent.length * currentTextSize / 4f) else 100f
                                 val centerY = when (currentTextPosition) {
-                                    "Top" -> 50f
-                                    "Bottom" -> if (boxSize.height > 0) boxSize.height - 100f else 400f
+                                    "Top" -> 60f
+                                    "Bottom" -> if (boxSize.height > 0) boxSize.height.toFloat() - 100f else 400f
                                     else -> if (boxSize.height > 0) boxSize.height / 2f else 100f
                                 }
-                                texts = texts + TextItem(currentTextContent, Offset(centerX, centerY), currentTextColor, currentTextSize, currentTextFont)
+                                texts = texts + TextItem(currentTextContent, Offset(centerX, centerY), currentTextColor, currentTextSize, currentTextFont, currentTextPosition)
                             }
                         } else if (editingTextIndex >= 0) {
                             val newTexts = texts.toMutableList()
@@ -751,10 +785,10 @@ fun CanvasEditor(
                         currentTextContent = ""
                         showTextDialog = false
                         editingTextIndex = -1
-                    }) { Text(if (editingTextIndex >= 0) "Save" else "Add") }
+                    }, modifier = Modifier.height(40.dp)) { Text(if (editingTextIndex >= 0) "Save" else "Add") }
                 },
                 dismissButton = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (editingTextIndex >= 0) {
                             Button(
                                 onClick = {
@@ -764,13 +798,14 @@ fun CanvasEditor(
                                     showTextDialog = false
                                     editingTextIndex = -1
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                                modifier = Modifier.height(40.dp)
                             ) { Text("Delete") }
                         }
                         Button(onClick = { 
                             showTextDialog = false
                             editingTextIndex = -1
-                        }) { Text("Cancel") }
+                        }, modifier = Modifier.height(40.dp)) { Text("Cancel") }
                     }
                 }
             )

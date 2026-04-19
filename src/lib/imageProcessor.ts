@@ -18,7 +18,8 @@ export const Styles: Record<string, StyleConfig> = {
   "Money": { bgColor: "#065F46", paddingFactor: 0.08, cornerRadiusFactor: 0.04, shadowAlpha: 0.2, contrastFactor: 1.2, brightnessFactor: 1 },
   "Focus": { bgColor: "#1F2937", paddingFactor: 0.1, cornerRadiusFactor: 0.04, shadowAlpha: 0.2, contrastFactor: 1.1, brightnessFactor: 1 },
   "Viral": { bgColor: "#EF4444", paddingFactor: 0.05, cornerRadiusFactor: 0.04, shadowAlpha: 0.2, contrastFactor: 1.1, brightnessFactor: 1 },
-  "Chat": { bgColor: "#ECFDF5", paddingFactor: 0.15, cornerRadiusFactor: 0.08, shadowAlpha: 0.2, contrastFactor: 1.05, brightnessFactor: 1.03 }
+  "Chat": { bgColor: "#ECFDF5", paddingFactor: 0.15, cornerRadiusFactor: 0.08, shadowAlpha: 0.2, contrastFactor: 1.05, brightnessFactor: 1.03 },
+  "Stacked": { bgColor: "#F1F5F9", paddingFactor: 0.15, cornerRadiusFactor: 0.04, shadowAlpha: 0.2, contrastFactor: 1, brightnessFactor: 1 }
 };
 
 export interface SensitiveArea {
@@ -135,7 +136,28 @@ export async function applyStyle(
 
       // Shadow
       const radius = Math.max(croppedWidth, croppedHeight) * config.cornerRadiusFactor;
-      if (config.shadowAlpha > 0) {
+
+      // Special handling for Stacked style (draw background layers)
+      if (styleName === "Stacked") {
+          const layers = 3;
+          for (let i = layers; i > 0; i--) {
+              const offset = i * (canvas.width * 0.04);
+              ctx.save();
+              ctx.shadowColor = `rgba(0, 0, 0, 0.15)`;
+              ctx.shadowBlur = canvas.width * 0.02;
+              ctx.shadowOffsetY = canvas.width * 0.01;
+              ctx.translate(offset, offset);
+              ctx.beginPath();
+              ctx.roundRect(padding - offset, padding - offset, croppedWidth, croppedHeight, radius);
+              ctx.fillStyle = "#FFF";
+              ctx.fill();
+              ctx.clip();
+              ctx.drawImage(sourceCanvas, padding - offset, padding - offset);
+              ctx.restore();
+          }
+      }
+
+      if (config.shadowAlpha > 0 && styleName !== "Stacked") {
           ctx.save();
           ctx.shadowColor = `rgba(0, 0, 0, ${config.shadowAlpha})`;
           ctx.shadowBlur = canvas.width * 0.03;

@@ -35,7 +35,8 @@ object ImageProcessor {
         "Money" to StyleConfig(Color.parseColor("#065F46"), contrastFactor = 1.2f),
         "Focus" to StyleConfig(Color.parseColor("#1F2937"), paddingFactor = 0.1f),
         "Viral" to StyleConfig(Color.parseColor("#EF4444"), paddingFactor = 0.05f),
-        "Chat" to StyleConfig(Color.parseColor("#ECFDF5"), paddingFactor = 0.15f, cornerRadiusFactor = 0.08f)
+        "Chat" to StyleConfig(Color.parseColor("#ECFDF5"), paddingFactor = 0.15f, cornerRadiusFactor = 0.08f),
+        "Stacked" to StyleConfig(Color.parseColor("#F1F5F9"), paddingFactor = 0.15f, cornerRadiusFactor = 0.04f)
     )
 
     fun autoCrop(source: Bitmap): Bitmap {
@@ -146,6 +147,32 @@ object ImageProcessor {
             (padding + baseImage.width).toFloat(),
             (padding + baseImage.height).toFloat()
         )
+
+        // Special handling for Stacked style
+        if (styleName == "Stacked") {
+            val layers = 3
+            val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+            for (i in layers downTo 1) {
+                val offset = i * (finalWidth * 0.04f)
+                val layerRect = RectF(
+                    padding.toFloat() - offset,
+                    padding.toFloat() - offset,
+                    (padding + baseImage.width).toFloat() - offset,
+                    (padding + baseImage.height).toFloat() - offset
+                )
+                
+                layerPaint.setShadowLayer(finalWidth * 0.02f, 0f, finalWidth * 0.01f, Color.argb(40, 0, 0, 0))
+                canvas.drawRoundRect(layerRect, radius, radius, layerPaint)
+                layerPaint.clearShadowLayer()
+                
+                val layerPath = Path()
+                layerPath.addRoundRect(layerRect, radius, radius, Path.Direction.CW)
+                canvas.save()
+                canvas.clipPath(layerPath)
+                canvas.drawBitmap(baseImage, null, layerRect, null)
+                canvas.restore()
+            }
+        }
         
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         paint.color = Color.WHITE
