@@ -494,8 +494,8 @@ fun CanvasEditor(
                 val topTextSize = texts.filter { it.position == "Top" }.maxOfOrNull { it.fontSize } ?: 0f
                 val bottomTextSize = texts.filter { it.position == "Bottom" }.maxOfOrNull { it.fontSize } ?: 0f
                 
-                val topPad = if (topTextSize > 20f) (topTextSize * 1.2f).dpToPx() else 0f
-                val bottomPad = if (bottomTextSize > 20f) (bottomTextSize * 1.2f).dpToPx() else 0f
+                val topPad = if (topTextSize > 20f) (topTextSize * 1.2f * localDensity) else 0f
+                val bottomPad = if (bottomTextSize > 20f) (bottomTextSize * 1.2f * localDensity) else 0f
 
                 val availableHeight = canvasHeight - topPad - bottomPad
                 val adjustedDestHeight = if (imgRatio > canvasRatio) {
@@ -834,8 +834,8 @@ fun CanvasEditor(
                                             
                                             val centerX = 0f // 0 is exactly center with Alignment.TopCenter
                                             val centerY = when (currentTextPosition) {
-                                                "Top" -> offsetY - 40f
-                                                "Bottom" -> offsetY + destHeight - 40f
+                                                "Top" -> offsetYPreview - 40f
+                                                "Bottom" -> offsetYPreview + destHeight - 40f
                                                 else -> if (boxSize.height > 0) boxSize.height / 2f else 100f
                                             }
                                             texts = texts + TextItem(currentTextContent, Offset(centerX, centerY), currentTextColor, currentTextSize, currentTextFont, currentTextPosition)
