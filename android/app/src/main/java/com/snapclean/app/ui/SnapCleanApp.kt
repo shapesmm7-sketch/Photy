@@ -46,6 +46,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import com.snapclean.app.processor.ImageProcessor
 import com.snapclean.app.utils.BitmapUtils
 import com.snapclean.app.utils.SmartScanner
@@ -654,7 +655,8 @@ fun SnapCleanApp() {
                         }
                     }
                 }
-                 "edit" -> {
+            } // Close preview branch
+            "edit" -> {
                 if (processedBitmap != null && originalBitmap != null) {
                     CanvasEditor(
                         activeBitmap = processedBitmap!!,
