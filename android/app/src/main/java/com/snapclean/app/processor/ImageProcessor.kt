@@ -36,7 +36,9 @@ object ImageProcessor {
         "Focus" to StyleConfig(Color.parseColor("#1F2937"), paddingFactor = 0.1f),
         "Viral" to StyleConfig(Color.parseColor("#EF4444"), paddingFactor = 0.05f),
         "Chat" to StyleConfig(Color.parseColor("#ECFDF5"), paddingFactor = 0.15f, cornerRadiusFactor = 0.08f),
-        "Stacked" to StyleConfig(Color.parseColor("#F1F5F9"), paddingFactor = 0.15f, cornerRadiusFactor = 0.04f)
+        "Stacked" to StyleConfig(Color.parseColor("#F1F5F9"), paddingFactor = 0.2f, cornerRadiusFactor = 0.04f),
+        "Stacked Left" to StyleConfig(Color.parseColor("#F1F5F9"), paddingFactor = 0.2f, cornerRadiusFactor = 0.04f),
+        "Stacked Right" to StyleConfig(Color.parseColor("#F1F5F9"), paddingFactor = 0.2f, cornerRadiusFactor = 0.04f)
     )
 
     fun autoCrop(source: Bitmap): Bitmap {
@@ -149,27 +151,43 @@ object ImageProcessor {
         )
 
         // Special handling for Stacked style
-        if (styleName == "Stacked") {
+        if (styleName.startsWith("Stacked")) {
             val layers = 3
             val layerPaint = Paint(Paint.ANTI_ALIAS_FLAG)
             for (i in layers downTo 1) {
-                val offset = i * (finalWidth * 0.04f)
-                val layerRect = RectF(
-                    padding.toFloat() - offset,
-                    padding.toFloat() - offset,
-                    (padding + baseImage.width).toFloat() - offset,
-                    (padding + baseImage.height).toFloat() - offset
-                )
+                var offsetX = 0f
+                var offsetY = i * (finalHeight * 0.03f)
                 
+                if (styleName == "Stacked Right") { offsetX = i * (finalWidth * 0.03f) }
+                if (styleName == "Stacked Left") { offsetX = -i * (finalWidth * 0.03f) }
+                
+                val scale = 1f - (i * 0.05f)
+
+                canvas.save()
+                canvas.translate(finalWidth / 2f, finalHeight / 2f)
+                canvas.translate(offsetX, offsetY)
+                canvas.scale(scale, scale)
+                canvas.translate(-finalWidth / 2f, -finalHeight / 2f)
+
                 layerPaint.setShadowLayer(finalWidth * 0.02f, 0f, finalWidth * 0.01f, Color.argb(40, 0, 0, 0))
-                canvas.drawRoundRect(layerRect, radius, radius, layerPaint)
+                layerPaint.color = Color.WHITE
+                canvas.drawRoundRect(destRect, radius, radius, layerPaint)
                 layerPaint.clearShadowLayer()
                 
                 val layerPath = Path()
-                layerPath.addRoundRect(layerRect, radius, radius, Path.Direction.CW)
+                layerPath.addRoundRect(destRect, radius, radius, Path.Direction.CW)
                 canvas.save()
                 canvas.clipPath(layerPath)
-                canvas.drawBitmap(baseImage, null, layerRect, null)
+                canvas.drawBitmap(baseImage, null, destRect, null)
+                
+                // Draw watermark on background layers
+                val wmPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+                wmPaint.color = Color.argb(76, 0, 0, 0) // 0.3 alpha black
+                wmPaint.textSize = finalWidth * 0.024f
+                wmPaint.textAlign = Paint.Align.RIGHT
+                canvas.drawText("Edited with SnapClean", padding + baseImage.width - (finalWidth * 0.015f), padding + baseImage.height - (finalHeight * 0.015f), wmPaint)
+                
+                canvas.restore()
                 canvas.restore()
             }
         }
@@ -230,26 +248,6 @@ object ImageProcessor {
                     canvas.drawText(memeBottom.uppercase(), finalWidth / 2f, finalHeight - (padding * 0.3f), memePaint)
                 }
             }
-            "Viral" -> {
-                val importantArea = sensitiveAreas.firstOrNull { it.type == "Message" || it.type == "Amount" }?.rect 
-                    ?: androidx.compose.ui.geometry.Rect(source.width / 2f - 100f, source.height / 2f - 100f, source.width / 2f + 100f, source.height / 2f + 100f)
-                
-                val midX = padding + importantArea.center.x
-                val midY = padding + importantArea.center.y
-                
-                // Draw a big red arrow pointing to the middle
-                val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-                arrowPaint.color = Color.RED
-                arrowPaint.strokeWidth = minOf(finalWidth, finalHeight) * 0.02f
-                arrowPaint.style = Paint.Style.STROKE
-                
-                // Draw Arrow
-                val arrowPath = Path()
-                arrowPath.moveTo(midX + finalWidth * 0.1f, midY - finalHeight * 0.2f)
-                arrowPath.lineTo(midX + finalWidth * 0.01f, midY - finalHeight * 0.05f)
-                arrowPath.lineTo(midX - finalWidth * 0.1f, midY - finalHeight * 0.2f)
-                canvas.drawPath(arrowPath, arrowPaint)
-            }
             "Chat" -> {
                 // Add a "Chat" accent - maybe a status bar or something
                 val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -284,12 +282,12 @@ object ImageProcessor {
         // 5. Watermark
         if (styleName != "Original") {
             val watermarkPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-            watermarkPaint.color = if (styleName == "Dark") Color.WHITE else Color.BLACK
+            watermarkPaint.color = if (styleName.contains("Dark")) Color.WHITE else Color.BLACK
             watermarkPaint.alpha = 100 
             watermarkPaint.textSize = finalWidth * 0.024f 
             watermarkPaint.textAlign = Paint.Align.RIGHT
             val watermarkText = "Edited with SnapClean"
-            canvas.drawText(watermarkText, finalWidth - (padding / 2f), finalHeight - (padding / 4f), watermarkPaint)
+            canvas.drawText(watermarkText, padding + baseImage.width - (finalWidth * 0.015f), padding + baseImage.height - (finalHeight * 0.015f), watermarkPaint)
         }
         
         return output

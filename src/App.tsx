@@ -301,7 +301,7 @@ export default function App() {
 
       {/* MANUAL EDITOR MODAL */}
       <AnimatePresence>
-        {showEditor && originalImage && (
+        {showEditor && (originalImage || processedImage) && (
            <motion.div
               initial={{ y: '100%', opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -310,10 +310,11 @@ export default function App() {
               className="absolute inset-0 z-50 md:rounded-3xl overflow-hidden bg-black md:inset-auto md:w-[480px] md:h-[90vh]"
            >
               <EditorCanvas 
-                imageSrc={originalImage} 
+                imageSrc={processedImage || originalImage!} 
                 onCancel={() => setShowEditor(false)}
                 onSave={(newImgDataUrl) => {
                    setOriginalImage(newImgDataUrl);
+                   setSelectedStyle('Original');
                    setShowEditor(false);
                 }}
               />

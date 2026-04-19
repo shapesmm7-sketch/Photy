@@ -95,7 +95,7 @@ fun CanvasEditor(
     
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
     
-    var currentPoints by remember { mutableStateOf<List<Offset>>(emptyList()) }
+    val currentPoints = remember { mutableListOf<Offset>() }
     var lastSuggestedShape by remember { mutableStateOf<String?>(null) } // "LINE", "CIRCLE", null
 
     fun detectShape(points: List<Offset>): String? {
@@ -385,7 +385,8 @@ fun CanvasEditor(
                     onDragStart = { offset ->
                         if (mode == "draw" && drawTool != "NONE") {
                             currentPath = Path().apply { moveTo(offset.x, offset.y) }
-                            currentPoints = listOf(offset)
+                            currentPoints.clear()
+                            currentPoints.add(offset)
                             lastSuggestedShape = null
                         } else if (mode == "crop") {
                             if (cropRect != null) {
@@ -433,7 +434,7 @@ fun CanvasEditor(
                         change.consume()
                         if (mode == "draw" && drawTool != "NONE") {
                             currentPath?.lineTo(change.position.x, change.position.y)
-                            currentPoints = currentPoints + change.position
+                            currentPoints.add(change.position)
                             refreshTick++
                         } else if (mode == "crop" && cropRect != null) {
                             val cr = cropRect!!
@@ -683,133 +684,164 @@ fun CanvasEditor(
         }
         
         if (showTextDialog) {
-            AlertDialog(
+            androidx.compose.ui.window.Dialog(
                 onDismissRequest = { 
                     showTextDialog = false
                     editingTextIndex = -1 
                 },
-                containerColor = Color(0xF2FFFFFF), // Semi-transparent white
-                title = { Text(if (editingTextIndex >= 0) "Edit Text" else "Add Text", fontSize = 18.sp) },
-                text = {
-                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                        OutlinedTextField(
-                            value = currentTextContent,
-                            onValueChange = { currentTextContent = it },
-                            label = { Text("Text") },
-                            modifier = Modifier.fillMaxWidth().height(80.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Size: ${currentTextSize.toInt()}", fontSize = 12.sp)
-                        Slider(
-                            value = currentTextSize,
-                            onValueChange = { currentTextSize = it },
-                            valueRange = 12f..100f,
-                            modifier = Modifier.height(32.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Position", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Button(
-                                onClick = { currentTextPosition = "Top" },
-                                colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Top") Color.Blue else Color.DarkGray),
-                                modifier = Modifier.height(32.dp).weight(1f),
-                                contentPadding = PaddingValues(0.dp)
-                            ) { Text("Top", fontSize = 11.sp) }
-                            Button(
-                                onClick = { currentTextPosition = "Default" },
-                                colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Default") Color.Blue else Color.DarkGray),
-                                modifier = Modifier.height(32.dp).weight(1f),
-                                contentPadding = PaddingValues(0.dp)
-                            ) { Text("Default", fontSize = 11.sp) }
-                            Button(
-                                onClick = { currentTextPosition = "Bottom" },
-                                colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Bottom") Color.Blue else Color.DarkGray),
-                                modifier = Modifier.height(32.dp).weight(1f),
-                                contentPadding = PaddingValues(0.dp)
-                            ) { Text("Bottom", fontSize = 11.sp) }
-                        }
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            items(fontNames) { font ->
+                properties = androidx.compose.ui.window.DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = false
+                )
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize().imePadding(),
+                    contentAlignment = Alignment.BottomCenter
+                ) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 24.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xF2FFFFFF)), // Semi-transparent white
+                        shape = RoundedCornerShape(24.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(20.dp).verticalScroll(rememberScrollState())) {
+                            Text(if (editingTextIndex >= 0) "Edit Text" else "Add Text", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            
+                            OutlinedTextField(
+                                value = currentTextContent,
+                                onValueChange = { currentTextContent = it },
+                                label = { Text("Text") },
+                                modifier = Modifier.fillMaxWidth().height(80.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Size: ${currentTextSize.toInt()}", fontSize = 12.sp)
+                            Slider(
+                                value = currentTextSize,
+                                onValueChange = { currentTextSize = it },
+                                valueRange = 12f..100f,
+                                modifier = Modifier.height(32.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Position", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Button(
-                                    onClick = { currentTextFont = font },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (currentTextFont == font) Color.Blue else Color.DarkGray
-                                    ),
-                                    modifier = Modifier.height(32.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp)
-                                ) {
-                                    Text(font, fontSize = 11.sp)
+                                    onClick = { currentTextPosition = "Top" },
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Top") Color.Blue else Color.DarkGray),
+                                    modifier = Modifier.height(32.dp).weight(1f),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) { Text("Top", fontSize = 11.sp) }
+                                Button(
+                                    onClick = { currentTextPosition = "Default" },
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Default") Color.Blue else Color.DarkGray),
+                                    modifier = Modifier.height(32.dp).weight(1f),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) { Text("Default", fontSize = 11.sp) }
+                                Button(
+                                    onClick = { currentTextPosition = "Bottom" },
+                                    colors = ButtonDefaults.buttonColors(containerColor = if (currentTextPosition == "Bottom") Color.Blue else Color.DarkGray),
+                                    modifier = Modifier.height(32.dp).weight(1f),
+                                    contentPadding = PaddingValues(0.dp)
+                                ) { Text("Bottom", fontSize = 11.sp) }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                items(fontNames) { font ->
+                                    Button(
+                                        onClick = { currentTextFont = font },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (currentTextFont == font) Color.Blue else Color.DarkGray
+                                        ),
+                                        modifier = Modifier.height(32.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp)
+                                    ) {
+                                        Text(font, fontSize = 11.sp)
+                                    }
                                 }
                             }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            items(textColors) { color ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .background(color, CircleShape)
-                                        .border(
-                                            width = if (currentTextColor == color) 2.dp else 1.dp,
-                                            color = if (currentTextColor == color) Color.Gray else Color.LightGray,
-                                            shape = CircleShape
-                                        )
-                                        .clickable { currentTextColor = color }
-                                )
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    Button(onClick = {
-                        if (currentTextContent.isNotBlank()) {
-                            if (editingTextIndex >= 0) {
-                                val newTexts = texts.toMutableList()
-                                newTexts[editingTextIndex] = newTexts[editingTextIndex].copy(text = currentTextContent, color = currentTextColor, fontSize = currentTextSize, fontName = currentTextFont)
-                                texts = newTexts
-                            } else {
-                                val centerX = if (boxSize.width > 0) boxSize.width / 2f - (currentTextContent.length * currentTextSize / 4f) else 100f
-                                val centerY = when (currentTextPosition) {
-                                    "Top" -> 60f
-                                    "Bottom" -> if (boxSize.height > 0) boxSize.height.toFloat() - 100f else 400f
-                                    else -> if (boxSize.height > 0) boxSize.height / 2f else 100f
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                items(textColors) { color ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .background(color, CircleShape)
+                                            .border(
+                                                width = if (currentTextColor == color) 2.dp else 1.dp,
+                                                color = if (currentTextColor == color) Color.Gray else Color.LightGray,
+                                                shape = CircleShape
+                                            )
+                                            .clickable { currentTextColor = color }
+                                    )
                                 }
-                                texts = texts + TextItem(currentTextContent, Offset(centerX, centerY), currentTextColor, currentTextSize, currentTextFont, currentTextPosition)
                             }
-                        } else if (editingTextIndex >= 0) {
-                            val newTexts = texts.toMutableList()
-                            newTexts.removeAt(editingTextIndex)
-                            texts = newTexts
-                        }
-                        currentTextContent = ""
-                        showTextDialog = false
-                        editingTextIndex = -1
-                    }, modifier = Modifier.height(40.dp)) { Text(if (editingTextIndex >= 0) "Save" else "Add") }
-                },
-                dismissButton = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (editingTextIndex >= 0) {
-                            Button(
-                                onClick = {
-                                    val newTexts = texts.toMutableList()
-                                    newTexts.removeAt(editingTextIndex)
-                                    texts = newTexts
+                            
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                                if (editingTextIndex >= 0) {
+                                    Button(
+                                        onClick = {
+                                            val newTexts = texts.toMutableList()
+                                            newTexts.removeAt(editingTextIndex)
+                                            texts = newTexts
+                                            showTextDialog = false
+                                            editingTextIndex = -1
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                                        modifier = Modifier.height(40.dp)
+                                    ) { Text("Delete") }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Button(onClick = { 
                                     showTextDialog = false
                                     editingTextIndex = -1
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
-                                modifier = Modifier.height(40.dp)
-                            ) { Text("Delete") }
+                                }, modifier = Modifier.height(40.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.Gray)) { Text("Cancel") }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Button(onClick = {
+                                    if (currentTextContent.isNotBlank()) {
+                                        if (editingTextIndex >= 0) {
+                                            val newTexts = texts.toMutableList()
+                                            newTexts[editingTextIndex] = newTexts[editingTextIndex].copy(text = currentTextContent, color = currentTextColor, fontSize = currentTextSize, fontName = currentTextFont)
+                                            texts = newTexts
+                                        } else {
+                                            val hasTopText = texts.any { it.position == "Top" } || currentTextPosition == "Top"
+                                            val hasBottomText = texts.any { it.position == "Bottom" } || currentTextPosition == "Bottom"
+                                            
+                                            val canvasWidth = boxSize.width.toFloat()
+                                            val canvasHeight = boxSize.height.toFloat()
+                                            val imgRatio = activeBitmap.width.toFloat() / activeBitmap.height
+                                            val canvasRatio = if (canvasHeight > 0) canvasWidth / canvasHeight else 1f
+                                            val destHeight = if (imgRatio > canvasRatio) (if (imgRatio > 0) canvasWidth / imgRatio else 0f) else canvasHeight
+                                            
+                                            var offsetYPreview = (canvasHeight - destHeight) / 2
+                                            if (hasTopText && !hasBottomText) {
+                                                offsetYPreview = (canvasHeight - destHeight) * 0.7f 
+                                            } else if (!hasTopText && hasBottomText) {
+                                                offsetYPreview = (canvasHeight - destHeight) * 0.3f
+                                            }
+
+                                            val centerX = if (boxSize.width > 0) boxSize.width / 2f - (currentTextContent.length * currentTextSize / 4f) else 100f
+                                            val centerY = when (currentTextPosition) {
+                                                "Top" -> offsetYPreview - 90f
+                                                "Bottom" -> offsetYPreview + destHeight + 40f
+                                                else -> if (boxSize.height > 0) boxSize.height / 2f else 100f
+                                            }
+                                            texts = texts + TextItem(currentTextContent, Offset(centerX, centerY), currentTextColor, currentTextSize, currentTextFont, currentTextPosition)
+                                        }
+                                    } else if (editingTextIndex >= 0) {
+                                        val newTexts = texts.toMutableList()
+                                        newTexts.removeAt(editingTextIndex)
+                                        texts = newTexts
+                                    }
+                                    currentTextContent = ""
+                                    showTextDialog = false
+                                    editingTextIndex = -1
+                                }, modifier = Modifier.height(40.dp)) { Text(if (editingTextIndex >= 0) "Save" else "Add") }
+                            }
                         }
-                        Button(onClick = { 
-                            showTextDialog = false
-                            editingTextIndex = -1
-                        }, modifier = Modifier.height(40.dp)) { Text("Cancel") }
                     }
                 }
-            )
+            }
         }
         
         // Mode Selector Bar

@@ -11,7 +11,11 @@ interface TextItem {
   color: string;
   size: number;
   positionMode: 'Top' | 'Default' | 'Bottom';
+  fontName: string;
 }
+
+const fontNames = ["Default", "Serif", "SansSerif", "Monospace", "Cursive"];
+const textColors = ["#FFFFFF", "#CCCCCC", "#888888", "#444444", "#000000", "#FF3366", "#FF0000", "#FF5722", "#4CAF50", "#2196F3", "#9C27B0", "#FFEB3B"];
 
 interface EditorCanvasProps {
   imageSrc: string;
@@ -68,6 +72,9 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
   const [showTextModal, setShowTextModal] = useState(false);
   const [currentText, setCurrentText] = useState('');
   const [textPositionMode, setTextPositionMode] = useState<'Top' | 'Default' | 'Bottom'>('Default');
+  const [currentTextSize, setCurrentTextSize] = useState(32);
+  const [currentTextColor, setCurrentTextColor] = useState('#FFFFFF');
+  const [currentTextFont, setCurrentTextFont] = useState('Default');
 
   // Initialize and load image
   useEffect(() => {
@@ -183,23 +190,38 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     // Draw texts
     texts.forEach(t => {
       ctx.fillStyle = t.color;
-      ctx.font = `bold ${t.size}px sans-serif`;
+      
+      let fontStr = 'sans-serif';
+      if (t.fontName === 'Serif') fontStr = 'serif';
+      if (t.fontName === 'Monospace') fontStr = 'monospace';
+      if (t.fontName === 'Cursive') fontStr = 'cursive';
+      ctx.font = `bold ${t.size}px ${fontStr}`;
+      
       ctx.textAlign = 'center';
       ctx.fillText(t.text, t.x, t.y);
     });
 
     // Draw temporary preview text if modal is open
-    if (showTextModal && currentText.trim()) {
-      const size = canvas.width * 0.05;
+    if (showTextModal && currentText.trim() && currentCrop) {
+      const size = currentTextSize;
       const x = canvas.width / 2;
-      let y = (canvas.height / 2) - imgY;
-      if (textPositionMode === 'Top') y = size - imgY;
-      if (textPositionMode === 'Bottom') y = (canvas.height - size) - imgY;
+      let y = currentCrop.h / 2;
+      
+      if (textPositionMode === 'Top') y = - (padVal / 2) + (size / 2);
+      if (textPositionMode === 'Bottom') y = currentCrop.h + (padVal / 2) + (size / 2);
 
-      ctx.fillStyle = 'rgba(255,255,255,0.8)'; // Slightly transparent for preview
-      ctx.font = `bold ${size}px sans-serif`;
+      ctx.fillStyle = currentTextColor;
+      ctx.globalAlpha = 0.8;
+      
+      let fontStr = 'sans-serif';
+      if (currentTextFont === 'Serif') fontStr = 'serif';
+      if (currentTextFont === 'Monospace') fontStr = 'monospace';
+      if (currentTextFont === 'Cursive') fontStr = 'cursive';
+      
+      ctx.font = `bold ${size}px ${fontStr}`;
       ctx.textAlign = 'center';
       ctx.fillText(currentText, x, y);
+      ctx.globalAlpha = 1.0;
     }
     
     ctx.restore();
@@ -357,20 +379,22 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     const hasTop = texts.some(t => t.positionMode === 'Top') || (showTextModal && textPositionMode === 'Top');
     const imgY = hasTop ? (cropRect.h * 0.15) : 0;
 
+    const padVal = cropRect.h * 0.15;
     const size = canvas.width * 0.05;
     const x = canvas.width / 2;
-    let y = (canvas.height / 2) - imgY;
+    let y = cropRect.h / 2;
 
-    if (textPositionMode === 'Top') y = size - imgY;
-    if (textPositionMode === 'Bottom') y = (canvas.height - size) - imgY;
+    if (textPositionMode === 'Top') y = - (padVal / 2) + (size / 2);
+    if (textPositionMode === 'Bottom') y = cropRect.h + (padVal / 2) + (size / 2);
 
     const newText: TextItem = {
       text: currentText,
       x,
       y,
-      color: 'white',
-      size,
-      positionMode: textPositionMode
+      color: currentTextColor,
+      size: currentTextSize,
+      positionMode: textPositionMode,
+      fontName: currentTextFont
     };
 
     setTexts([...texts, newText]);
@@ -520,30 +544,44 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="absolute inset-x-0 bottom-0 z-[60] flex items-end justify-center p-4 bg-black/10"
+            className="absolute inset-x-0 bottom-0 z-[60] flex items-end justify-center pb-24"
           >
-            <div className="bg-[#1a1a1a]/90 backdrop-blur-md w-full max-w-sm rounded-[24px] p-6 border border-white/10 shadow-2xl mb-24">
-              <h3 className="text-lg font-bold mb-4 text-center">Add Text</h3>
+            <div className="bg-white/95 backdrop-blur-md w-full max-w-[400px] mx-4 rounded-3xl p-6 shadow-2xl text-black border border-gray-200">
+              <h3 className="text-lg font-bold mb-4">Add Text</h3>
               
-              <div className="space-y-4">
-                <input 
-                  autoFocus
-                  className="w-full bg-[#2a2a2a] rounded-xl px-4 py-3 outline-none focus:ring-2 ring-blue-500 transition-all font-medium text-sm"
-                  placeholder="Enter text here..."
-                  value={currentText}
-                  onChange={e => setCurrentText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && currentText && handleAddText()}
-                />
+              <div className="space-y-4 max-h-[50vh] overflow-y-auto">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1 mb-1">Text</label>
+                  <input 
+                    autoFocus
+                    className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 outline-none focus:ring-2 ring-blue-500 transition-all font-medium text-sm text-black"
+                    placeholder="Enter text here..."
+                    value={currentText}
+                    onChange={e => setCurrentText(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && currentText && handleAddText()}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">Size: {currentTextSize}</label>
+                  <input 
+                    type="range"
+                    min="12" max="100"
+                    value={currentTextSize}
+                    onChange={e => setCurrentTextSize(Number(e.target.value))}
+                    className="w-full mt-2"
+                  />
+                </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-1">Position</label>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">Position</label>
                   <div className="flex gap-2">
                     {(['Top', 'Default', 'Bottom'] as const).map(mode => (
                       <button
                         key={mode}
                         onClick={() => setTextPositionMode(mode)}
-                        className={`flex-1 py-2 rounded-lg text-[10px] font-bold transition-all ${
-                          textPositionMode === mode ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#333]'
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                          textPositionMode === mode ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                         }`}
                       >
                         {mode}
@@ -552,17 +590,44 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
                   </div>
                 </div>
 
+                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                  {fontNames.map(font => (
+                    <button
+                      key={font}
+                      onClick={() => setCurrentTextFont(font)}
+                      className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                        currentTextFont === font ? 'bg-blue-600 text-white shadow-lg' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                      }`}
+                    >
+                      {font}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                  {textColors.map(color => (
+                    <button
+                      key={color}
+                      onClick={() => setCurrentTextColor(color)}
+                      className={`w-7 h-7 shrink-0 rounded-full border-2 transition-transform ${
+                        currentTextColor === color ? 'border-blue-500 scale-110' : 'border-gray-200 opacity-80'
+                      }`}
+                      style={{ backgroundColor: color }}
+                    />
+                  ))}
+                </div>
+
                 <div className="flex gap-3 pt-2">
                   <button 
                     onClick={() => setShowTextModal(false)}
-                    className="flex-1 py-3 bg-transparent text-gray-400 font-bold text-sm"
+                    className="flex-1 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded-xl font-bold text-sm"
                   >
                     Cancel
                   </button>
                   <button 
                     disabled={!currentText.trim()}
                     onClick={handleAddText}
-                    className="flex-[2] py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95"
+                    className="flex-[2] py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-500 text-white rounded-xl font-bold text-sm shadow-md transition-all active:scale-95"
                   >
                     Add
                   </button>

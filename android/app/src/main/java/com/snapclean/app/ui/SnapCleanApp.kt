@@ -107,7 +107,9 @@ fun SnapCleanApp() {
             // Move processing to background thread to keep UI smooth
             val newBitmap = withContext(kotlinx.coroutines.Dispatchers.Default) {
                 try {
-                    ImageProcessor.applyStyle(
+                    if (!kotlinx.coroutines.isActive) return@withContext null
+                    
+                    val result = ImageProcessor.applyStyle(
                         bmp, 
                         selectedStyle, 
                         sensitiveAreas = sensitiveAreas, 
@@ -115,7 +117,13 @@ fun SnapCleanApp() {
                         memeTop = memeTopText, 
                         memeBottom = memeBottomText
                     )
-                } catch (e: Exception) {
+                    
+                    if (!kotlinx.coroutines.isActive) {
+                        result.recycle()
+                        return@withContext null
+                    }
+                    result
+                } catch (t: Throwable) {
                     null
                 }
             }
@@ -133,7 +141,7 @@ fun SnapCleanApp() {
     var paths by remember { mutableStateOf(emptyList<com.snapclean.app.ui.DrawAction>()) }
     var texts by remember { mutableStateOf(emptyList<com.snapclean.app.ui.TextItem>()) }
     
-    val stylePresets = listOf("Original", "Minimal", "Dark", "Instagram", "Shadow", "Meme", "Money", "Viral", "Focus", "Chat", "Stacked")
+    val stylePresets = listOf("Original", "Minimal", "Dark", "Instagram", "Shadow", "Meme", "Money", "Viral", "Focus", "Chat", "Stacked", "Stacked Left", "Stacked Right")
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -646,14 +654,13 @@ fun SnapCleanApp() {
                         }
                     }
                 }
-            }
-            "edit" -> {
-                if (baseBitmap != null && originalBitmap != null) {
+                 "edit" -> {
+                if (processedBitmap != null && originalBitmap != null) {
                     CanvasEditor(
-                        activeBitmap = baseBitmap!!,
+                        activeBitmap = processedBitmap!!,
                         originalBitmap = originalBitmap!!,
-                        initialPaths = paths,
-                        initialTexts = texts,
+                        initialPaths = emptyList(),
+                        initialTexts = emptyList(),
                         onDone = { bakedBmp, newBaseBmp, newPaths, newTexts -> 
                             val oldActive = activeBitmap
                             val oldBase = baseBitmap
@@ -662,6 +669,7 @@ fun SnapCleanApp() {
                             baseBitmap = newBaseBmp
                             paths = newPaths
                             texts = newTexts
+                            selectedStyle = "Original"
                             
     // Recycle previous if they were different
     if (oldActive != null && oldActive != bakedBmp && oldActive != originalBitmap && !oldActive.isRecycled) {
@@ -671,12 +679,12 @@ fun SnapCleanApp() {
         try { oldBase.recycle() } catch (e: Exception) {}
     }
                             
-                            state = "preview"
+                            state = "preview" 
                         },
                         onCancel = { state = "preview" }
                     )
                 }
-            }
+            }        }
         }
     }
 }

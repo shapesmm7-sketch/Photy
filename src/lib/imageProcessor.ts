@@ -19,7 +19,9 @@ export const Styles: Record<string, StyleConfig> = {
   "Focus": { bgColor: "#1F2937", paddingFactor: 0.1, cornerRadiusFactor: 0.04, shadowAlpha: 0.2, contrastFactor: 1.1, brightnessFactor: 1 },
   "Viral": { bgColor: "#EF4444", paddingFactor: 0.05, cornerRadiusFactor: 0.04, shadowAlpha: 0.2, contrastFactor: 1.1, brightnessFactor: 1 },
   "Chat": { bgColor: "#ECFDF5", paddingFactor: 0.15, cornerRadiusFactor: 0.08, shadowAlpha: 0.2, contrastFactor: 1.05, brightnessFactor: 1.03 },
-  "Stacked": { bgColor: "#F1F5F9", paddingFactor: 0.15, cornerRadiusFactor: 0.04, shadowAlpha: 0.2, contrastFactor: 1, brightnessFactor: 1 }
+  "Stacked": { bgColor: "#F1F5F9", paddingFactor: 0.2, cornerRadiusFactor: 0.04, shadowAlpha: 0.2, contrastFactor: 1, brightnessFactor: 1 },
+  "Stacked Left": { bgColor: "#F1F5F9", paddingFactor: 0.2, cornerRadiusFactor: 0.04, shadowAlpha: 0.2, contrastFactor: 1, brightnessFactor: 1 },
+  "Stacked Right": { bgColor: "#F1F5F9", paddingFactor: 0.2, cornerRadiusFactor: 0.04, shadowAlpha: 0.2, contrastFactor: 1, brightnessFactor: 1 }
 };
 
 export interface SensitiveArea {
@@ -138,26 +140,46 @@ export async function applyStyle(
       const radius = Math.max(croppedWidth, croppedHeight) * config.cornerRadiusFactor;
 
       // Special handling for Stacked style (draw background layers)
-      if (styleName === "Stacked") {
+      if (styleName.startsWith("Stacked")) {
           const layers = 3;
           for (let i = layers; i > 0; i--) {
-              const offset = i * (canvas.width * 0.04);
+              let offsetX = 0;
+              let offsetY = i * (canvas.height * 0.03); // base down
+              
+              if (styleName === "Stacked Right") { offsetX = i * (canvas.width * 0.03); }
+              if (styleName === "Stacked Left") { offsetX = -i * (canvas.width * 0.03); }
+              
+              const scale = 1 - (i * 0.05);
+
               ctx.save();
+              ctx.translate(canvas.width / 2, canvas.height / 2);
+              ctx.translate(offsetX, offsetY);
+              ctx.scale(scale, scale);
+              ctx.translate(-canvas.width / 2, -canvas.height / 2);
+
               ctx.shadowColor = `rgba(0, 0, 0, 0.15)`;
               ctx.shadowBlur = canvas.width * 0.02;
               ctx.shadowOffsetY = canvas.width * 0.01;
-              ctx.translate(offset, offset);
               ctx.beginPath();
-              ctx.roundRect(padding - offset, padding - offset, croppedWidth, croppedHeight, radius);
+              ctx.roundRect(padding, padding, croppedWidth, croppedHeight, radius);
               ctx.fillStyle = "#FFF";
               ctx.fill();
+
+              ctx.shadowColor = "transparent";
               ctx.clip();
-              ctx.drawImage(sourceCanvas, padding - offset, padding - offset);
+              ctx.drawImage(sourceCanvas, padding, padding);
+              
+              // Layer Watermark inside the card
+              ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+              ctx.font = `${canvas.width * 0.024}px sans-serif`;
+              ctx.textAlign = "right";
+              ctx.fillText("Edited with SnapClean", padding + croppedWidth - (canvas.width * 0.015), padding + croppedHeight - (canvas.height * 0.015));
+
               ctx.restore();
           }
       }
 
-      if (config.shadowAlpha > 0 && styleName !== "Stacked") {
+      if (config.shadowAlpha > 0) {
           ctx.save();
           ctx.shadowColor = `rgba(0, 0, 0, ${config.shadowAlpha})`;
           ctx.shadowBlur = canvas.width * 0.03;
@@ -194,24 +216,17 @@ export async function applyStyle(
             ctx.strokeText(memeBottom.toUpperCase(), canvas.width / 2, canvas.height - (padding * 0.3));
             ctx.fillText(memeBottom.toUpperCase(), canvas.width / 2, canvas.height - (padding * 0.3));
           }
-      } else if (styleName === "Viral") {
-          ctx.strokeStyle = "red";
-          ctx.lineWidth = canvas.width * 0.015;
-          const cx = canvas.width / 2, cy = canvas.height / 2;
-
-          ctx.beginPath();
-          ctx.moveTo(cx + 50, cy - 150);
-          ctx.lineTo(cx, cy - 20);
-          ctx.lineTo(cx - 50, cy - 150);
-          ctx.stroke();
       }
 
       // Watermark
       if (styleName !== "Original") {
-          ctx.fillStyle = styleName === "Dark" ? "rgba(255, 255, 255, 0.4)" : "rgba(0, 0, 0, 0.3)";
+          ctx.fillStyle = styleName.includes("Dark") ? "rgba(255, 255, 255, 0.4)" : "rgba(0, 0, 0, 0.3)";
           ctx.font = `${canvas.width * 0.024}px sans-serif`;
           ctx.textAlign = "right";
-          ctx.fillText("Edited with SnapClean", canvas.width - (padding / 2), canvas.height - (padding / 4));
+          
+          // Draw standard watermark inside white bounding box
+          // (padding + croppedWidth is the right edge of the white box)
+          ctx.fillText("Edited with SnapClean", padding + croppedWidth - (canvas.width * 0.015), padding + croppedHeight - (canvas.height * 0.015));
       }
 
       resolve(canvas.toDataURL("image/png"));
