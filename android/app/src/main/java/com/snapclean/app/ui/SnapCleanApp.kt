@@ -92,6 +92,7 @@ fun SnapCleanApp() {
     var activeBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Baked with bindings
     var processedBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Styled with corners
     var selectedStyle by remember { mutableStateOf("Minimal") }
+    var selectedLayout by remember { mutableStateOf("None") }
     var showOriginal by remember { mutableStateOf(false) }
     var isPrivacyScanning by remember { mutableStateOf(false) }
     var blurStrength by remember { mutableFloatStateOf(15f) }
@@ -113,6 +114,7 @@ fun SnapCleanApp() {
                     val result = ImageProcessor.applyStyle(
                         bmp, 
                         selectedStyle, 
+                        selectedLayout,
                         sensitiveAreas = sensitiveAreas, 
                         blurStrength = blurStrength, 
                         memeTop = memeTopText, 
@@ -143,6 +145,7 @@ fun SnapCleanApp() {
     var texts by remember { mutableStateOf(emptyList<com.snapclean.app.ui.TextItem>()) }
     
     val stylePresets = listOf("Original", "Minimal", "Dark", "Instagram", "Shadow", "Meme", "Money", "Viral", "Focus", "Chat", "Stacked", "Stacked Left", "Stacked Right")
+    val layoutPresets = ImageProcessor.PhoneLayouts.keys.toList()
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -192,7 +195,7 @@ fun SnapCleanApp() {
                         .fillMaxSize()
                         .background(
                             androidx.compose.ui.graphics.Brush.verticalGradient(
-                                colors = listOf(Color(0xFFF8FAFC), Color(0xFFE2E8F0))
+                                colors = listOf(Color(0xFF3B82F6), Color(0xFF1D4ED8))
                             )
                         )
                         .padding(bottom = 16.dp),
@@ -204,8 +207,9 @@ fun SnapCleanApp() {
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp, vertical = 8.dp),
                         shape = RoundedCornerShape(28.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.15f)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -214,10 +218,10 @@ fun SnapCleanApp() {
                         ) {
                             // Artistic Hero Icon
                             Box(modifier = Modifier.size(60.dp), contentAlignment = Alignment.Center) {
-                                Box(modifier = Modifier.size(42.dp).rotate(-12f).background(Color(0xFFE2E8F0), RoundedCornerShape(10.dp)))
-                                Box(modifier = Modifier.size(42.dp).rotate(8f).background(Color(0x33FF3366), RoundedCornerShape(10.dp)))
-                                Box(modifier = Modifier.size(42.dp).background(Color(0xFF1E293B), RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-                                    Text("✨", fontSize = 18.sp)
+                                Box(modifier = Modifier.size(42.dp).rotate(-12f).background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(10.dp)))
+                                Box(modifier = Modifier.size(42.dp).rotate(8f).background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(10.dp)))
+                                Box(modifier = Modifier.size(42.dp).background(Color.White, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+                                    Text("📸", fontSize = 18.sp)
                                 }
                             }
                             
@@ -225,13 +229,13 @@ fun SnapCleanApp() {
                             
                             Text(
                                 "Snap Clean", 
-                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.ExtraBold),
-                                color = Color(0xFF0F172A)
+                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+                                color = Color.White
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 "Auto-crop, enhance, and beautify your screenshot in milliseconds.", 
-                                color = Color(0xFF64748B),
+                                color = Color.White.copy(alpha = 0.8f),
                                 textAlign = TextAlign.Center,
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -243,30 +247,20 @@ fun SnapCleanApp() {
                                     .fillMaxWidth()
                                     .height(115.dp)
                                     .clickable { launcher.launch("image/*") }
-                                    .background(Color(0xFFF8FAFC), RoundedCornerShape(16.dp)),
+                                    .background(Color.White, RoundedCornerShape(16.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-                                    drawRoundRect(
-                                        color = Color(0xFFCBD5E1),
-                                        style = androidx.compose.ui.graphics.drawscope.Stroke(
-                                            width = 6f,
-                                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f)
-                                        ),
-                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(16.dp.toPx())
-                                    )
-                                }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Box(
                                         modifier = Modifier.size(44.dp).background(Color(0xFFEFF6FF), CircleShape),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Text("📸", fontSize = 18.sp)
+                                        Text("✨", fontSize = 18.sp)
                                     }
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    Text("Tap to Select Image", fontWeight = FontWeight.Bold, color = Color(0xFF334155), fontSize = 14.sp)
+                                    Text("Tap to Select Image", fontWeight = FontWeight.Bold, color = Color(0xFF1D4ED8), fontSize = 14.sp)
                                     Spacer(modifier = Modifier.height(2.dp))
-                                    Text("PNG, JPG, WEBP", fontSize = 11.sp, color = Color(0xFF94A3B8))
+                                    Text("PNG, JPG, WEBP", fontSize = 11.sp, color = Color(0xFF60A5FA))
                                 }
                             }
                         }
@@ -274,9 +268,9 @@ fun SnapCleanApp() {
                     
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            "How it works",
+                            "Pro Screenshots",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = Color(0xFF475569)
+                            color = Color.White
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         
@@ -569,6 +563,78 @@ fun SnapCleanApp() {
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, 
                                     color = if (isSelected) Color(0xFF3B82F6) else Color.Gray, 
                                     modifier = Modifier.padding(top = 8.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // PHONE LAYOUTS SELECTOR
+                    Text("PHONE LAYOUTS", fontWeight = FontWeight.Black, color = Color(0xFF64748B), fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 24.dp, bottom = 8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        layoutPresets.forEach { layoutName ->
+                            val config = ImageProcessor.PhoneLayouts[layoutName]
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.clickable { 
+                                    selectedLayout = layoutName
+                                }
+                            ) {
+                                val isSelected = selectedLayout == layoutName
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .size(68.dp, 100.dp)
+                                        .scale(if (isSelected) 1.05f else 1f)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color.White)
+                                        .border(
+                                            width = if (isSelected) 3.dp else 1.dp, 
+                                            color = if (isSelected) Color(0xFF3B82F6) else Color(0xFFE2E8F0), 
+                                            shape = RoundedCornerShape(12.dp)
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (layoutName == "None") {
+                                        Text("None", fontSize = 12.sp, color = Color.Gray)
+                                    } else {
+                                        // Simple preview representation
+                                        Box(
+                                            modifier = Modifier
+                                                .size(30.dp, 60.dp)
+                                                .border(1.dp, Color.LightGray, RoundedCornerShape(4.dp))
+                                                .background(Color(0xFFF8FAFC))
+                                        ) {
+                                            Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(Color.LightGray))
+                                            Box(modifier = Modifier.fillMaxWidth().height(8.dp).align(Alignment.BottomCenter).background(Color(0xFFEFF6FF)))
+                                        }
+                                    }
+                                    
+                                    if (config?.premium == true) {
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .background(Color(0xFFFBBF24), RoundedCornerShape(bottomStart = 8.dp))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text("PRO", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                                Text(
+                                    layoutName, 
+                                    fontSize = 10.sp, 
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, 
+                                    color = if (isSelected) Color(0xFF3B82F6) else Color.Gray, 
+                                    modifier = Modifier.padding(top = 8.dp),
+                                    maxLines = 1
                                 )
                             }
                         }

@@ -6,7 +6,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, Image as ImageIcon, Share2, Download, Edit2, Sparkles, Shield, Palette, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { applyStyle, SensitiveArea, Styles } from './lib/imageProcessor';
+import { applyStyle, SensitiveArea, Styles, PhoneLayouts } from './lib/imageProcessor';
 import EditorCanvas from './EditorCanvas';
 
 type AppState = 'upload' | 'processing' | 'preview';
@@ -19,6 +19,7 @@ export default function App() {
   
   // NEW STATES
   const [selectedStyle, setSelectedStyle] = useState('Minimal');
+  const [selectedLayout, setSelectedLayout] = useState('None');
   const [isPrivacyScanning, setIsPrivacyScanning] = useState(false);
   const [blurStrength, setBlurStrength] = useState(15);
   const [sensitiveAreas, setSensitiveAreas] = useState<SensitiveArea[]>([]);
@@ -30,11 +31,11 @@ export default function App() {
   // Sync processed image when any parameter changes
   React.useEffect(() => {
     if (originalImage) {
-      applyStyle(originalImage, selectedStyle, sensitiveAreas, blurStrength, memeTopText, memeBottomText)
+      applyStyle(originalImage, selectedStyle, selectedLayout, sensitiveAreas, blurStrength, memeTopText, memeBottomText)
         .then(setProcessedImage)
         .catch(console.error);
     }
-  }, [originalImage, selectedStyle, sensitiveAreas, blurStrength, memeTopText, memeBottomText]);
+  }, [originalImage, selectedStyle, selectedLayout, sensitiveAreas, blurStrength, memeTopText, memeBottomText]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -111,7 +112,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] text-gray-900 font-sans flex items-center justify-center relative overflow-hidden">
+    <div className="min-h-screen bg-blue-600 text-gray-900 font-sans flex items-center justify-center relative overflow-hidden">
       
       <AnimatePresence mode="wait">
         {/* ... upload and processing screens same ... */}
@@ -121,23 +122,23 @@ export default function App() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="w-full max-w-md p-8 flex flex-col items-center text-center space-y-6"
+            className="w-full max-w-md p-8 flex flex-col items-center text-center space-y-6 bg-white/10 backdrop-blur-xl rounded-[40px] border border-white/20 shadow-2xl m-4"
           >
-            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-sm border border-blue-200">
+            <div className="w-16 h-16 bg-white text-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-xl">
                <ImageIcon className="w-8 h-8" />
             </div>
-            <div>
-              <h1 className="text-3xl font-bold mb-2 tracking-tight">SnapClean</h1>
-              <p className="text-gray-500 text-sm">
+            <div className="text-white">
+              <h1 className="text-4xl font-black mb-2 tracking-tighter">SnapClean</h1>
+              <p className="text-blue-100 text-sm font-medium">
                 Viral screenshots, one tap away. Professional styles and memes.
               </p>
             </div>
             
             <button
                onClick={() => fileInputRef.current?.click()}
-               className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold shadow-xl shadow-blue-200 hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+               className="w-full py-5 bg-white text-blue-600 rounded-2xl font-black shadow-2xl hover:bg-blue-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-lg"
             >
-               <Upload className="w-5 h-5" />
+               <Upload className="w-6 h-6" />
                Upload Screenshot
             </button>
             <input 
@@ -149,10 +150,10 @@ export default function App() {
             />
 
             <div className="grid grid-cols-1 gap-3 w-full">
-              <div className="p-4 bg-white rounded-2xl border border-gray-100 shadow-sm text-center">
-                <Palette className="w-5 h-5 text-purple-500 mb-2 mx-auto" />
-                <h3 className="text-xs font-bold">Viral Styles</h3>
-                <p className="text-[10px] text-gray-400">Professional Card & Meme Layouts</p>
+              <div className="p-4 bg-white/10 rounded-2xl border border-white/10 text-center">
+                <Palette className="w-5 h-5 text-blue-200 mb-2 mx-auto" />
+                <h3 className="text-xs font-bold text-white uppercase tracking-widest">Viral Styles</h3>
+                <p className="text-[10px] text-blue-100/60">Professional Card & Meme Layouts</p>
               </div>
             </div>
           </motion.div>
@@ -212,36 +213,78 @@ export default function App() {
                 </div>
              </div>
 
-            {/* Style Selector */}
-            <div className="bg-white p-4">
-              <div className="flex items-center gap-2 mb-3 px-2">
-                <Palette className="w-4 h-4 text-gray-400" />
-                <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Viral Styles</span>
-              </div>
-              <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
-                 {Object.keys(Styles).map(style => {
-                   const isSelected = selectedStyle === style;
-                   const config = Styles[style];
-                   const bgStyle = config.bgGradient 
-                     ? { background: `linear-gradient(135deg, ${config.bgGradient.join(', ')})` }
-                     : { backgroundColor: config.bgColor };
+            {/* Style & Layout Selectors */}
+            <div className="bg-white p-4 border-t border-gray-50 flex flex-col gap-4">
+              {/* Viral Styles */}
+              <div>
+                <div className="flex items-center gap-2 mb-3 px-2">
+                  <Palette className="w-4 h-4 text-gray-400" />
+                  <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Viral Styles</span>
+                </div>
+                <div className="flex gap-4 overflow-x-auto pb-1 no-scrollbar">
+                  {Object.keys(Styles).map(style => {
+                    const isSelected = selectedStyle === style;
+                    const config = Styles[style];
+                    const bgStyle = config.bgGradient 
+                      ? { background: `linear-gradient(135deg, ${config.bgGradient.join(', ')})` }
+                      : { backgroundColor: config.bgColor };
 
-                   return (
-                    <button 
-                      key={style}
-                      onClick={() => setSelectedStyle(style)}
-                      className="flex flex-col items-center gap-2 shrink-0 group"
-                    >
-                      <div 
-                        style={bgStyle}
-                        className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-black transition-all border-2 ${isSelected ? 'border-blue-600 scale-110 shadow-lg shadow-blue-200' : 'border-gray-100 shadow-sm'} ${style === 'Dark' || style === 'Meme' || style === 'Money' || style === 'Focus' || style === 'Instagram' ? 'text-white' : 'text-gray-900 font-black'}`}
+                    return (
+                      <button 
+                        key={style}
+                        onClick={() => setSelectedStyle(style)}
+                        className="flex flex-col items-center gap-2 shrink-0 group"
                       >
-                         {style[0]}
-                      </div>
-                      <span className={`text-[10px] ${isSelected ? 'text-blue-600 font-bold' : 'text-gray-400 font-medium group-hover:text-gray-600 transition-colors'}`}>{style}</span>
-                    </button>
-                   );
-                 })}
+                        <div 
+                          style={bgStyle}
+                          className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black transition-all border-2 ${isSelected ? 'border-blue-600 scale-110 shadow-lg shadow-blue-100' : 'border-gray-100'}`}
+                        >
+                          <span className={`${(style === 'Dark' || style === 'Money' || style === 'Focus' || style === 'Instagram' || style === 'Meme') ? 'text-white' : 'text-gray-900'}`}>{style[0]}</span>
+                        </div>
+                        <span className={`text-[9px] ${isSelected ? 'text-blue-600 font-bold' : 'text-gray-400 font-medium'}`}>{style}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Phone Layouts */}
+              <div>
+                <div className="flex items-center gap-2 mb-3 px-2">
+                  <ImageIcon className="w-4 h-4 text-gray-400" />
+                  <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Phone Layouts</span>
+                </div>
+                <div className="flex gap-4 overflow-x-auto pb-1 no-scrollbar">
+                  {Object.keys(PhoneLayouts).map(layoutName => {
+                    const isSelected = selectedLayout === layoutName;
+                    const config = PhoneLayouts[layoutName];
+
+                    return (
+                      <button 
+                        key={layoutName}
+                        onClick={() => setSelectedLayout(layoutName)}
+                        className="flex flex-col items-center gap-2 shrink-0 group relative"
+                      >
+                        <div 
+                          className={`w-12 h-20 rounded-lg flex flex-col items-center justify-center transition-all border-2 overflow-hidden bg-gray-50 ${isSelected ? 'border-blue-600 scale-105 shadow-md' : 'border-gray-100'}`}
+                        >
+                           {layoutName === 'None' ? (
+                             <X className="w-4 h-4 text-gray-300" />
+                           ) : (
+                             <div className="w-8 h-14 border border-gray-300 rounded-sm bg-white relative">
+                               <div className="absolute top-1 left-1 right-1 h-2 bg-gray-100 rounded-full" />
+                               <div className="absolute bottom-1 left-1 right-1 h-3 bg-blue-50 rounded-xs" />
+                             </div>
+                           )}
+                           {config.premium && (
+                             <div className="absolute top-0 right-0 bg-amber-400 text-white text-[8px] px-1 font-bold">PRO</div>
+                           )}
+                        </div>
+                        <span className={`text-[9px] max-w-[50px] text-center truncate ${isSelected ? 'text-blue-600 font-bold' : 'text-gray-400 font-medium'}`}>{layoutName}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 

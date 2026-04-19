@@ -30,9 +30,113 @@ export interface SensitiveArea {
   isBlurred: boolean;
 }
 
+export interface LayoutConfig {
+  name: string;
+  deviceX: number; // 0 to 1 relative to canvas
+  deviceY: number; // 0 to 1 relative to canvas
+  deviceScale: number;
+  rotation?: number; 
+  isLandscape?: boolean;
+  premium?: boolean;
+}
+
+export const PhoneLayouts: Record<string, LayoutConfig> = {
+  "None": { name: "None", deviceX: 0.5, deviceY: 0.5, deviceScale: 1 },
+  "Standard": { name: "Standard", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.85 },
+  "Phone Top": { name: "Phone Top", deviceX: 0.5, deviceY: 0.35, deviceScale: 0.7, premium: true },
+  "Phone Bottom": { name: "Phone Bottom", deviceX: 0.5, deviceY: 0.65, deviceScale: 0.7, premium: true },
+  "Tilted Left": { name: "Tilted Left", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.8, rotation: -12, premium: true },
+  "Tilted Right": { name: "Tilted Right", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.8, rotation: 12, premium: true },
+  "Landscape": { name: "Landscape", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.85, isLandscape: true, premium: true },
+  "Small Center": { name: "Small Center", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.6 },
+  "Floating": { name: "Floating", deviceX: 0.5, deviceY: 0.45, deviceScale: 0.8, premium: true }
+};
+
+function drawDevice(ctx: CanvasRenderingContext2D, img: HTMLCanvasElement | HTMLImageElement, x: number, y: number, width: number, height: number, layout: LayoutConfig) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (layout.rotation) {
+    ctx.rotate((layout.rotation * Math.PI) / 180);
+  }
+
+  // Calculate device dimensions based on aspect ratio
+  const ratio = layout.isLandscape ? (19.5/9) : (9/19.5);
+  let devW = width;
+  let devH = width / ratio;
+  
+  if (devH > height) {
+    devH = height;
+    devW = height * ratio;
+  }
+
+  // Draw Shadow
+  ctx.shadowColor = "rgba(0,0,0,0.3)";
+  ctx.shadowBlur = devW * 0.1;
+  ctx.shadowOffsetY = devW * 0.05;
+
+  // Draw Frame (iPhone-like)
+  const radius = devW * 0.12;
+  ctx.beginPath();
+  ctx.roundRect(-devW/2, -devH/2, devW, devH, radius);
+  ctx.fillStyle = "#1a1a1a"; // Device frame color
+  ctx.fill();
+  
+  // Outer border
+  ctx.strokeStyle = "#333";
+  ctx.lineWidth = devW * 0.02;
+  ctx.stroke();
+
+  ctx.shadowColor = "transparent";
+
+  // Clip content inside screen
+  const screenMargin = devW * 0.04;
+  const screenRadius = radius * 0.8;
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(-devW/2 + screenMargin, -devH/2 + screenMargin, devW - screenMargin*2, devH - screenMargin*2, screenRadius);
+  ctx.clip();
+  
+  // Fill screen background before image
+  ctx.fillStyle = "#000";
+  ctx.fillRect(-devW/2, -devH/2, devW, devH);
+
+  // Draw Image - fitted to screen
+  const imgW = img.width;
+  const imgH = img.height;
+  const screenW = devW - screenMargin*2;
+  const screenH = devH - screenMargin*2;
+  const imgRatio = imgW / imgH;
+  const screenRatio = screenW / screenH;
+
+  let drawW, drawH;
+  if (imgRatio > screenRatio) {
+    drawH = screenH;
+    drawW = screenH * imgRatio;
+  } else {
+    drawW = screenW;
+    drawH = screenW / imgRatio;
+  }
+  
+  ctx.drawImage(img, -drawW/2, -drawH/2, drawW, drawH);
+  ctx.restore();
+
+  // Draw Dynamic Island / Notch
+  if (!layout.isLandscape) {
+    ctx.fillStyle = "#000";
+    const islandW = devW * 0.25;
+    const islandH = devH * 0.025;
+    ctx.beginPath();
+    ctx.roundRect(-islandW/2, -devH/2 + screenMargin + devH * 0.015, islandW, islandH, islandH/2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
 export async function applyStyle(
   originalSrc: string, 
   styleName: string = "Minimal", 
+  layoutName: string = "None",
   sensitiveAreas: SensitiveArea[] = [],
   blurStrength: number = 15,
   memeTop: string = "",
@@ -43,6 +147,7 @@ export async function applyStyle(
     img.crossOrigin = "anonymous";
     img.onload = () => {
       const config = Styles[styleName] || Styles["Minimal"];
+      const layout = PhoneLayouts[layoutName] || PhoneLayouts["None"];
       
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
@@ -51,13 +156,13 @@ export async function applyStyle(
         return;
       }
 
-      // 1. Auto Crop
+      // Base dimensions for the card content
       const cropTop = img.height * 0.04;
       const cropBottom = img.height * 0.05;
       const croppedHeight = img.height - cropTop - cropBottom;
       const croppedWidth = img.width;
 
-      // 2. Initial processing on a source canvas (for blurs/highlights)
+      // Processing on source canvas
       const sourceCanvas = document.createElement("canvas");
       sourceCanvas.width = croppedWidth;
       sourceCanvas.height = croppedHeight;
@@ -65,6 +170,8 @@ export async function applyStyle(
       if (!sCtx) return;
 
       sCtx.drawImage(img, 0, cropTop, croppedWidth, croppedHeight, 0, 0, croppedWidth, croppedHeight);
+      
+      // ... same processing for sensitiveAreas ...
 
       if (styleName === "Money") {
           // Blur BG except money
@@ -192,13 +299,24 @@ export async function applyStyle(
       }
 
       // Clip and Draw
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(padding, padding, croppedWidth, croppedHeight, radius);
-      ctx.clip();
-      ctx.filter = `brightness(${config.brightnessFactor}) contrast(${config.contrastFactor})`;
-      ctx.drawImage(sourceCanvas, padding, padding);
-      ctx.restore();
+      if (layout.name === "None") {
+          ctx.save();
+          ctx.beginPath();
+          ctx.roundRect(padding, padding, croppedWidth, croppedHeight, radius);
+          ctx.clip();
+          ctx.filter = `brightness(${config.brightnessFactor}) contrast(${config.contrastFactor})`;
+          ctx.drawImage(sourceCanvas, padding, padding);
+          ctx.restore();
+      } else {
+          const devX = canvas.width * layout.deviceX;
+          const devY = canvas.height * layout.deviceY;
+          const maxWidth = canvas.width * layout.deviceScale;
+          const maxHeight = canvas.height * layout.deviceScale;
+          
+          ctx.filter = `brightness(${config.brightnessFactor}) contrast(${config.contrastFactor})`;
+          drawDevice(ctx, sourceCanvas, devX, devY, maxWidth, maxHeight, layout);
+          ctx.filter = "none";
+      }
 
       // 4. Overlays
       if (styleName === "Meme") {

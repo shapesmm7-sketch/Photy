@@ -51,9 +51,32 @@ object ImageProcessor {
         return Bitmap.createBitmap(source, 0, cropTop, croppedWidth, croppedHeight)
     }
 
+    data class LayoutConfig(
+        val name: String,
+        val deviceX: Float, // 0 to 1
+        val deviceY: Float, // 0 to 1
+        val deviceScale: Float,
+        val rotation: Float = 0f,
+        val isLandscape: Boolean = false,
+        val premium: Boolean = false
+    )
+
+    val PhoneLayouts = mapOf(
+        "None" to LayoutConfig("None", 0.5f, 0.5f, 1f),
+        "Standard" to LayoutConfig("Standard", 0.5f, 0.5f, 0.85f),
+        "Phone Top" to LayoutConfig("Phone Top", 0.5f, 0.35f, 0.7f, premium = true),
+        "Phone Bottom" to LayoutConfig("Phone Bottom", 0.5f, 0.65f, 0.7f, premium = true),
+        "Tilted Left" to LayoutConfig("Tilted Left", 0.5f, 0.5f, 0.8f, rotation = -12f, premium = true),
+        "Tilted Right" to LayoutConfig("Tilted Right", 0.5f, 0.5f, 0.8f, rotation = 12f, premium = true),
+        "Landscape" to LayoutConfig("Landscape", 0.5f, 0.5f, 0.85f, isLandscape = true, premium = true),
+        "Small Center" to LayoutConfig("Small Center", 0.5f, 0.5f, 0.6f),
+        "Floating" to LayoutConfig("Floating", 0.5f, 0.45f, 0.8f, premium = true)
+    )
+
     fun applyStyle(
         source: Bitmap, 
         styleName: String = "Minimal", 
+        layoutName: String = "None",
         customColor: Int? = null, 
         sensitiveAreas: List<SensitiveArea> = emptyList(), 
         blurStrength: Float = 15f,
@@ -61,6 +84,7 @@ object ImageProcessor {
         memeBottom: String = ""
     ): Bitmap {
         val config = Styles[styleName] ?: Styles["Minimal"]!!
+        val layout = PhoneLayouts[layoutName] ?: PhoneLayouts["None"]!!
         
         // 1. Process Source (Blur/Mask)
         var baseImage = source
@@ -214,10 +238,19 @@ object ImageProcessor {
         
         val clipPath = Path()
         clipPath.addRoundRect(destRect, radius, radius, Path.Direction.CW)
-        canvas.save()
-        canvas.clipPath(clipPath)
-        canvas.drawBitmap(baseImage, null, destRect, paint)
-        canvas.restore()
+        
+        if (layout.name == "None") {
+            canvas.save()
+            canvas.clipPath(clipPath)
+            canvas.drawBitmap(baseImage, null, destRect, paint)
+            canvas.restore()
+        } else {
+            val devX = finalWidth * layout.deviceX
+            val devY = finalHeight * layout.deviceY
+            val maxWidth = finalWidth * layout.deviceScale
+            val maxHeight = finalHeight * layout.deviceScale
+            drawDevice(canvas, baseImage, devX, devY, maxWidth, maxHeight, layout, paint)
+        }
         
         // Final cleanup of intermediate copy
         if (isBaseImageACopy) {
@@ -272,6 +305,86 @@ object ImageProcessor {
         }
         
         return output
+    }
+
+    private fun drawDevice(canvas: Canvas, bitmap: Bitmap, x: Float, y: Float, maxWidth: Float, maxHeight: Float, layout: LayoutConfig, paint: Paint) {
+        canvas.save()
+        canvas.translate(x, y)
+        if (layout.rotation != 0f) {
+            canvas.rotate(layout.rotation)
+        }
+
+        val ratio = if (layout.isLandscape) (19.5f / 9f) else (9f / 19.5f)
+        var devW = maxWidth
+        var devH = maxWidth / ratio
+
+        if (devH > maxHeight) {
+            devH = maxHeight
+            devW = maxHeight * ratio
+        }
+
+        val radius = devW * 0.12f
+        val rect = RectF(-devW / 2, -devH / 2, devW / 2, devH / 2)
+
+        // Draw Shadow
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        shadowPaint.color = Color.BLACK
+        shadowPaint.alpha = 80
+        shadowPaint.setShadowLayer(devW * 0.1f, 0f, devW * 0.05f, Color.argb(100, 0, 0, 0))
+        canvas.drawRoundRect(rect, radius, radius, shadowPaint)
+
+        // Draw Frame
+        val framePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        framePaint.color = Color.parseColor("#1a1a1a")
+        canvas.drawRoundRect(rect, radius, radius, framePaint)
+
+        // Screen clipping
+        val margin = devW * 0.04f
+        val screenRadius = radius * 0.8f
+        val screenRect = RectF(rect.left + margin, rect.top + margin, rect.right - margin, rect.bottom - margin)
+        
+        val screenPath = Path()
+        screenPath.addRoundRect(screenRect, screenRadius, screenRadius, Path.Direction.CW)
+        
+        canvas.save()
+        canvas.clipPath(screenPath)
+        
+        // Background for black screen
+        val blackPaint = Paint()
+        blackPaint.color = Color.BLACK
+        canvas.drawRect(screenRect, blackPaint)
+
+        // Draw image scaled to fit screen correctly
+        val imgW = bitmap.width.toFloat()
+        val imgH = bitmap.height.toFloat()
+        val screenW = screenRect.width()
+        val screenH = screenRect.height()
+        val imgRatio = imgW / imgH
+        val screenRatio = screenW / screenH
+
+        val drawW: Float
+        val drawH: Float
+        if (imgRatio > screenRatio) {
+            drawH = screenH
+            drawW = screenH * imgRatio
+        } else {
+            drawW = screenW
+            drawH = screenW / imgRatio
+        }
+
+        val destRect = RectF(-drawW / 2, -drawH / 2, drawW / 2, drawH / 2)
+        canvas.drawBitmap(bitmap, null, destRect, paint)
+        canvas.restore()
+
+        // Notch / Dynamic Island
+        if (!layout.isLandscape) {
+            val islandW = devW * 0.25f
+            val islandH = devH * 0.025f
+            val islandRect = RectF(-islandW / 2, rect.top + margin + devH * 0.015f, islandW / 2, rect.top + margin + devH * 0.015f + islandH)
+            canvas.drawRoundRect(islandRect, islandH / 2, islandH / 2, blackPaint)
+        }
+
+        canvas.restore()
     }
 
     private fun blurRegions(source: Bitmap, areas: List<SensitiveArea>, strength: Float, recycleSource: Boolean = false): Bitmap {
