@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { Upload, Image as ImageIcon, Share2, Download, Edit2, Sparkles, Shield, Palette, X } from 'lucide-react';
+import { Upload, Image as ImageIcon, Share2, Download, Edit2, Sparkles, Shield, Palette, X, Smartphone } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { applyStyle, SensitiveArea, Styles, PhoneLayouts } from './lib/imageProcessor';
 import EditorCanvas from './EditorCanvas';
@@ -251,10 +251,10 @@ export default function App() {
               {/* Phone Layouts */}
               <div>
                 <div className="flex items-center gap-2 mb-3 px-2">
-                  <ImageIcon className="w-4 h-4 text-gray-400" />
+                  <Smartphone className="w-4 h-4 text-gray-400" />
                   <span className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Phone Layouts</span>
                 </div>
-                <div className="flex gap-4 overflow-x-auto pb-1 no-scrollbar">
+                <div className="flex gap-4 overflow-x-auto pb-1 no-scrollbar px-2">
                   {Object.keys(PhoneLayouts).map(layoutName => {
                     const isSelected = selectedLayout === layoutName;
                     const config = PhoneLayouts[layoutName];
@@ -266,21 +266,32 @@ export default function App() {
                         className="flex flex-col items-center gap-2 shrink-0 group relative"
                       >
                         <div 
-                          className={`w-12 h-20 rounded-lg flex flex-col items-center justify-center transition-all border-2 overflow-hidden bg-gray-50 ${isSelected ? 'border-blue-600 scale-105 shadow-md' : 'border-gray-100'}`}
+                          style={{ backgroundColor: config.themeColor }}
+                          className={`w-14 h-24 rounded-xl flex flex-col items-center justify-center transition-all border-2 overflow-hidden ${isSelected ? 'border-white ring-2 ring-blue-600 ring-offset-2 scale-105 shadow-xl' : 'border-black/5 hover:border-black/20 shadow-sm opacity-90 hover:opacity-100'}`}
                         >
                            {layoutName === 'None' ? (
-                             <X className="w-4 h-4 text-gray-300" />
+                             <X className={`w-5 h-5 ${layoutName === 'None' && config.themeColor === '#f3f4f6' ? 'text-gray-400' : 'text-white'}`} />
                            ) : (
-                             <div className="w-8 h-14 border border-gray-300 rounded-sm bg-white relative">
-                               <div className="absolute top-1 left-1 right-1 h-2 bg-gray-100 rounded-full" />
-                               <div className="absolute bottom-1 left-1 right-1 h-3 bg-blue-50 rounded-xs" />
+                             <div 
+                              style={{ 
+                                transform: config.rotation ? `rotate(${config.rotation}deg)` : 'none',
+                                aspectRatio: config.isLandscape ? '16/9' : '9/16'
+                              }}
+                              className={`bg-slate-900 rounded-[4px] border border-white/20 shadow-2xl relative flex flex-col items-center justify-center ${config.isLandscape ? 'w-10 h-6' : 'w-7 h-12'}`}
+                             >
+                               {/* Screen Content Mockup */}
+                               <div className="w-[85%] h-[85%] bg-blue-500/20 rounded-[2px] flex items-center justify-center">
+                                  <div className="w-[60%] h-[10%] bg-blue-400/40 rounded-full" />
+                               </div>
+                               {/* Notch */}
+                               {!config.isLandscape && <div className="absolute top-[2px] w-[30%] h-[2px] bg-black rounded-full" />}
                              </div>
                            )}
                            {config.premium && (
-                             <div className="absolute top-0 right-0 bg-amber-400 text-white text-[8px] px-1 font-bold">PRO</div>
+                             <div className="absolute top-0 right-0 bg-blue-600 text-white text-[7px] px-1.5 py-0.5 font-black rounded-bl-lg">PRO</div>
                            )}
                         </div>
-                        <span className={`text-[9px] max-w-[50px] text-center truncate ${isSelected ? 'text-blue-600 font-bold' : 'text-gray-400 font-medium'}`}>{layoutName}</span>
+                        <span className={`text-[8px] uppercase tracking-tighter ${isSelected ? 'text-blue-600 font-black' : 'text-gray-400 font-bold'}`}>{layoutName}</span>
                       </button>
                     );
                   })}

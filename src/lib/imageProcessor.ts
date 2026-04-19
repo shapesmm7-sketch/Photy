@@ -38,18 +38,24 @@ export interface LayoutConfig {
   rotation?: number; 
   isLandscape?: boolean;
   premium?: boolean;
+  themeColor: string; // Background color for this layout
 }
 
 export const PhoneLayouts: Record<string, LayoutConfig> = {
-  "None": { name: "None", deviceX: 0.5, deviceY: 0.5, deviceScale: 1 },
-  "Standard": { name: "Standard", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.85 },
-  "Phone Top": { name: "Phone Top", deviceX: 0.5, deviceY: 0.35, deviceScale: 0.7, premium: true },
-  "Phone Bottom": { name: "Phone Bottom", deviceX: 0.5, deviceY: 0.65, deviceScale: 0.7, premium: true },
-  "Tilted Left": { name: "Tilted Left", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.8, rotation: -12, premium: true },
-  "Tilted Right": { name: "Tilted Right", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.8, rotation: 12, premium: true },
-  "Landscape": { name: "Landscape", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.85, isLandscape: true, premium: true },
-  "Small Center": { name: "Small Center", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.6 },
-  "Floating": { name: "Floating", deviceX: 0.5, deviceY: 0.45, deviceScale: 0.8, premium: true }
+  "None": { name: "None", deviceX: 0.5, deviceY: 0.5, deviceScale: 1, themeColor: "#f3f4f6" },
+  "Standard": { name: "Standard", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.85, themeColor: "#3b82f6" },
+  "Bottom View": { name: "Bottom View", deviceX: 0.5, deviceY: 0.65, deviceScale: 0.7, themeColor: "#8b5cf6" },
+  "Forest View": { name: "Forest View", deviceX: 0.5, deviceY: 0.65, deviceScale: 0.7, themeColor: "#10b981" },
+  "Top View": { name: "Top View", deviceX: 0.5, deviceY: 0.35, deviceScale: 0.7, themeColor: "#f59e0b" },
+  "Elevated": { name: "Elevated", deviceX: 0.5, deviceY: 0.3, deviceScale: 0.8, themeColor: "#06b6d4" },
+  "Split Right": { name: "Split Right", deviceX: 0.75, deviceY: 0.5, deviceScale: 0.8, premium: true, themeColor: "#ec4899" },
+  "Split Left": { name: "Split Left", deviceX: 0.25, deviceY: 0.5, deviceScale: 0.8, premium: true, themeColor: "#6366f1" },
+  "Tilted": { name: "Tilted", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.8, rotation: 15, premium: true, themeColor: "#f97316" },
+  "Cinema Center": { name: "Cinema Center", deviceX: 0.5, deviceY: 0.5, deviceScale: 0.85, isLandscape: true, premium: true, themeColor: "#14b8a6" },
+  "Cinema Top": { name: "Cinema Top", deviceX: 0.5, deviceY: 0.3, deviceScale: 0.7, isLandscape: true, premium: true, themeColor: "#ef4444" },
+  "Cinema Btm": { name: "Cinema Btm", deviceX: 0.5, deviceY: 0.7, deviceScale: 0.7, isLandscape: true, premium: true, themeColor: "#4f46e5" },
+  "Cinema Left": { name: "Cinema Left", deviceX: 0.25, deviceY: 0.6, deviceScale: 0.8, isLandscape: true, premium: true, themeColor: "#84cc16" },
+  "Cinema Right": { name: "Cinema Right", deviceX: 0.75, deviceY: 0.6, deviceScale: 0.8, isLandscape: true, premium: true, themeColor: "#a855f7" }
 };
 
 function drawDevice(ctx: CanvasRenderingContext2D, img: HTMLCanvasElement | HTMLImageElement, x: number, y: number, width: number, height: number, layout: LayoutConfig) {
@@ -232,7 +238,41 @@ export async function applyStyle(
       canvas.height = croppedHeight + padding * 2;
 
       // Background
-      if (config.bgGradient) {
+      if (layout.name !== "None") {
+          ctx.fillStyle = layout.themeColor;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          // Add decorative lines to match user screenshot mockup
+          ctx.save();
+          ctx.globalAlpha = 0.2;
+          ctx.fillStyle = "#FFF";
+          const lineW = canvas.width * 0.4;
+          const lineH = canvas.height * 0.015;
+          const lineGap = canvas.height * 0.025;
+          
+          if (layout.name.includes("Top") || layout.name === "Elevated") {
+              // Lines at bottom
+              for(let i=0; i<4; i++) {
+                  ctx.fillRect(canvas.width/2 - lineW/2, canvas.height * 0.75 + i * lineGap, lineW, lineH);
+              }
+          } else if (layout.name.includes("Bottom") || layout.name === "Forest View" || layout.name.includes("Btm")) {
+              // Lines at top
+              for(let i=0; i<4; i++) {
+                  ctx.fillRect(canvas.width/2 - lineW/2, canvas.height * 0.15 + i * lineGap, lineW, lineH);
+              }
+          } else if (layout.name.includes("Left")) {
+              // Lines on right
+              for(let i=0; i<6; i++) {
+                  ctx.fillRect(canvas.width * 0.65, canvas.height * 0.3 + i * lineGap, lineW * 0.7, lineH);
+              }
+          } else if (layout.name.includes("Right")) {
+              // Lines on left
+              for(let i=0; i<6; i++) {
+                  ctx.fillRect(canvas.width * 0.05, canvas.height * 0.3 + i * lineGap, lineW * 0.7, lineH);
+              }
+          }
+          ctx.restore();
+      } else if (config.bgGradient) {
           const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
           config.bgGradient.forEach((color, i, arr) => {
               grad.addColorStop(i / (arr.length - 1), color);

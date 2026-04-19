@@ -577,10 +577,10 @@ fun SnapCleanApp() {
                             .fillMaxWidth()
                             .horizontalScroll(rememberScrollState())
                             .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         layoutPresets.forEach { layoutName ->
-                            val config = ImageProcessor.PhoneLayouts[layoutName]
+                            val config = ImageProcessor.PhoneLayouts[layoutName]!!
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier.clickable { 
@@ -591,47 +591,66 @@ fun SnapCleanApp() {
                                 
                                 Box(
                                     modifier = Modifier
-                                        .size(68.dp, 100.dp)
-                                        .scale(if (isSelected) 1.05f else 1f)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(Color.White)
+                                        .size(68.dp, 108.dp)
+                                        .scale(if (isSelected) 1.1f else 1f)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(Color(config.themeColor))
                                         .border(
                                             width = if (isSelected) 3.dp else 1.dp, 
-                                            color = if (isSelected) Color(0xFF3B82F6) else Color(0xFFE2E8F0), 
-                                            shape = RoundedCornerShape(12.dp)
-                                        ),
+                                            color = if (isSelected) Color.White else Color.Black.copy(alpha = 0.05f), 
+                                            shape = RoundedCornerShape(16.dp)
+                                        )
+                                        .shadow(if (isSelected) 8.dp else 2.dp, RoundedCornerShape(16.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (layoutName == "None") {
-                                        Text("None", fontSize = 12.sp, color = Color.Gray)
+                                        Text("None", fontSize = 12.sp, color = if (config.themeColor == android.graphics.Color.parseColor("#f3f4f6")) Color.Gray else Color.White)
                                     } else {
-                                        // Simple preview representation
+                                        // Detailed preview representation
+                                        val rotation = config.rotation
                                         Box(
                                             modifier = Modifier
-                                                .size(30.dp, 60.dp)
-                                                .border(1.dp, Color.LightGray, RoundedCornerShape(4.dp))
-                                                .background(Color(0xFFF8FAFC))
+                                                .rotate(rotation)
+                                                .size(if (config.isLandscape) 44.dp else 28.dp, if (config.isLandscape) 24.dp else 56.dp)
+                                                .background(Color(0xFF1E293B), RoundedCornerShape(4.dp))
+                                                .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
+                                            contentAlignment = Alignment.Center
                                         ) {
-                                            Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(Color.LightGray))
-                                            Box(modifier = Modifier.fillMaxWidth().height(8.dp).align(Alignment.BottomCenter).background(Color(0xFFEFF6FF)))
+                                            // Screen
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize(0.85f)
+                                                    .background(Color.Blue.copy(alpha = 0.2f), RoundedCornerShape(1.dp))
+                                            )
+                                            // Island
+                                            if (!config.isLandscape) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .align(Alignment.TopCenter)
+                                                        .padding(top = 2.dp)
+                                                        .width(10.dp)
+                                                        .height(1.dp)
+                                                        .background(Color.Black, RoundedCornerShape(1.dp))
+                                                )
+                                            }
                                         }
                                     }
                                     
-                                    if (config?.premium == true) {
+                                    if (config.premium) {
                                         Box(
                                             modifier = Modifier
                                                 .align(Alignment.TopEnd)
-                                                .background(Color(0xFFFBBF24), RoundedCornerShape(bottomStart = 8.dp))
+                                                .background(Color(0xFF3B82F6), RoundedCornerShape(bottomStart = 8.dp))
                                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                                         ) {
-                                            Text("PRO", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                            Text("PRO", color = Color.White, fontSize = 7.sp, fontWeight = FontWeight.Black)
                                         }
                                     }
                                 }
                                 Text(
-                                    layoutName, 
-                                    fontSize = 10.sp, 
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium, 
+                                    layoutName.uppercase(), 
+                                    fontSize = 9.sp, 
+                                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold, 
                                     color = if (isSelected) Color(0xFF3B82F6) else Color.Gray, 
                                     modifier = Modifier.padding(top = 8.dp),
                                     maxLines = 1

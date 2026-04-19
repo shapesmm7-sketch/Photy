@@ -58,19 +58,25 @@ object ImageProcessor {
         val deviceScale: Float,
         val rotation: Float = 0f,
         val isLandscape: Boolean = false,
-        val premium: Boolean = false
+        val premium: Boolean = false,
+        val themeColor: Int
     )
 
     val PhoneLayouts = mapOf(
-        "None" to LayoutConfig("None", 0.5f, 0.5f, 1f),
-        "Standard" to LayoutConfig("Standard", 0.5f, 0.5f, 0.85f),
-        "Phone Top" to LayoutConfig("Phone Top", 0.5f, 0.35f, 0.7f, premium = true),
-        "Phone Bottom" to LayoutConfig("Phone Bottom", 0.5f, 0.65f, 0.7f, premium = true),
-        "Tilted Left" to LayoutConfig("Tilted Left", 0.5f, 0.5f, 0.8f, rotation = -12f, premium = true),
-        "Tilted Right" to LayoutConfig("Tilted Right", 0.5f, 0.5f, 0.8f, rotation = 12f, premium = true),
-        "Landscape" to LayoutConfig("Landscape", 0.5f, 0.5f, 0.85f, isLandscape = true, premium = true),
-        "Small Center" to LayoutConfig("Small Center", 0.5f, 0.5f, 0.6f),
-        "Floating" to LayoutConfig("Floating", 0.5f, 0.45f, 0.8f, premium = true)
+        "None" to LayoutConfig("None", 0.5f, 0.5f, 1f, themeColor = Color.parseColor("#f3f4f6")),
+        "Standard" to LayoutConfig("Standard", 0.5f, 0.5f, 0.85f, themeColor = Color.parseColor("#3b82f6")),
+        "Bottom View" to LayoutConfig("Bottom View", 0.5f, 0.65f, 0.7f, themeColor = Color.parseColor("#8b5cf6")),
+        "Forest View" to LayoutConfig("Forest View", 0.5f, 0.65f, 0.7f, themeColor = Color.parseColor("#10b981")),
+        "Top View" to LayoutConfig("Top View", 0.5f, 0.35f, 0.7f, themeColor = Color.parseColor("#f59e0b")),
+        "Elevated" to LayoutConfig("Elevated", 0.5f, 0.3f, 0.8f, themeColor = Color.parseColor("#06b6d4")),
+        "Split Right" to LayoutConfig("Split Right", 0.75f, 0.5f, 0.8f, premium = true, themeColor = Color.parseColor("#ec4899")),
+        "Split Left" to LayoutConfig("Split Left", 0.25f, 0.5f, 0.8f, premium = true, themeColor = Color.parseColor("#6366f1")),
+        "Tilted" to LayoutConfig("Tilted", 0.5f, 0.5f, 0.8f, rotation = 15f, premium = true, themeColor = Color.parseColor("#f97316")),
+        "Cinema Center" to LayoutConfig("Cinema Center", 0.5f, 0.5f, 0.85f, isLandscape = true, premium = true, themeColor = Color.parseColor("#14b8a6")),
+        "Cinema Top" to LayoutConfig("Cinema Top", 0.5f, 0.3f, 0.7f, isLandscape = true, premium = true, themeColor = Color.parseColor("#ef4444")),
+        "Cinema Btm" to LayoutConfig("Cinema Btm", 0.5f, 0.7f, 0.7f, isLandscape = true, premium = true, themeColor = Color.parseColor("#4f46e5")),
+        "Cinema Left" to LayoutConfig("Cinema Left", 0.25f, 0.6f, 0.8f, isLandscape = true, premium = true, themeColor = Color.parseColor("#84cc16")),
+        "Cinema Right" to LayoutConfig("Cinema Right", 0.75f, 0.6f, 0.8f, isLandscape = true, premium = true, themeColor = Color.parseColor("#a855f7"))
     )
 
     fun applyStyle(
@@ -155,7 +161,9 @@ object ImageProcessor {
         
         // Background
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-        if (config.bgGradient != null) {
+        if (layout.name != "None") {
+            bgPaint.color = layout.themeColor
+        } else if (config.bgGradient != null) {
             bgPaint.shader = android.graphics.LinearGradient(
                 0f, 0f, finalWidth.toFloat(), finalHeight.toFloat(),
                 config.bgGradient.toIntArray(), null, android.graphics.Shader.TileMode.CLAMP
@@ -164,6 +172,58 @@ object ImageProcessor {
             bgPaint.color = customColor ?: config.bgColor
         }
         canvas.drawRect(0f, 0f, finalWidth.toFloat(), finalHeight.toFloat(), bgPaint)
+        
+        // Background decorative lines
+        if (layout.name != "None") {
+            val linePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+            linePaint.color = Color.WHITE
+            linePaint.alpha = 50
+            val lineW = finalWidth * 0.4f
+            val lineH = finalHeight * 0.015f
+            val lineGap = finalHeight * 0.025f
+            
+            if (layout.name.contains("Top") || layout.name == "Elevated") {
+                for (i in 0 until 4) {
+                    canvas.drawRect(
+                        finalWidth/2f - lineW/2f, 
+                        finalHeight * 0.75f + i * lineGap, 
+                        finalWidth/2f + lineW/2f, 
+                        finalHeight * 0.75f + i * lineGap + lineH, 
+                        linePaint
+                    )
+                }
+            } else if (layout.name.contains("Bottom") || layout.name == "Forest View" || layout.name.contains("Btm")) {
+                for (i in 0 until 4) {
+                    canvas.drawRect(
+                        finalWidth/2f - lineW/2f, 
+                        finalHeight * 0.15f + i * lineGap, 
+                        finalWidth/2f + lineW/2f, 
+                        finalHeight * 0.15f + i * lineGap + lineH, 
+                        linePaint
+                    )
+                }
+            } else if (layout.name.contains("Left")) {
+                for (i in 0 until 6) {
+                    canvas.drawRect(
+                        finalWidth * 0.65f, 
+                        finalHeight * 0.3f + i * lineGap, 
+                        finalWidth * 0.65f + lineW * 0.7f, 
+                        finalHeight * 0.3f + i * lineGap + lineH, 
+                        linePaint
+                    )
+                }
+            } else if (layout.name.contains("Right")) {
+                for (i in 0 until 6) {
+                    canvas.drawRect(
+                        finalWidth * 0.05f, 
+                        finalHeight * 0.3f + i * lineGap, 
+                        finalWidth * 0.05f + lineW * 0.7f, 
+                        finalHeight * 0.3f + i * lineGap + lineH, 
+                        linePaint
+                    )
+                }
+            }
+        }
         
         // 3. Draw Screenshot Holder
         val radius = maxOf(baseImage.width, baseImage.height) * config.cornerRadiusFactor
