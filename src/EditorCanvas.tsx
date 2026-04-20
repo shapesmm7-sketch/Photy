@@ -17,13 +17,23 @@ interface TextItem {
 const fontNames = ["Default", "Serif", "SansSerif", "Monospace", "Cursive"];
 const textColors = ["#FFFFFF", "#CCCCCC", "#888888", "#444444", "#000000", "#FF3366", "#FF0000", "#FF5722", "#4CAF50", "#2196F3", "#9C27B0", "#FFEB3B"];
 
+interface DrawingPath {
+  points: {x: number, y: number}[];
+  path2d: Path2D;
+  color: string;
+  width: number;
+  isBlur: boolean;
+}
+
 interface EditorCanvasProps {
   imageSrc: string;
-  onSave: (dataUrl: string) => void;
+  initialPaths?: DrawingPath[];
+  initialTexts?: TextItem[];
+  onSave: (dataUrl: string, cleanSrc: string, paths: DrawingPath[], texts: TextItem[]) => void;
   onCancel: () => void;
 }
 
-export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanvasProps) {
+export default function EditorCanvas({ imageSrc, initialPaths = [], initialTexts = [], onSave, onCancel }: EditorCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const blurCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -38,10 +48,11 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
   const cropEndRef = useRef<{x: number, y: number} | null>(null);
 
   // Drawing state
-  const [paths, setPaths] = useState<{ path: Path2D, color: string, width: number, isBlur: boolean }[]>([]);
+  const [paths, setPaths] = useState<DrawingPath[]>(initialPaths);
   const currentPathRef = useRef<Path2D | null>(null);
   const drawingPointsRef = useRef<{x: number, y: number}[]>([]);
   const [suggestedShape, setSuggestedShape] = useState<'Line' | 'Circle' | null>(null);
+  const [editingPathIndex, setEditingPathIndex] = useState<number>(-1);
 
   const detectShapeWeb = (points: {x: number, y: number}[]) => {
     if (points.length < 10) return null;
@@ -68,7 +79,7 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
   };
 
   // Text state
-  const [texts, setTexts] = useState<TextItem[]>([]);
+  const [texts, setTexts] = useState<TextItem[]>(initialTexts);
   const [showTextModal, setShowTextModal] = useState(false);
   const [editingTextIndex, setEditingTextIndex] = useState<number>(-1);
   const [currentText, setCurrentText] = useState('');
@@ -110,8 +121,8 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     const topTextSize = Math.max(0, ...texts.filter(t => t.positionMode === 'Top').map(t => t.size), (showTextModal && textPositionMode === 'Top') ? currentTextSize : 0);
     const bottomTextSize = Math.max(0, ...texts.filter(t => t.positionMode === 'Bottom').map(t => t.size), (showTextModal && textPositionMode === 'Bottom') ? currentTextSize : 0);
     
-    const topPad = topTextSize > 24 ? topTextSize * 1.2 : 0;
-    const bottomPad = bottomTextSize > 24 ? bottomTextSize * 1.2 : 0;
+    const topPad = 0;
+    const bottomPad = 0;
 
     const virtualH = rect.h + topPad + bottomPad;
 
@@ -159,7 +170,7 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     if (!ctx) return;
 
     const topTextSize = Math.max(0, ...texts.filter(t => t.positionMode === 'Top').map(t => t.size), (showTextModal && textPositionMode === 'Top') ? currentTextSize : 0);
-    const topPad = topTextSize > 24 ? topTextSize * 1.2 : 0;
+    const topPad = 0;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
@@ -176,7 +187,7 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     paths.forEach(p => {
       if (p.isBlur) {
         ctx.save();
-        ctx.clip(p.path);
+        ctx.clip(p.path2d);
         if (blurCanvasRef.current) {
           ctx.drawImage(blurCanvasRef.current, 0, 0);
         }
@@ -184,7 +195,7 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
       } else {
         ctx.strokeStyle = p.color;
         ctx.lineWidth = p.width;
-        ctx.stroke(p.path);
+        ctx.stroke(p.path2d);
       }
     });
 
@@ -208,8 +219,8 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
       const x = canvas.width / 2;
       let y = currentCrop.h / 2;
       
-      if (textPositionMode === 'Top') y = size + 20;
-      if (textPositionMode === 'Bottom') y = currentCrop.h - 40;
+      if (textPositionMode === 'Top') y = size + 10;
+      if (textPositionMode === 'Bottom') y = currentCrop.h - 20;
 
       ctx.fillStyle = currentTextColor;
       ctx.globalAlpha = 0.8;
@@ -295,12 +306,11 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
   const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
     const pt = getCanvasPoint(e);
 
-    // Hit test for texts (even if activeTool !== 'text', allow tapping to edit)
+    // Hit test for texts
     const clickedTextIndex = texts.findIndex(t => {
-      // Approximation of font bounds. t.x is center, t.y is baseline
-      const height = t.size * 1.5; // add padding
-      const width = Math.max(t.text.length * (t.size * 0.7), 40) + 40; // approx width with generous padding
-      return pt.x > t.x - width/2 && pt.x < t.x + width/2 && pt.y < t.y + 20 && pt.y > t.y - height;
+      const height = t.size * 1.5;
+      const width = Math.max(t.text.length * (t.size * 0.6), 30) + 20;
+      return pt.x > t.x - width/2 && pt.x < t.x + width/2 && pt.y < t.y + 10 && pt.y > t.y - height + 10;
     });
 
     if (clickedTextIndex >= 0) {
@@ -314,6 +324,19 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
       setActiveTool('text');
       setShowTextModal(true);
       return;
+    }
+
+    // Hit test for paths (Draw/Blur)
+    const clickedPathIndex = paths.findIndex(p => {
+      return p.points.some(ppp => Math.sqrt(Math.pow(ppp.x - pt.x, 2) + Math.pow(ppp.y - pt.y, 2)) < (p.width + 10));
+    });
+
+    if (clickedPathIndex >= 0) {
+      setEditingPathIndex(clickedPathIndex);
+      // Give feedback by resetting tool? Or just allow deletion
+      return;
+    } else {
+      setEditingPathIndex(-1);
     }
 
     if (activeTool === 'none' || activeTool === 'text') return;
@@ -377,11 +400,13 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
        setActiveTool('none'); // Reset tool after crop
     } else if (currentPathRef.current && canvasRef.current) {
         const color = activeTool === 'draw' ? '#FF3366' : 'transparent';
-        const width = canvasRef.current.width * 0.01;
+        const width = activeTool === 'blur' ? 30 : (canvasRef.current.width * 0.01);
+        
         setPaths([...paths, { 
-          path: currentPathRef.current, 
+          points: [...drawingPointsRef.current],
+          path2d: currentPathRef.current, 
           color, 
-          width: activeTool === 'blur' ? 30 : width, 
+          width: width, 
           isBlur: activeTool === 'blur' 
         }]);
 
@@ -404,9 +429,9 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
     let y = canvas.height / 2;
 
     const topTextSize = Math.max(0, ...texts.filter(t => t.positionMode === 'Top').map(t => t.size), (showTextModal && textPositionMode === 'Top') ? currentTextSize : 0);
-    const topPad = topTextSize > 24 ? topTextSize * 1.2 : 0;
+    const topPad = 0;
 
-    if (textPositionMode === 'Top') y = size;
+    if (textPositionMode === 'Top') y = size + 10;
     if (textPositionMode === 'Bottom') y = canvas.height - 20;
 
     const newText: TextItem = {
@@ -446,8 +471,17 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
   };
 
   const handleSave = () => {
-    if (canvasRef.current) {
-        onSave(canvasRef.current.toDataURL('image/png', 0.9));
+    if (canvasRef.current && originalImageRef.current && cropRect) {
+        // Create clean cropped base
+        const cleanCanvas = document.createElement('canvas');
+        cleanCanvas.width = cropRect.w;
+        cleanCanvas.height = cropRect.h;
+        const cCtx = cleanCanvas.getContext('2d');
+        if (cCtx) {
+           cCtx.drawImage(originalImageRef.current, cropRect.x, cropRect.y, cropRect.w, cropRect.h, 0, 0, cropRect.w, cropRect.h);
+           const cleanDataUrl = cleanCanvas.toDataURL('image/png');
+           onSave(canvasRef.current.toDataURL('image/png', 0.9), cleanDataUrl, paths, texts);
+        }
     }
   };
 
@@ -489,6 +523,24 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
             />
         )}
 
+        {/* Path Deletion Prompt */}
+        {editingPathIndex >= 0 && (
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30">
+            <button 
+              onClick={() => {
+                const newPaths = [...paths];
+                newPaths.splice(editingPathIndex, 1);
+                setPaths(newPaths);
+                setEditingPathIndex(-1);
+                setTimeout(() => redraw(), 0);
+              }}
+              className="bg-red-600 text-white px-6 py-2 rounded-full font-bold shadow-xl border border-white/20 flex items-center gap-2"
+            >
+              <X className="w-4 h-4" /> Delete Drawing
+            </button>
+          </div>
+        )}
+
         {/* Refinement Prompt */}
         {suggestedShape && (
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30">
@@ -518,7 +570,7 @@ export default function EditorCanvas({ imageSrc, onSave, onCancel }: EditorCanva
                    const next = [...prev];
                    const last = next[next.length - 1];
                    if (!last) return prev;
-                   next[next.length - 1] = { ...last, path: newRefined };
+                   next[next.length - 1] = { ...last, path2d: newRefined };
                    return next;
                  });
                  setSuggestedShape(null);

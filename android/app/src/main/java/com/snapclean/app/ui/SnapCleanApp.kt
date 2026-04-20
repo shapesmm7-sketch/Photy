@@ -91,7 +91,7 @@ fun SnapCleanApp() {
     var baseBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Cropped & Resized (no drawings)
     var activeBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Baked with bindings
     var processedBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) } // Styled with corners
-    var selectedStyle by remember { mutableStateOf("Minimal") }
+    var selectedStyle by remember { mutableStateOf("Money") }
     var selectedLayout by remember { mutableStateOf("None") }
     var showOriginal by remember { mutableStateOf(false) }
     var isPrivacyScanning by remember { mutableStateOf(false) }
@@ -523,7 +523,7 @@ fun SnapCleanApp() {
                                 
                                 Box(
                                     modifier = Modifier
-                                        .size(68.dp)
+                                        .size(54.dp)
                                         .scale(if (isSelected) 1.1f else 1f)
                                         .clip(RoundedCornerShape(16.dp))
                                         .then(
@@ -568,16 +568,16 @@ fun SnapCleanApp() {
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     // PHONE LAYOUTS SELECTOR
-                    Text("PHONE LAYOUTS", fontWeight = FontWeight.Black, color = Color(0xFF64748B), fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 24.dp, bottom = 8.dp))
+                    Text("PHONE LAYOUTS", fontWeight = FontWeight.Black, color = Color(0xFF64748B), fontSize = 12.sp, modifier = Modifier.fillMaxWidth().padding(start = 24.dp, bottom = 4.dp))
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         layoutPresets.forEach { layoutName ->
                             val config = ImageProcessor.PhoneLayouts[layoutName]!!
@@ -591,7 +591,7 @@ fun SnapCleanApp() {
                                 
                                 Box(
                                     modifier = Modifier
-                                        .size(68.dp, 108.dp)
+                                        .size(54.dp, 86.dp)
                                         .scale(if (isSelected) 1.1f else 1f)
                                         .clip(RoundedCornerShape(16.dp))
                                         .background(Color(config.themeColor))
@@ -611,9 +611,9 @@ fun SnapCleanApp() {
                                         Box(
                                             modifier = Modifier
                                                 .rotate(rotation)
-                                                .size(if (config.isLandscape) 44.dp else 28.dp, if (config.isLandscape) 24.dp else 56.dp)
-                                                .background(Color(0xFF1E293B), RoundedCornerShape(4.dp))
-                                                .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(4.dp)),
+                                                .size(if (config.isLandscape) 36.dp else 22.dp, if (config.isLandscape) 20.dp else 44.dp)
+                                                .background(Color(0xFF1E293B), RoundedCornerShape(3.dp))
+                                                .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(3.dp)),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             // Screen
@@ -659,44 +659,47 @@ fun SnapCleanApp() {
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 32.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         // Main Bottom Actions
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Button(
                                 onClick = { 
                                     state = "edit" 
                                 }, 
-                                modifier = Modifier.weight(1f).height(56.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1), contentColor = Color.White)
-                            ) { Text("Edit", fontWeight = FontWeight.Bold) }
+                                modifier = Modifier.weight(1f).height(44.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6366F1), contentColor = Color.White),
+                                contentPadding = PaddingValues(0.dp)
+                            ) { Text("Edit", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
                             
                             Button(
                                 onClick = { processedBitmap?.let { shareBitmap(context, it) } }, 
-                                modifier = Modifier.weight(2f).height(56.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
-                            ) { Text("Share to Viral", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp) }
+                                modifier = Modifier.weight(2f).height(44.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                                contentPadding = PaddingValues(0.dp)
+                            ) { Text("Share to Viral", fontWeight = FontWeight.ExtraBold, fontSize = 14.sp) }
                         }
                         
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Button(
                                 onClick = { processedBitmap?.let { saveImageToGallery(context, it) } }, 
-                                modifier = Modifier.weight(1f).height(56.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
-                            ) { Text("Save", fontWeight = FontWeight.Bold) }
+                                modifier = Modifier.weight(1f).height(44.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                contentPadding = PaddingValues(0.dp)
+                            ) { Text("Save", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
 
                             Button(
                 onClick = { 
@@ -711,10 +714,11 @@ fun SnapCleanApp() {
                                     processedBitmap = null
                                     state = "upload" 
                                 }, 
-                                modifier = Modifier.weight(1f).height(56.dp),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF87171), contentColor = Color.White)
-                            ) { Text("Start Over", fontWeight = FontWeight.Bold) }
+                                modifier = Modifier.weight(1f).height(44.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF87171), contentColor = Color.White),
+                                contentPadding = PaddingValues(0.dp)
+                            ) { Text("Start Over", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
                         }
                     }
                 }
@@ -722,10 +726,10 @@ fun SnapCleanApp() {
             "edit" -> {
                 if (processedBitmap != null && originalBitmap != null) {
                     CanvasEditor(
-                        activeBitmap = processedBitmap!!,
+                        activeBitmap = baseBitmap!!,
                         originalBitmap = originalBitmap!!,
-                        initialPaths = emptyList(),
-                        initialTexts = emptyList(),
+                        initialPaths = paths,
+                        initialTexts = texts,
                         onDone = { bakedBmp, newBaseBmp, newPaths, newTexts -> 
                             val oldActive = activeBitmap
                             val oldBase = baseBitmap
@@ -734,7 +738,6 @@ fun SnapCleanApp() {
                             baseBitmap = newBaseBmp
                             paths = newPaths
                             texts = newTexts
-                            selectedStyle = "Original"
                             
     // Recycle previous if they were different
     if (oldActive != null && oldActive != bakedBmp && oldActive != originalBitmap && !oldActive.isRecycled) {

@@ -13,12 +13,15 @@ type AppState = 'upload' | 'processing' | 'preview';
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>('upload');
-  const [originalImage, setOriginalImage] = useState<string | null>(null);
+  const [originalImage, setOriginalImage] = useState<string | null>(null); // Baked version for style
+  const [cleanImage, setCleanImage] = useState<string | null>(null); // Clean version for editor (un-baked)
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   
   // NEW STATES
-  const [selectedStyle, setSelectedStyle] = useState('Minimal');
+  const [editorPaths, setEditorPaths] = useState<any[]>([]);
+  const [editorTexts, setEditorTexts] = useState<any[]>([]);
+  const [selectedStyle, setSelectedStyle] = useState('Money');
   const [selectedLayout, setSelectedLayout] = useState('None');
   const [isPrivacyScanning, setIsPrivacyScanning] = useState(false);
   const [blurStrength, setBlurStrength] = useState(15);
@@ -70,6 +73,7 @@ export default function App() {
         
         const resizedResult = canvas.toDataURL('image/jpeg', 0.9);
         setOriginalImage(resizedResult);
+        setCleanImage(resizedResult);
         setAppState('processing');
         
         setTimeout(() => {
@@ -237,7 +241,7 @@ export default function App() {
                       >
                         <div 
                           style={bgStyle}
-                          className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black transition-all border-2 ${isSelected ? 'border-blue-600 scale-110 shadow-lg shadow-blue-100' : 'border-gray-100'}`}
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black transition-all border-2 ${isSelected ? 'border-blue-600 scale-110 shadow-lg shadow-blue-100' : 'border-gray-100'}`}
                         >
                           <span className={`${(style === 'Dark' || style === 'Money' || style === 'Focus' || style === 'Instagram' || style === 'Meme') ? 'text-white' : 'text-gray-900'}`}>{style[0]}</span>
                         </div>
@@ -267,17 +271,17 @@ export default function App() {
                       >
                         <div 
                           style={{ backgroundColor: config.themeColor }}
-                          className={`w-14 h-24 rounded-xl flex flex-col items-center justify-center transition-all border-2 overflow-hidden ${isSelected ? 'border-white ring-2 ring-blue-600 ring-offset-2 scale-105 shadow-xl' : 'border-black/5 hover:border-black/20 shadow-sm opacity-90 hover:opacity-100'}`}
+                          className={`w-12 h-20 rounded-xl flex flex-col items-center justify-center transition-all border-2 overflow-hidden ${isSelected ? 'border-white ring-2 ring-blue-600 ring-offset-2 scale-105 shadow-xl' : 'border-black/5 hover:border-black/20 shadow-sm opacity-90 hover:opacity-100'}`}
                         >
                            {layoutName === 'None' ? (
-                             <X className={`w-5 h-5 ${layoutName === 'None' && config.themeColor === '#f3f4f6' ? 'text-gray-400' : 'text-white'}`} />
+                             <X className={`w-4 h-4 ${layoutName === 'None' && config.themeColor === '#f3f4f6' ? 'text-gray-400' : 'text-white'}`} />
                            ) : (
                              <div 
                               style={{ 
                                 transform: config.rotation ? `rotate(${config.rotation}deg)` : 'none',
                                 aspectRatio: config.isLandscape ? '16/9' : '9/16'
                               }}
-                              className={`bg-slate-900 rounded-[4px] border border-white/20 shadow-2xl relative flex flex-col items-center justify-center ${config.isLandscape ? 'w-10 h-6' : 'w-7 h-12'}`}
+                              className={`bg-slate-900 rounded-[3px] border border-white/20 shadow-2xl relative flex flex-col items-center justify-center ${config.isLandscape ? 'w-8 h-5' : 'w-6 h-10'}`}
                              >
                                {/* Screen Content Mockup */}
                                <div className="w-[85%] h-[85%] bg-blue-500/20 rounded-[2px] flex items-center justify-center">
@@ -300,19 +304,19 @@ export default function App() {
             </div>
 
             {/* Bottom Actions */}
-            <div className="p-6 bg-white border-t border-gray-100 flex flex-col gap-3">
+            <div className="p-4 bg-white border-t border-gray-100 flex flex-col gap-3">
                <div className="flex gap-3">
                   <button 
                     onClick={() => {
                       setShowEditor(true);
                     }}
-                    className="flex-1 py-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-indigo-100"
+                    className="flex-1 py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-indigo-100"
                   >
                     <Edit2 className="w-5 h-5" /> Edit
                   </button>
                   <button 
                     onClick={shareImage}
-                    className="flex-[2] py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-100"
+                    className="flex-[2] py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-100"
                   >
                     <Share2 className="w-5 h-5" /> Share to Viral
                   </button>
@@ -320,13 +324,13 @@ export default function App() {
                <div className="flex gap-3">
                   <button 
                     onClick={downloadImage}
-                    className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-100"
+                    className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-100"
                   >
                     <Download className="w-5 h-5" /> Save
                   </button>
                   <button 
                     onClick={() => setAppState('upload')}
-                    className="flex-1 py-4 bg-red-400 hover:bg-red-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-100"
+                    className="flex-1 py-3 bg-red-400 hover:bg-red-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-100"
                   >
                     <X className="w-5 h-5" /> Start Over
                   </button>
@@ -347,11 +351,15 @@ export default function App() {
               className="absolute inset-0 z-50 md:rounded-3xl overflow-hidden bg-black md:inset-auto md:w-[480px] md:h-[90vh]"
            >
               <EditorCanvas 
-                imageSrc={processedImage || originalImage!} 
+                imageSrc={cleanImage || originalImage!} 
+                initialPaths={editorPaths}
+                initialTexts={editorTexts}
                 onCancel={() => setShowEditor(false)}
-                onSave={(newImgDataUrl) => {
+                onSave={(newImgDataUrl, finalCleanSrc, finalPaths, finalTexts) => {
                    setOriginalImage(newImgDataUrl);
-                   setSelectedStyle('Original');
+                   setCleanImage(finalCleanSrc);
+                   setEditorPaths(finalPaths);
+                   setEditorTexts(finalTexts);
                    setShowEditor(false);
                 }}
               />

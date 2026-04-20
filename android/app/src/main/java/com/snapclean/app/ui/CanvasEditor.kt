@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
-data class DrawAction(val path: Path, val tool: String, val color: Color)
+data class DrawAction(val path: Path, val tool: String, val color: Color, val points: List<Offset> = emptyList())
 data class TextItem(val text: String, val offset: Offset, val color: Color = Color.White, val fontSize: Float = 32f, val fontName: String = "Default", val position: String = "Default")
 
 @Composable
@@ -71,6 +71,7 @@ fun CanvasEditor(
     var currentTextFont by remember { mutableStateOf("Default") }
     var currentTextPosition by remember { mutableStateOf("Default") } // "Default", "Top", "Bottom"
     var editingTextIndex by remember { mutableIntStateOf(-1) }
+    var editingPathIndex by remember { mutableIntStateOf(-1) }
     var rubberColor by remember { mutableStateOf(Color.Black) }
     var penColor by remember { mutableStateOf(Color(0xFFFF3366)) }
     val textColors = listOf(
@@ -139,7 +140,23 @@ fun CanvasEditor(
                 Text("Cancel")
             }
             
-            if (mode == "draw") {
+            if (editingPathIndex >= 0) {
+                Button(
+                    onClick = {
+                        val newPaths = paths.toMutableList()
+                        if (editingPathIndex in newPaths.indices) {
+                            newPaths.removeAt(editingPathIndex)
+                        }
+                        paths = newPaths
+                        editingPathIndex = -1
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                ) {
+                    Text("Delete", color = Color.White)
+                }
+            } else if (mode == "draw") {
                 Row(
                     modifier = Modifier
                         .weight(1f)
@@ -232,11 +249,11 @@ fun CanvasEditor(
                         val topTextSize = texts.filter { it.position == "Top" }.maxOfOrNull { it.fontSize } ?: 0f
                         val bottomTextSize = texts.filter { it.position == "Bottom" }.maxOfOrNull { it.fontSize } ?: 0f
                         
-                        val topPadPx = (topTextSize * 1.5f * localDensity * scale).toInt()
-                        val botPadPx = (bottomTextSize * 1.5f * localDensity * scale).toInt()
+                        val topPadPx = 0
+                        val botPadPx = 0
                         
                         val finalWidth = activeBitmap.width
-                        val finalHeight = activeBitmap.height + topPadPx + botPadPx
+                        val finalHeight = activeBitmap.height
                         
                         val finalBitmap = Bitmap.createBitmap(finalWidth, finalHeight, Bitmap.Config.ARGB_8888)
                         val androidCanvas = android.graphics.Canvas(finalBitmap)
@@ -378,7 +395,21 @@ fun CanvasEditor(
             
             var dragStart by remember { mutableStateOf(Offset.Zero) }
             
-            Canvas(modifier = Modifier.fillMaxSize().pointerInput(mode, drawTool) {
+            Canvas(modifier = Modifier.fillMaxSize()
+                .pointerInput(mode, drawTool, paths) {
+                    detectTapGestures(onTap = { offset ->
+                        if (mode == "draw") {
+                            val index = paths.indexOfLast { p ->
+                                p.points.any { pt ->
+                                    val dist = sqrt((pt.x - offset.x).pow(2) + (pt.y - offset.y).pow(2))
+                                    dist < 40f
+                                }
+                            }
+                            editingPathIndex = index
+                        }
+                    })
+                }
+                .pointerInput(mode, drawTool) {
                 detectDragGestures(
                     onDragStart = { offset ->
                         if (mode == "draw" && drawTool != "NONE") {
@@ -466,7 +497,7 @@ fun CanvasEditor(
                     onDragEnd = {
                         if (mode == "draw" && drawTool != "NONE") {
                             currentPath?.let { 
-                                paths = paths + DrawAction(it, drawTool, if (drawTool == "RUBBER") rubberColor else penColor) 
+                                paths = paths + DrawAction(it, drawTool, if (drawTool == "RUBBER") rubberColor else penColor, currentPoints.toList()) 
                             }
                             lastSuggestedShape = detectShape(currentPoints)
                             currentPath = null
@@ -494,8 +525,8 @@ fun CanvasEditor(
                 val topTextSize = texts.filter { it.position == "Top" }.maxOfOrNull { it.fontSize } ?: 0f
                 val bottomTextSize = texts.filter { it.position == "Bottom" }.maxOfOrNull { it.fontSize } ?: 0f
                 
-                val topPad = if (topTextSize > 20f) (topTextSize * 1.2f * localDensity) else 0f
-                val bottomPad = if (bottomTextSize > 20f) (bottomTextSize * 1.2f * localDensity) else 0f
+                val topPad = 0f
+                val bottomPad = 0f
 
                 val availableHeight = canvasHeight - topPad - bottomPad
                 val adjustedDestHeight = if (imgRatio > canvasRatio) {
@@ -615,8 +646,8 @@ fun CanvasEditor(
                         texts[editingTextIndex].offset.y
                     } else {
                         when (currentTextPosition) {
-                            "Top" -> 50f
-                            "Bottom" -> if (boxSize.height > 0) boxSize.height - 100f else 400f
+                            "Top" -> 30f
+                            "Bottom" -> if (boxSize.height > 0) boxSize.height - 60f else 400f
                             else -> if (boxSize.height > 0) boxSize.height / 2f else 100f
                         }
                     }
@@ -677,7 +708,7 @@ fun CanvasEditor(
                                 }
                                 
                                 val newPaths = paths.toMutableList()
-                                newPaths[newPaths.size - 1] = DrawAction(refinedPath, lastTool, lastColor)
+                                newPaths[newPaths.size - 1] = DrawAction(refinedPath, lastTool, lastColor, currentPoints.toList())
                                 paths = newPaths
                                 lastSuggestedShape = null
                             }
