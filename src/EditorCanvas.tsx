@@ -1,6 +1,8 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Share2, Download, Edit2, Crop, PenTool, Droplets, X, Check, Save, Type } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { Styles, PhoneLayouts } from './lib/imageProcessor';
+import { translations, LanguageKey } from './i18n';
 
 type Tool = 'none' | 'crop' | 'draw' | 'blur' | 'text';
 
@@ -33,7 +35,13 @@ interface EditorCanvasProps {
   onCancel: () => void;
 }
 
-export default function EditorCanvas({ imageSrc, initialPaths = [], initialTexts = [], onSave, onCancel }: EditorCanvasProps) {
+export default function EditorCanvas({ 
+  imageSrc, 
+  initialPaths = [], 
+  initialTexts = [], 
+  onSave, 
+  onCancel 
+}: EditorCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const blurCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -48,7 +56,19 @@ export default function EditorCanvas({ imageSrc, initialPaths = [], initialTexts
   const cropEndRef = useRef<{x: number, y: number} | null>(null);
 
   // Drawing state
-  const [paths, setPaths] = useState<DrawingPath[]>(initialPaths);
+  const [paths, setPaths] = useState<DrawingPath[]>(() => {
+    // Regenerate Path2D objects to prevent WebKit detached memory segfaults on unmount/remount
+    return initialPaths.map(p => {
+       const newPath = new Path2D();
+       if (p.points && p.points.length > 0) {
+          newPath.moveTo(p.points[0].x, p.points[0].y);
+          for (let i = 1; i < p.points.length; i++) {
+             newPath.lineTo(p.points[i].x, p.points[i].y);
+          }
+       }
+       return { ...p, path2d: newPath };
+    });
+  });
   const currentPathRef = useRef<Path2D | null>(null);
   const drawingPointsRef = useRef<{x: number, y: number}[]>([]);
   const [suggestedShape, setSuggestedShape] = useState<'Line' | 'Circle' | null>(null);
@@ -294,12 +314,9 @@ export default function EditorCanvas({ imageSrc, initialPaths = [], initialTexts
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
 
-    const hasTop = texts.some(t => t.positionMode === 'Top') || (showTextModal && textPositionMode === 'Top');
-    const imgY = hasTop ? (cropRect.h * 0.15) : 0;
-
     return {
       x: (clientX - rect.left) * scaleX,
-      y: ((clientY - rect.top) * scaleY) - (activeTool === 'crop' ? 0 : imgY)
+      y: (clientY - rect.top) * scaleY
     };
   };
 
@@ -504,23 +521,26 @@ export default function EditorCanvas({ imageSrc, initialPaths = [], initialTexts
         className="flex-1 flex items-center justify-center relative overflow-hidden bg-[#0a0a0a]"
       >
         {canvasSize.width > 0 && (
-            <canvas
-              ref={canvasRef}
-              style={{
-                width: canvasSize.width,
-                height: canvasSize.height,
-                touchAction: 'none',
-                cursor: activeTool === 'crop' ? 'crosshair' : 'default'
-              }}
-              className="shadow-2xl rounded"
-              onMouseDown={handlePointerDown}
-              onMouseMove={handlePointerMove}
-              onMouseUp={handlePointerUp}
-              onMouseLeave={handlePointerUp}
-              onTouchStart={handlePointerDown}
-              onTouchMove={handlePointerMove}
-              onTouchEnd={handlePointerUp}
-            />
+            <div className="relative flex items-center justify-center transition-all duration-500">
+               <canvas
+                 ref={canvasRef}
+                 style={{
+                   width: canvasSize.width,
+                   height: canvasSize.height,
+                   touchAction: 'none',
+                   cursor: activeTool === 'crop' ? 'crosshair' : 'default',
+                   zIndex: 10
+                 }}
+                 className="shadow-2xl rounded border border-white/20"
+                 onMouseDown={handlePointerDown}
+                 onMouseMove={handlePointerMove}
+                 onMouseUp={handlePointerUp}
+                 onMouseLeave={handlePointerUp}
+                 onTouchStart={handlePointerDown}
+                 onTouchMove={handlePointerMove}
+                 onTouchEnd={handlePointerUp}
+               />
+            </div>
         )}
 
         {/* Path Deletion Prompt */}
@@ -641,7 +661,7 @@ export default function EditorCanvas({ imageSrc, initialPaths = [], initialTexts
             className="absolute inset-x-0 bottom-0 z-[60] flex items-end justify-center pb-24"
           >
             <div className="bg-white/95 backdrop-blur-md w-full max-w-[400px] mx-4 rounded-3xl p-6 shadow-2xl text-black border border-gray-200">
-              <h3 className="text-lg font-bold mb-4">Add Text</h3>
+              <h3 className="text-lg font-bold mb-4">{editingTextIndex >= 0 ? "Edit Text" : "Add Text"}</h3>
               
               <div className="space-y-4 max-h-[50vh] overflow-y-auto">
                 <div>

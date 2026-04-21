@@ -188,7 +188,8 @@ export async function applyStyle(
   sensitiveAreas: SensitiveArea[] = [],
   blurStrength: number = 15,
   memeTop: string = "",
-  memeBottom: string = ""
+  memeBottom: string = "",
+  customBg: string | null = null
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -283,7 +284,31 @@ export async function applyStyle(
       canvas.height = croppedHeight + padding * 2;
 
       // Background
-      if (layout.name !== "None") {
+      if (customBg) {
+          ctx.fillStyle = customBg;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw decorative lines for layout if present
+          if (layout.name !== "None") {
+              ctx.save();
+              ctx.globalAlpha = 0.2;
+              ctx.fillStyle = "#FFF";
+              const lineW = canvas.width * 0.4;
+              const lineH = canvas.height * 0.015;
+              const lineGap = canvas.height * 0.025;
+              
+              if (layout.name.includes("Top") || layout.name === "Elevated") {
+                  for(let i=0; i<4; i++) ctx.fillRect(canvas.width/2 - lineW/2, canvas.height * 0.75 + i * lineGap, lineW, lineH);
+              } else if (layout.name.includes("Bottom") || layout.name === "Forest View" || layout.name.includes("Btm")) {
+                  for(let i=0; i<4; i++) ctx.fillRect(canvas.width/2 - lineW/2, canvas.height * 0.15 + i * lineGap, lineW, lineH);
+              } else if (layout.name.includes("Left")) {
+                  for(let i=0; i<6; i++) ctx.fillRect(canvas.width * 0.65, canvas.height * 0.3 + i * lineGap, lineW * 0.7, lineH);
+              } else if (layout.name.includes("Right")) {
+                  for(let i=0; i<6; i++) ctx.fillRect(canvas.width * 0.05, canvas.height * 0.3 + i * lineGap, lineW * 0.7, lineH);
+              }
+              ctx.restore();
+          }
+      } else if (layout.name !== "None" && styleName === "Original") {
           ctx.fillStyle = layout.themeColor;
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -323,16 +348,17 @@ export async function applyStyle(
               grad.addColorStop(i / (arr.length - 1), color);
           });
           ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
       } else {
           ctx.fillStyle = config.bgColor;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Shadow
       const radius = Math.max(croppedWidth, croppedHeight) * config.cornerRadiusFactor;
 
       // Special handling for Stacked style (draw background layers)
-      if (styleName.startsWith("Stacked")) {
+      if (styleName.startsWith("Stacked") && layout.name === "None") {
           const layers = 3;
           for (let i = layers; i > 0; i--) {
               let offsetX = 0;
@@ -371,7 +397,7 @@ export async function applyStyle(
           }
       }
 
-      if (config.shadowAlpha > 0) {
+      if (config.shadowAlpha > 0 && layout.name === "None") {
           ctx.save();
           ctx.shadowColor = `rgba(0, 0, 0, ${config.shadowAlpha})`;
           ctx.shadowBlur = canvas.width * 0.03;
