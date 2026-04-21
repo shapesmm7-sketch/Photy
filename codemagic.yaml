@@ -3,7 +3,7 @@ workflows:
     name: Snap Clean Android Build
     max_build_duration: 60
     environment:
-      java: 21
+      java: 17
       node: 22
     scripts:
       - name: Install dependencies
@@ -22,6 +22,8 @@ workflows:
       - name: Build Android Debug APK
         script: |
           cd android
+          # Fix potential corrupt wrapper jar by regenerating it
+          gradle wrapper --gradle-version 8.2.1
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
     artifacts:
