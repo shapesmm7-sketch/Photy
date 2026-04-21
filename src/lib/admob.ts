@@ -47,25 +47,41 @@ export async function hideBannerAd() {
 export async function playRewardedAds(onComplete: () => void) {
   if (!isNative) {
     console.log("Mock AdMob: Simulating rewarded ad completion because environment is web.");
-    // Free users testing on web will automatically bypass so development doesn't block them.
     onComplete();
     return;
   }
 
-  try {
-    AdMob.addListener(RewardAdPluginEvents.Rewarded, () => {
-      onComplete();
-    });
+  let watchedCount = 0;
 
-    await AdMob.prepareRewardVideoAd({
-      adId: 'ca-app-pub-3940256099942544/5224354917', // Google Test AdUnit
-      isTesting: true,
-    });
+  const showNextAd = async () => {
+    try {
+      const listener = AdMob.addListener(RewardAdPluginEvents.Rewarded, () => {
+        watchedCount++;
+        listener.remove();
+        
+        if (watchedCount < 2) {
+           if (confirm(`1 / 2 Ads Watched. Watch the next ad to unlock?`)) {
+              showNextAd();
+           }
+        } else {
+           onComplete();
+        }
+      });
 
-    await AdMob.showRewardVideoAd();
-  } catch (error) {
-    console.error("AdMob rewarded video failed to load", error);
-    // If it fails to load for any reason (e.g. no fill), let user proceed
-    onComplete();
-  }
+      await AdMob.prepareRewardVideoAd({
+        adId: 'ca-app-pub-3940256099942544/5224354917', // Google Test AdUnit
+        isTesting: true,
+      });
+
+      await AdMob.showRewardVideoAd();
+    } catch (error) {
+      console.error("AdMob rewarded video failed", error);
+      // Fallback for test issues: let user skip if ads are broken
+      if (confirm("Ad failed to load. Grant access anyway (Dev Mode)?")) {
+        onComplete();
+      }
+    }
+  };
+
+  showNextAd();
 }
