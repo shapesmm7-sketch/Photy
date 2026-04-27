@@ -22,12 +22,13 @@ workflows:
       - name: Build Android Debug APK
         script: |
           cd android
-          # Wipe global gradle cache to fix corrupted bcprov-jdk18on jar issue
+          # Wipe global gradle cache and build folders to fix corrupted jar issues
           rm -rf ~/.gradle/caches/ || true
+          rm -rf .gradle build app/build || true
           # Use Gradle 8.7 for better stability with SDK 35 and AGP 8.4.2
           gradle wrapper --gradle-version 8.7
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon --no-build-cache --stacktrace
+          ./gradlew clean assembleDebug --no-daemon --no-build-cache --stacktrace --info
     artifacts:
       - android/app/build/outputs/apk/**/*.apk
       - android/app/build/outputs/bundle/**/*.aab
