@@ -3,7 +3,7 @@ workflows:
     name: Snap Clean Android Build
     max_build_duration: 60
     environment:
-      java: 17
+      java: 21
       node: 22
     scripts:
       - name: Install dependencies
@@ -24,8 +24,10 @@ workflows:
           cd android
           # Fix for potentially corrupt wrapper jarfile
           rm -f gradle/wrapper/gradle-wrapper.jar
-          gradle wrapper --gradle-version 8.7 --distribution-type bin
+          gradle wrapper --gradle-version 8.10.2 --distribution-type bin
           chmod +x gradlew
+          # Run sync again to ensure everything is matched with root
+          npx cap sync android
           ./gradlew clean assembleDebug --no-daemon --no-build-cache --stacktrace --info -Dorg.gradle.vfs.watch=false
     artifacts:
       - android/app/build/outputs/apk/**/*.apk
