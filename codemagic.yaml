@@ -22,12 +22,14 @@ workflows:
       - name: Build Android Debug APK
         script: |
           cd android
+          # Wipe global gradle cache to fix corrupted jar issues
+          rm -rf ~/.gradle/caches/ || true
           # Remove potentially corrupt wrapper files first
           rm -f gradle/wrapper/gradle-wrapper.jar
           # Regenerate gradle wrapper to fix corrupt jarfile issue
-          gradle wrapper --gradle-version 8.5
+          gradle wrapper --gradle-version 8.7
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon --stacktrace
+          ./gradlew clean assembleDebug --no-daemon --stacktrace --info
     artifacts:
       - android/app/build/outputs/apk/**/*.apk
       - android/app/build/outputs/bundle/**/*.aab
