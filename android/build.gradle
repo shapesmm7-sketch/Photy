@@ -14,9 +14,10 @@ buildscript {
         // in the individual module build.gradle files
     }
     configurations.classpath {
-        resolutionStrategy {
-            force 'org.bouncycastle:bcprov-jdk18on:1.78.1'
-            force 'org.bouncycastle:bcutil-jdk18on:1.78.1'
+        resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+            if (details.requested.group == 'org.bouncycastle') {
+                details.useVersion '1.72'
+            }
         }
     }
 }
@@ -29,10 +30,12 @@ allprojects {
         mavenCentral()
     }
     configurations.all {
-         resolutionStrategy {
-            force 'org.bouncycastle:bcprov-jdk18on:1.78.1'
-            force 'org.bouncycastle:bcutil-jdk18on:1.78.1'
-         }
+        resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+            if (details.requested.group == 'org.bouncycastle') {
+                details.useVersion '1.72'
+                details.because 'Avoids signed JAR instrumentation issues on macOS runners'
+            }
+        }
     }
 }
 
