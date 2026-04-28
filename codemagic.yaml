@@ -22,11 +22,13 @@ workflows:
       - name: Build Android Debug APK
         script: |
           cd android
-          # Fix for potentially corrupt wrapper jarfile
+          # Fix for potentially corrupt wrapper jarfile and gradle state
+          rm -rf .gradle
           rm -f gradle/wrapper/gradle-wrapper.jar
+          # Use system gradle to regenerate the wrapper correctly
           gradle wrapper --gradle-version 8.7 --distribution-type bin
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon --stacktrace -Dorg.gradle.vfs.watch=false
+          ./gradlew clean assembleDebug --no-daemon --no-build-cache --stacktrace --info
     artifacts:
       - android/app/build/outputs/apk/**/*.apk
       - android/app/build/outputs/bundle/**/*.aab

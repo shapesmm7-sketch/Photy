@@ -15,8 +15,9 @@ buildscript {
     }
     configurations.classpath {
         resolutionStrategy {
-            force 'org.bouncycastle:bcprov-jdk18on:1.72'
-            force 'org.bouncycastle:bcutil-jdk18on:1.72'
+            force 'org.bouncycastle:bcprov-jdk18on:1.78.1'
+            force 'org.bouncycastle:bcutil-jdk18on:1.78.1'
+            force 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
         }
     }
 }
@@ -30,8 +31,9 @@ allprojects {
     }
     configurations.all {
         resolutionStrategy {
-            force 'org.bouncycastle:bcprov-jdk18on:1.72'
-            force 'org.bouncycastle:bcutil-jdk18on:1.72'
+            force 'org.bouncycastle:bcprov-jdk18on:1.78.1'
+            force 'org.bouncycastle:bcutil-jdk18on:1.78.1'
+            force 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
         }
     }
 }
