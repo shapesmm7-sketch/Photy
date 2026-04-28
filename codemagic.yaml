@@ -25,10 +25,10 @@ workflows:
           # Wipe global gradle cache and build folders to fix corrupted jar issues
           rm -rf ~/.gradle/caches/ || true
           rm -rf .gradle build app/build || true
-          # Use Gradle 8.7 for better stability with SDK 35 and AGP 8.4.2
-          gradle wrapper --gradle-version 8.7
+          # Use Gradle 8.5 for better stability
+          gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          ./gradlew clean assembleDebug --no-daemon --no-build-cache --stacktrace --info
+          ./gradlew clean assembleDebug --no-daemon --no-build-cache --stacktrace --info -Dorg.gradle.vfs.watch=false
     artifacts:
       - android/app/build/outputs/apk/**/*.apk
       - android/app/build/outputs/bundle/**/*.aab
