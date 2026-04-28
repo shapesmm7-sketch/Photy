@@ -15,10 +15,8 @@ buildscript {
     }
     configurations.classpath {
         resolutionStrategy {
-            force 'org.bouncycastle:bcprov-jdk18on:1.70'
-            force 'org.bouncycastle:bcprov-jdk15on:1.70'
-            force 'org.bouncycastle:bcutil-jdk18on:1.70'
-            force 'org.bouncycastle:bcutil-jdk15on:1.70'
+            force 'org.bouncycastle:bcprov-jdk18on:1.72'
+            force 'org.bouncycastle:bcutil-jdk18on:1.72'
         }
     }
 }
@@ -32,10 +30,8 @@ allprojects {
     }
     configurations.all {
         resolutionStrategy {
-            force 'org.bouncycastle:bcprov-jdk18on:1.70'
-            force 'org.bouncycastle:bcprov-jdk15on:1.70'
-            force 'org.bouncycastle:bcutil-jdk18on:1.70'
-            force 'org.bouncycastle:bcutil-jdk15on:1.70'
+            force 'org.bouncycastle:bcprov-jdk18on:1.72'
+            force 'org.bouncycastle:bcutil-jdk18on:1.72'
         }
     }
 }
