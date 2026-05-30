@@ -124,6 +124,130 @@ export default function App() {
   >("12months");
   const [isPremium, setIsPremium] = useState(false);
 
+  // Zoom & Pan states for the preview image
+  const [zoomScale, setZoomScale] = useState(1);
+  const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
+  const zoomStartRef = useRef<{ x: number; y: number } | null>(null);
+  const zoomInitialScaleRef = useRef<number>(1);
+  const zoomInitialDistanceRef = useRef<number | null>(null);
+  const zoomLastTapRef = useRef<number>(0);
+  const [isMouseDragging, setIsMouseDragging] = useState(false);
+
+  const handleDoubleTap = (clientX: number, clientY: number) => {
+    if (zoomScale > 1.1) {
+      setZoomScale(1);
+      setZoomOffset({ x: 0, y: 0 });
+    } else {
+      setZoomScale(2.5);
+      setZoomOffset({ x: 0, y: 0 });
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const now = Date.now();
+    const DOUBLE_TAP_DELAY = 300;
+    if (now - zoomLastTapRef.current < DOUBLE_TAP_DELAY && e.touches.length === 1) {
+      handleDoubleTap(e.touches[0].clientX, e.touches[0].clientY);
+      zoomLastTapRef.current = 0;
+      return;
+    }
+    zoomLastTapRef.current = now;
+
+    if (e.touches.length === 1) {
+      zoomStartRef.current = {
+        x: e.touches[0].clientX - zoomOffset.x,
+        y: e.touches[0].clientY - zoomOffset.y
+      };
+    } else if (e.touches.length === 2) {
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+      zoomInitialDistanceRef.current = dist;
+      zoomInitialScaleRef.current = zoomScale;
+      zoomStartRef.current = {
+        x: ((touch1.clientX + touch2.clientX) / 2) - zoomOffset.x,
+        y: ((touch1.clientY + touch2.clientY) / 2) - zoomOffset.y
+      };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 1 && zoomStartRef.current && zoomScale > 1) {
+      if (e.cancelable) e.preventDefault();
+      const touch = e.touches[0];
+      setZoomOffset({
+        x: touch.clientX - zoomStartRef.current.x,
+        y: touch.clientY - zoomStartRef.current.y
+      });
+    } else if (e.touches.length === 2 && zoomInitialDistanceRef.current && zoomStartRef.current) {
+      if (e.cancelable) e.preventDefault();
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+      const factor = dist / zoomInitialDistanceRef.current;
+      const newScale = Math.max(1, Math.min(4, zoomInitialScaleRef.current * factor));
+      setZoomScale(newScale);
+
+      if (newScale > 1) {
+        const midX = (touch1.clientX + touch2.clientX) / 2;
+        const midY = (touch1.clientY + touch2.clientY) / 2;
+        setZoomOffset({
+          x: midX - zoomStartRef.current.x,
+          y: midY - zoomStartRef.current.y
+        });
+      } else {
+        setZoomOffset({ x: 0, y: 0 });
+      }
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length === 0) {
+      zoomStartRef.current = null;
+      zoomInitialDistanceRef.current = null;
+      if (zoomScale <= 1.05) {
+        setZoomScale(1);
+        setZoomOffset({ x: 0, y: 0 });
+      }
+    } else if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      zoomStartRef.current = {
+        x: touch.clientX - zoomOffset.x,
+        y: touch.clientY - zoomOffset.y
+      };
+      zoomInitialDistanceRef.current = null;
+    }
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    handleDoubleTap(e.clientX, e.clientY);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoomScale > 1.1) {
+      setIsMouseDragging(true);
+      zoomStartRef.current = {
+        x: e.clientX - zoomOffset.x,
+        y: e.clientY - zoomOffset.y
+      };
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isMouseDragging && zoomStartRef.current) {
+      setZoomOffset({
+        x: e.clientX - zoomStartRef.current.x,
+        y: e.clientY - zoomStartRef.current.y
+      });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsMouseDragging(false);
+    zoomStartRef.current = null;
+  };
+
   const t = (key: keyof (typeof translations)["en"]) =>
     translations[language]?.[key] || translations["en"][key];
 
@@ -143,6 +267,8 @@ export default function App() {
   // Sync processed image when any parameter changes
   React.useEffect(() => {
     if (originalImage) {
+      setZoomScale(1);
+      setZoomOffset({ x: 0, y: 0 });
       applyStyle(
         originalImage,
         selectedStyle,
@@ -418,14 +544,46 @@ export default function App() {
             </div>
 
             {/* Main Preview Area */}
-            <div className="flex-1 bg-[#F1F5F9] p-4 flex items-center justify-center overflow-hidden min-h-0">
-              <div className="relative group cursor-zoom-in h-full w-full flex items-center justify-center">
+            <div className="flex-1 bg-[#F1F5F9] p-4 flex items-center justify-center overflow-hidden min-h-0 relative select-none">
+              <div 
+                className="relative h-full w-full flex items-center justify-center"
+                style={{ touchAction: "none" }}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onDoubleClick={handleDoubleClick}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+              >
                 <img
                   src={processedImage}
-                  className="max-h-full max-w-full object-contain rounded-xl shadow-2xl transition-transform duration-300 group-hover:scale-[1.02]"
+                  className={`max-h-full max-w-full object-contain rounded-xl shadow-2xl ${
+                    zoomScale > 1.1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"
+                  }`}
+                  style={{
+                    transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoomScale})`,
+                    transition: isMouseDragging || zoomStartRef.current ? "none" : "transform 0.15s ease-out",
+                    transformOrigin: "center center",
+                  }}
                   alt="Preview"
+                  draggable={false}
                 />
               </div>
+
+              {zoomScale > 1.05 && (
+                <button
+                  onClick={() => {
+                    setZoomScale(1);
+                    setZoomOffset({ x: 0, y: 0 });
+                  }}
+                  className="absolute bottom-4 right-4 bg-gray-900/90 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg border border-white/10 hover:bg-gray-800 transition-colors z-30 opacity-90 hover:opacity-100"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Reset Zoom
+                </button>
+              )}
             </div>
 
             {/* Style & Layout Selectors */}

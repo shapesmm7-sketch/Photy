@@ -1086,17 +1086,29 @@ export async function applyStyle(
         }
 
         // Watermark
-        if (styleName !== "Original") {
-          ctx.fillStyle = styleName.includes("Dark")
-            ? "rgba(255, 255, 255, 0.4)"
-            : "rgba(0, 0, 0, 0.3)";
+        if (styleName !== "Original" || layout.name !== "None") {
+          const isDarkBg =
+            styleName.includes("Dark") ||
+            (layout.name !== "None" && layout.themeColor !== "#f3f4f6");
+          ctx.fillStyle = isDarkBg
+            ? "rgba(255, 255, 255, 0.45)"
+            : "rgba(0, 0, 0, 0.35)";
           ctx.font = `${canvas.width * 0.024}px sans-serif`;
           ctx.textAlign = "right";
-          ctx.fillText(
-            "Edited with Shot Clean",
-            padding + croppedWidth - canvas.width * 0.015,
-            padding + croppedHeight - canvas.height * 0.015,
-          );
+
+          if (layout.name === "None") {
+            ctx.fillText(
+              "Edited with Shot Clean",
+              padding + croppedWidth - canvas.width * 0.015,
+              padding + croppedHeight - canvas.height * 0.015,
+            );
+          } else {
+            ctx.fillText(
+              "Edited with Shot Clean",
+              canvas.width - canvas.width * 0.03,
+              canvas.height - canvas.height * 0.03,
+            );
+          }
         }
 
         try {
