@@ -975,54 +975,8 @@ export async function applyStyle(
           ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
-        // Decorative lines for layouts
-        if (layout.name !== "None") {
-          ctx.save();
-          ctx.globalAlpha = 0.2;
-          ctx.fillStyle = "#FFF";
-          const lineW = canvas.width * 0.4;
-          const lineH = canvas.height * 0.015;
-          const lineGap = canvas.height * 0.025;
+        // Decorative lines for layouts removed per user request
 
-          if (layout.name.includes("Top") || layout.name === "Elevated") {
-            for (let i = 0; i < 4; i++)
-              ctx.fillRect(
-                canvas.width / 2 - lineW / 2,
-                canvas.height * 0.75 + i * lineGap,
-                lineW,
-                lineH,
-              );
-          } else if (
-            layout.name.includes("Bottom") ||
-            layout.name === "Forest View" ||
-            layout.name.includes("Btm")
-          ) {
-            for (let i = 0; i < 4; i++)
-              ctx.fillRect(
-                canvas.width / 2 - lineW / 2,
-                canvas.height * 0.15 + i * lineGap,
-                lineW,
-                lineH,
-              );
-          } else if (layout.name.includes("Left")) {
-            for (let i = 0; i < 6; i++)
-              ctx.fillRect(
-                canvas.width * 0.65,
-                canvas.height * 0.3 + i * lineGap,
-                lineW * 0.7,
-                lineH,
-              );
-          } else if (layout.name.includes("Right")) {
-            for (let i = 0; i < 6; i++)
-              ctx.fillRect(
-                canvas.width * 0.05,
-                canvas.height * 0.3 + i * lineGap,
-                lineW * 0.7,
-                lineH,
-              );
-          }
-          ctx.restore();
-        }
 
         const radius =
           Math.max(croppedWidth, croppedHeight) * config.cornerRadiusFactor;
