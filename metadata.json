@@ -1,6 +1,6 @@
 {
-  "name": "Snap Clean",
+  "name": "Shot Clean",
   "description": "Android-style screenshot auto-editor with smart crop, beautify features, and manual drawing tools.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

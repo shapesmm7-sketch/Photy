@@ -1,6 +1,6 @@
 workflows:
   native-android:
-    name: Snap Clean Android Build
+    name: Shot Clean Android Build
     max_build_duration: 60
     environment:
       java: 21
