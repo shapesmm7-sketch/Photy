@@ -813,6 +813,7 @@ export async function applyStyle(
   sensitiveAreas: SensitiveArea[] = [],
   blurStrength: number = 15,
   customBg: string | null = null,
+  customCropRect: { x: number; y: number; w: number; h: number } | null = null,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -832,10 +833,10 @@ export async function applyStyle(
         }
 
         // Base dimensions for the card content
-        const cropTop = img.height * 0.04;
-        const cropBottom = img.height * 0.05;
-        const croppedHeight = Math.max(1, img.height - cropTop - cropBottom);
-        const croppedWidth = Math.max(1, img.width);
+        const cropLeft = customCropRect ? customCropRect.x : 0;
+        const cropTop = customCropRect ? customCropRect.y : Math.round(img.height * 0.04);
+        const croppedWidth = customCropRect ? customCropRect.w : img.width;
+        const croppedHeight = customCropRect ? customCropRect.h : Math.max(1, Math.round(img.height - (img.height * 0.04) - (img.height * 0.05)));
 
         // Processing on source canvas
         const sourceCanvas = document.createElement("canvas");
@@ -849,7 +850,7 @@ export async function applyStyle(
 
         sCtx.drawImage(
           img,
-          0,
+          cropLeft,
           cropTop,
           croppedWidth,
           croppedHeight,

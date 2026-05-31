@@ -102,6 +102,7 @@ export default function App() {
   const [cleanImage, setCleanImage] = useState<string | null>(null); // Clean version for editor (un-baked)
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [baseStyledImage, setBaseStyledImage] = useState<string | null>(null);
+  const [customCropRect, setCustomCropRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [showEditor, setShowEditor] = useState(false);
 
   // NEW STATES
@@ -253,6 +254,10 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const prevStyleRef = React.useRef(selectedStyle);
+  const prevLayoutRef = React.useRef(selectedLayout);
+  const prevBgRef = React.useRef(customBgColor);
+
   // Capacitor AdMob Initialization
   React.useEffect(() => {
     if (!isPremium) {
@@ -276,14 +281,28 @@ export default function App() {
         sensitiveAreas,
         blurStrength,
         customBgColor,
+        customCropRect,
       )
         .then((res) => {
           setBaseStyledImage(res);
-          setProcessedImage(res);
-          // Clear any manual edits on the new base style
-          setCleanImage(null);
-          setEditorPaths([]);
-          setEditorTexts([]);
+          if (!showEditor) {
+            setProcessedImage(res);
+          }
+          
+          // Only clear manual edits if structural options actually changed in the sidebar
+          const styleChanged = prevStyleRef.current !== selectedStyle;
+          const layoutChanged = prevLayoutRef.current !== selectedLayout;
+          const bgChanged = prevBgRef.current !== customBgColor;
+
+          if (styleChanged || layoutChanged || bgChanged) {
+            setCleanImage(null);
+            setEditorPaths([]);
+            setEditorTexts([]);
+          }
+
+          prevStyleRef.current = selectedStyle;
+          prevLayoutRef.current = selectedLayout;
+          prevBgRef.current = customBgColor;
         })
         .catch(console.error);
     }
@@ -296,6 +315,8 @@ export default function App() {
     memeTopText,
     memeBottomText,
     customBgColor,
+    customCropRect,
+    showEditor,
   ]);
 
   // Deselect custom color if style or layout changes, EXCEPT when changing the custom color itself
@@ -335,6 +356,7 @@ export default function App() {
         const resizedResult = canvas.toDataURL("image/jpeg", 0.9);
         setOriginalImage(resizedResult);
         setCleanImage(resizedResult);
+        setCustomCropRect(null);
         setAppState("processing");
 
         setTimeout(() => {
@@ -420,14 +442,7 @@ export default function App() {
     <div
       className={`min-h-screen font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col ${isNative ? "" : "pt-safe"} ${isDarkMode ? "bg-slate-900 text-white" : "bg-blue-600 text-gray-900"}`}
     >
-      {!isNative && !isPremium && (
-        <div
-          className={`w-full ${isDarkMode ? "bg-slate-800 text-slate-400 border-slate-700/50" : "bg-yellow-50 text-yellow-800 border-yellow-200"} text-xs text-center border-b shadow-sm flex items-center justify-center p-2 z-[40] relative`}
-        >
-          <strong>Note:</strong> AdMob requires native iOS/Android to render. In
-          this browser view, ads are skipped automatically.
-        </div>
-      )}
+
 
       <AnimatePresence mode="wait">
         {/* ... upload and processing screens same ... */}
@@ -528,23 +543,19 @@ export default function App() {
             key="preview"
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full h-[100dvh] md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5"
+            className="w-full h-[100dvh] md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5 select-none"
           >
-            {/* Top Toolbar */}
-            <div className="p-3 md:p-4 flex justify-between items-center bg-white z-20 shrink-0">
+            {/* Main Preview Area - Structured at exactly 70% of parent */}
+            <div className="h-[70%] max-h-[70%] bg-[#F1F5F9] p-3 flex items-center justify-center overflow-hidden relative select-none shrink-0 border-b border-gray-100">
+              {/* Absolute Close/Reset Button inside the Preview Area */}
               <button
                 onClick={() => setAppState("upload")}
-                className="p-2 bg-gray-100 rounded-full text-gray-600"
+                className="absolute top-3.5 left-3.5 z-30 p-2 bg-white/95 hover:bg-white text-gray-700 hover:text-gray-900 backdrop-blur rounded-full shadow border border-gray-200/50 transition-all active:scale-95 cursor-pointer"
+                title={t("startOverBtn")}
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
-              <div className="flex gap-2">
-                {/* Secondary actions can go here */}
-              </div>
-            </div>
 
-            {/* Main Preview Area */}
-            <div className="flex-1 bg-[#F1F5F9] p-4 flex items-center justify-center overflow-hidden min-h-0 relative select-none">
               <div 
                 className="relative h-full w-full flex items-center justify-center"
                 style={{ touchAction: "none" }}
@@ -559,7 +570,7 @@ export default function App() {
               >
                 <img
                   src={processedImage}
-                  className={`max-h-full max-w-full object-contain rounded-xl shadow-2xl ${
+                  className={`max-h-full max-w-full object-contain rounded-xl shadow-xl ${
                     zoomScale > 1.1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"
                   }`}
                   style={{
@@ -578,245 +589,243 @@ export default function App() {
                     setZoomScale(1);
                     setZoomOffset({ x: 0, y: 0 });
                   }}
-                  className="absolute bottom-4 right-4 bg-gray-900/90 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-lg border border-white/10 hover:bg-gray-800 transition-colors z-30 opacity-90 hover:opacity-100"
+                  className="absolute bottom-3.5 right-3.5 bg-gray-900/90 backdrop-blur text-white text-[10px] font-bold px-2.5 py-1.5 rounded-full flex items-center gap-1 shadow-lg border border-white/10 hover:bg-gray-800 transition-colors z-30 cursor-pointer"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3 h-3" />
                   Reset Zoom
                 </button>
               )}
             </div>
 
-            {/* Style & Layout Selectors */}
-            <div className="bg-white p-2 md:p-4 border-t border-gray-50 flex flex-col gap-2 shrink-0">
-              {/* Viral Styles */}
-              <div>
-                <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3 px-2">
-                  <Palette className="w-3.5 h-3.5 md:w-4 md:h-4 text-gray-400" />
-                  <span className="text-[9px] md:text-[10px] font-bold text-gray-400 tracking-widest uppercase">
-                    {t("viralStylesTitle")}
-                  </span>
-                </div>
-                <div className="flex gap-3 md:gap-4 overflow-x-auto pb-1 no-scrollbar items-center">
-                  {Object.keys(Styles).map((style) => {
-                    const isSelected = selectedStyle === style;
-
-                    return (
-                      <button
-                        key={style}
-                        onClick={() => {
-                          setSelectedStyle(style);
-                          setCustomBgColor(null);
-                        }}
-                        className="flex flex-col items-center gap-2 shrink-0 group"
-                      >
-                        <div
-                          className={`w-8 h-8 md:w-10 md:h-10 rounded-xl flex items-center justify-center text-sm md:text-lg font-black transition-[transform,border-color,box-shadow] duration-200 border-2 ${isSelected ? "border-blue-600 scale-110 shadow-lg shadow-blue-100" : "border-gray-100"} ${
-                            style === "Original"
-                              ? "bg-white"
-                              : style === "Minimal"
-                                ? "bg-[#F8FAFC]"
-                                : style === "Dark"
-                                  ? "bg-[#0F172A]"
-                                  : style === "Instagram"
-                                    ? "bg-gradient-to-br from-[#f09433] via-[#dc2743] to-[#bc1888]"
-                                    : style === "Shadow"
-                                      ? "bg-[#E2E8F0]"
-                                      : style === "Meme"
-                                        ? "bg-black"
-                                        : style === "Money"
-                                          ? "bg-[#065F46]"
-                                          : style === "Focus"
-                                            ? "bg-[#1F2937]"
-                                            : style === "Viral"
-                                              ? "bg-red-500"
-                                              : style === "Chat"
-                                                ? "bg-[#ECFDF5]"
-                                                : "bg-[#F1F5F9]"
-                          }`}
-                        >
-                          <span
-                            className={`${style === "Dark" || style === "Money" || style === "Focus" || style === "Instagram" || style === "Meme" || style === "Viral" ? "text-white" : "text-gray-900"}`}
-                          >
-                            {style[0]}
-                          </span>
-                        </div>
-                        <span
-                          className={`text-[9px] ${isSelected ? "text-blue-600 font-bold" : "text-gray-400 font-medium"}`}
-                        >
-                          {style}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Phone Layouts */}
-              <div>
-                <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3 px-2">
-                  <Smartphone className="w-3.5 h-3.5 md:w-4 md:h-4 text-gray-400" />
-                  <span className="text-[9px] md:text-[10px] font-bold text-gray-400 tracking-widest uppercase">
-                    {t("phoneLayouts")}
-                  </span>
-                </div>
-                <div className="flex gap-3 md:gap-4 overflow-x-auto pb-1 no-scrollbar px-2 items-center">
-                  {Object.keys(PhoneLayouts).map((layoutName) => {
-                    const isSelected = selectedLayout === layoutName;
-                    const config = PhoneLayouts[layoutName];
-
-                    return (
-                      <button
-                        key={layoutName}
-                        onClick={() => {
-                          setSelectedLayout(layoutName);
-                          // For layout colors to show up natively, the style needs to fallback, or at least unset custom bg
-                          setCustomBgColor(null);
-                          if (
-                            layoutName !== "None" &&
-                            selectedStyle !== "Original"
-                          ) {
-                            setSelectedStyle("Original");
-                          }
-                        }}
-                        className="flex flex-col items-center gap-2 shrink-0 group relative"
-                      >
-                        <div
-                          style={{ backgroundColor: config.themeColor }}
-                          className={`w-10 h-16 md:w-12 md:h-20 rounded-xl flex flex-col items-center justify-center transition-all border-2 overflow-hidden ${isSelected ? "border-white ring-2 ring-blue-600 ring-offset-2 scale-105 shadow-xl" : "border-black/5 hover:border-black/20 shadow-sm opacity-90 hover:opacity-100"}`}
-                        >
-                          {layoutName === "None" ? (
-                            <X
-                              className={`w-4 h-4 ${layoutName === "None" && config.themeColor === "#f3f4f6" ? "text-gray-400" : "text-white"}`}
-                            />
-                          ) : (
-                            <div
-                              style={{
-                                transform: config.rotation
-                                  ? `rotate(${config.rotation}deg)`
-                                  : "none",
-                                aspectRatio: config.isLandscape
-                                  ? "16/9"
-                                  : "9/16",
-                              }}
-                              className={`bg-slate-900 rounded-[3px] border border-white/20 shadow-2xl relative flex flex-col items-center justify-center ${config.isLandscape ? "w-8 h-5" : "w-6 h-10"}`}
-                            >
-                              {/* Screen Content Mockup */}
-                              <div className="w-[85%] h-[85%] bg-blue-500/20 rounded-[2px] flex items-center justify-center">
-                                <div className="w-[60%] h-[10%] bg-blue-400/40 rounded-full" />
-                              </div>
-                              {/* Notch */}
-                              {!config.isLandscape && (
-                                <div className="absolute top-[2px] w-[30%] h-[2px] bg-black rounded-full" />
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <span
-                          className={`text-[8px] uppercase tracking-tighter ${isSelected ? "text-blue-600 font-black" : "text-gray-400 font-bold"}`}
-                        >
-                          {layoutName}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Background Colors */}
-              <div>
-                <div className="flex items-center gap-1.5 md:gap-2 mb-2 md:mb-3 px-2">
-                  <PaintBucket className="w-3.5 h-3.5 md:w-4 md:h-4 text-gray-400" />
-                  <span className="text-[9px] md:text-[10px] font-bold text-gray-400 tracking-widest uppercase">
-                    {t("canvasColor")}
-                  </span>
-                </div>
-                <div className="flex gap-2.5 md:gap-3 overflow-x-auto pb-1 no-scrollbar px-2 items-center">
-                  <button
-                    onClick={() => setCustomBgColor(null)}
-                    className="flex flex-col items-center gap-1.5 shrink-0 group relative"
-                  >
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all border-2 overflow-hidden bg-gray-100 ${customBgColor === null ? "border-blue-600 ring-2 ring-blue-600 ring-offset-1 scale-110 shadow-md" : "border-gray-200"}`}
-                    >
-                      <X className="w-4 h-4 text-gray-500" />
-                    </div>
-                  </button>
-
-                  {/* Native Color Picker for ALL infinite colors */}
-                  <div className="flex flex-col items-center gap-1.5 shrink-0 group relative">
-                    <div
-                      className={`w-8 h-8 rounded-full transition-all border-2 overflow-hidden shadow-sm relative flex items-center justify-center cursor-pointer hover:scale-105 ${
-                        customBgColor &&
-                        !EXTENDED_PALETTE.includes(customBgColor.toUpperCase())
-                          ? "border-white ring-2 ring-blue-600 ring-offset-1 scale-110 shadow-md"
-                          : "border-white"
-                      }`}
-                      style={{
-                        background:
-                          "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)",
-                      }}
-                    >
-                      <input
-                        type="color"
-                        title="Pick custom color"
-                        value={customBgColor || "#FFFFFF"}
-                        onChange={(e) => setCustomBgColor(e.target.value)}
-                        className="absolute inset-[-10px] w-12 h-12 opacity-0 cursor-pointer"
-                      />
-                    </div>
+            {/* Bottom Controls Panel - Structured at exactly 30% of parent */}
+            <div className="h-[30%] max-h-[30%] shrink-0 bg-white flex flex-col justify-between overflow-hidden p-2.5">
+              {/* Selectors Wrapper: Scrollable to avoid overflow on tiny screens */}
+              <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 mt-0.5">
+                {/* Viral Styles */}
+                <div>
+                  <div className="flex items-center gap-1 mb-1 px-1">
+                    <Palette className="w-3 h-3 text-gray-400" />
+                    <span className="text-[8px] font-black text-gray-400 tracking-wider uppercase">
+                      {t("viralStylesTitle")}
+                    </span>
                   </div>
+                  <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar items-center px-1">
+                    {Object.keys(Styles).map((style) => {
+                      const isSelected = selectedStyle === style;
 
-                  {/* Extended Palette */}
-                  {EXTENDED_PALETTE.map((hex) => (
+                      return (
+                        <button
+                          key={style}
+                          onClick={() => {
+                            setSelectedStyle(style);
+                            setCustomBgColor(null);
+                          }}
+                          className="flex flex-col items-center gap-1 shrink-0 group"
+                        >
+                          <div
+                            className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center text-xs font-black transition-all border ${isSelected ? "border-blue-600 scale-105 shadow-md shadow-blue-50" : "border-gray-100"} ${
+                              style === "Original"
+                                ? "bg-white"
+                                : style === "Minimal"
+                                  ? "bg-[#F8FAFC]"
+                                  : style === "Dark"
+                                    ? "bg-[#0F172A]"
+                                    : style === "Instagram"
+                                      ? "bg-gradient-to-br from-[#f09433] via-[#dc2743] to-[#bc1888]"
+                                      : style === "Shadow"
+                                        ? "bg-[#E2E8F0]"
+                                        : style === "Meme"
+                                          ? "bg-black"
+                                          : style === "Money"
+                                            ? "bg-[#065F46]"
+                                            : style === "Focus"
+                                              ? "bg-[#1F2937]"
+                                              : style === "Viral"
+                                                ? "bg-red-500"
+                                                : style === "Chat"
+                                                  ? "bg-[#ECFDF5]"
+                                                  : "bg-[#F1F5F9]"
+                            }`}
+                          >
+                            <span
+                              className={`${style === "Dark" || style === "Money" || style === "Focus" || style === "Instagram" || style === "Meme" || style === "Viral" ? "text-white" : "text-gray-900"}`}
+                            >
+                              {style[0]}
+                            </span>
+                          </div>
+                          <span
+                            className={`text-[8px] leading-none ${isSelected ? "text-blue-600 font-bold" : "text-gray-400 font-medium"}`}
+                          >
+                            {style}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Phone Layouts */}
+                <div>
+                  <div className="flex items-center gap-1 mb-1 px-1">
+                    <Smartphone className="w-3 h-3 text-gray-400" />
+                    <span className="text-[8px] font-black text-gray-400 tracking-wider uppercase">
+                      {t("phoneLayouts")}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar px-1 items-center">
+                    {Object.keys(PhoneLayouts).map((layoutName) => {
+                      const isSelected = selectedLayout === layoutName;
+                      const config = PhoneLayouts[layoutName];
+
+                      return (
+                        <button
+                          key={layoutName}
+                          onClick={() => {
+                            setSelectedLayout(layoutName);
+                            setCustomBgColor(null);
+                            if (
+                              layoutName !== "None" &&
+                              selectedStyle !== "Original"
+                            ) {
+                              setSelectedStyle("Original");
+                            }
+                          }}
+                          className="flex flex-col items-center gap-1 shrink-0 group relative"
+                        >
+                          <div
+                            style={{ backgroundColor: config.themeColor }}
+                            className={`w-7 h-10 rounded-lg flex flex-col items-center justify-center transition-all border ${isSelected ? "border-white ring-1 ring-blue-600 scale-105 shadow-md" : "border-black/5 hover:border-black/10 shadow-sm opacity-90 hover:opacity-100"}`}
+                          >
+                            {layoutName === "None" ? (
+                              <X
+                                className={`w-3.5 h-3.5 ${layoutName === "None" && config.themeColor === "#f3f4f6" ? "text-gray-400" : "text-white"}`}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  transform: config.rotation
+                                    ? `rotate(${config.rotation}deg)`
+                                    : "none",
+                                  aspectRatio: config.isLandscape
+                                    ? "16/9"
+                                    : "9/16",
+                                }}
+                                className={`bg-slate-900 rounded-[2px] border border-white/20 shadow relative flex flex-col items-center justify-center ${config.isLandscape ? "w-5 h-3" : "w-3.5 h-6"}`}
+                              >
+                                <div className="w-[85%] h-[85%] bg-blue-500/20 rounded-[1px] flex items-center justify-center">
+                                  <div className="w-[60%] h-[10%] bg-blue-400/40 rounded-full" />
+                                </div>
+                                {!config.isLandscape && (
+                                  <div className="absolute top-[1px] w-[30%] h-[1px] bg-black rounded-full" />
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <span
+                            className={`text-[7px] leading-none uppercase tracking-tighter ${isSelected ? "text-blue-600 font-extrabold" : "text-gray-400 font-bold"}`}
+                          >
+                            {layoutName}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Canvas Color */}
+                <div>
+                  <div className="flex items-center gap-1 mb-1 px-1">
+                    <PaintBucket className="w-3 h-3 text-gray-400" />
+                    <span className="text-[8px] font-black text-gray-400 tracking-wider uppercase">
+                      {t("canvasColor")}
+                    </span>
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar px-1 items-center">
                     <button
-                      key={hex}
-                      onClick={() => setCustomBgColor(hex)}
-                      className="flex flex-col items-center gap-1.5 shrink-0 group relative"
+                      onClick={() => setCustomBgColor(null)}
+                      className="flex flex-col items-center gap-1 shrink-0 group relative"
                     >
                       <div
-                        style={{
-                          background: hex.includes(",")
-                            ? `linear-gradient(to bottom right, ${hex})`
-                            : hex,
-                        }}
-                        className={`w-8 h-8 rounded-full transition-all border-2 overflow-hidden shadow-sm ${customBgColor?.toUpperCase() === hex.toUpperCase() ? "border-white ring-2 ring-blue-600 ring-offset-1 scale-110 shadow-md" : "border-black/5 hover:scale-105"}`}
-                      />
+                        className={`w-6.5 h-6.5 rounded-full flex items-center justify-center transition-all border bg-gray-100 ${customBgColor === null ? "border-blue-600 ring-1 ring-blue-600 scale-105 shadow-sm" : "border-gray-200"}`}
+                      >
+                        <X className="w-3 h-3 text-gray-500" />
+                      </div>
                     </button>
-                  ))}
+
+                    {/* Custom Color Picker */}
+                    <div className="flex flex-col items-center gap-1 shrink-0 group relative">
+                      <div
+                        className={`w-6.5 h-6.5 rounded-full transition-all border shadow-sm relative flex items-center justify-center cursor-pointer hover:scale-105 ${
+                          customBgColor &&
+                          !EXTENDED_PALETTE.includes(customBgColor.toUpperCase())
+                            ? "border-white ring-1 ring-blue-600 scale-105 shadow-md"
+                            : "border-white"
+                        }`}
+                        style={{
+                          background:
+                            "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)",
+                        }}
+                      >
+                        <input
+                          type="color"
+                          title="Pick custom color"
+                          value={customBgColor || "#FFFFFF"}
+                          onChange={(e) => setCustomBgColor(e.target.value)}
+                          className="absolute inset-[-10px] w-10 h-10 opacity-0 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Palette colors */}
+                    {EXTENDED_PALETTE.map((hex) => (
+                      <button
+                        key={hex}
+                        onClick={() => setCustomBgColor(hex)}
+                        className="flex flex-col items-center gap-1 shrink-0 group relative"
+                      >
+                        <div
+                          style={{
+                            background: hex.includes(",")
+                              ? `linear-gradient(to bottom right, ${hex})`
+                              : hex,
+                          }}
+                          className={`w-6.5 h-6.5 rounded-full transition-all border ${customBgColor?.toUpperCase() === hex.toUpperCase() ? "border-white ring-1 ring-blue-600 scale-105 shadow-md" : "border-black/5 hover:scale-105"}`}
+                        />
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Bottom Actions */}
-            <div className="p-4 bg-white border-t border-gray-100 flex flex-col gap-3 shrink-0 pb-6 md:pb-4">
-              <div className="flex gap-2 md:gap-3">
+              {/* Multi-Function Sleek Bottom Row Buttons */}
+              <div className="grid grid-cols-4 gap-1 pt-1.5 border-t border-gray-100/80 mt-1 shrink-0">
                 <button
-                  onClick={() => {
-                    setShowEditor(true);
-                  }}
-                  className="flex-1 py-2.5 md:py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl md:rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-indigo-100"
+                  onClick={() => setShowEditor(true)}
+                  className="h-6.5 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer px-1"
                 >
-                  <Edit2 className="w-4 h-4 md:w-5 md:h-5" /> {t("editBtn")}
+                  <Edit2 className="w-2.5 h-2.5 shrink-0" />
+                  <span className="text-[9.5px] tracking-tight truncate font-bold">{t("editBtn")}</span>
                 </button>
                 <button
                   onClick={shareImage}
-                  className="flex-[2] py-2.5 md:py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl md:rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-100"
+                  className="h-6.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer px-1"
                 >
-                  <Share2 className="w-5 h-5" /> {t("shareBtn")}
+                  <Share2 className="w-2.5 h-2.5 shrink-0" />
+                  <span className="text-[9.5px] tracking-tight truncate font-bold">{t("shareBtn")}</span>
                 </button>
-              </div>
-              <div className="flex gap-3">
                 <button
                   onClick={downloadImage}
-                  className="flex-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-100"
+                  className="h-6.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer px-1"
                 >
-                  <Download className="w-5 h-5" /> {t("saveBtn")}
+                  <Download className="w-2.5 h-2.5 shrink-0" />
+                  <span className="text-[9.5px] tracking-tight truncate font-bold">{t("saveBtn")}</span>
                 </button>
                 <button
                   onClick={() => setAppState("upload")}
-                  className="flex-1 py-3 bg-red-400 hover:bg-red-500 text-white rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-100"
+                  className="h-6.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer px-1"
                 >
-                  <X className="w-5 h-5" /> {t("startOverBtn")}
+                  <X className="w-2.5 h-2.5 shrink-0" />
+                  <span className="text-[9.5px] tracking-tight truncate font-bold">{t("startOverBtn")}</span>
                 </button>
               </div>
             </div>
@@ -1216,6 +1225,8 @@ export default function App() {
           >
             <EditorCanvas
               imageSrc={baseStyledImage || cleanImage!}
+              originalScreenshotSrc={originalImage || undefined}
+              initialCropRect={customCropRect}
               initialPaths={editorPaths}
               initialTexts={editorTexts}
               onCancel={() => setShowEditor(false)}
@@ -1224,11 +1235,15 @@ export default function App() {
                 finalCleanSrc,
                 finalPaths,
                 finalTexts,
+                customCrop,
               ) => {
                 setProcessedImage(newImgDataUrl);
                 setCleanImage(finalCleanSrc);
                 setEditorPaths(finalPaths);
                 setEditorTexts(finalTexts);
+                if (customCrop) {
+                  setCustomCropRect(customCrop);
+                }
                 setShowEditor(false);
               }}
             />

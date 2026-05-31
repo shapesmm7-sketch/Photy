@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">SnapClean</string>
-    <string name="title_activity_main">SnapClean</string>
-    <string name="package_name">com.snapclean.app</string>
-    <string name="custom_url_scheme">com.snapclean.app</string>
+    <string name="app_name">Shot Clean</string>
+    <string name="title_activity_main">Shot Clean</string>
+    <string name="package_name">com.shotclean.app</string>
+    <string name="custom_url_scheme">com.shotclean.app</string>
 </resources>

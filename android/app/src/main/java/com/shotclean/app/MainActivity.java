@@ -1,4 +1,4 @@
-package com.snapclean.app;
+package com.shotclean.app;
 
 import com.getcapacitor.BridgeActivity;
 
