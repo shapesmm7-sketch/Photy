@@ -120,10 +120,19 @@ export default function EditorCanvas({
   } | null>(null);
   const cropStartRef = useRef<{ x: number; y: number } | null>(null);
   const cropEndRef = useRef<{ x: number; y: number } | null>(null);
-  const cropDragModeRef = useRef<"none" | "new" | "tl" | "tr" | "bl" | "br" | "move">("none");
+  const cropDragModeRef = useRef<"none" | "new" | "tl" | "tr" | "bl" | "br" | "t" | "b" | "l" | "r" | "move">("none");
   const dragStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const dragStartCropRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const tempCropRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+
+  // Focus and Zoom state
+  const [zoomScale, setZoomScale] = useState(1);
+  const [zoomOffset, setZoomOffset] = useState({ x: 0, y: 0 });
+  const zoomStartRef = useRef<{ x: number; y: number } | null>(null);
+  const zoomInitialScaleRef = useRef<number>(1);
+  const zoomInitialDistanceRef = useRef<number | null>(null);
+  const isPinchZoomingRef = useRef<boolean>(false);
+  const editorLastTapRef = useRef<number>(0);
 
   // Drawing state
   const [paths, setPaths] = useState<DrawingPath[]>(() => {
@@ -495,7 +504,11 @@ export default function EditorCanvas({
     ctx.restore();
   };
 
-  const redraw = (currentCrop?: { x: number; y: number; w: number; h: number } | null) => {
+  const redraw = (
+    currentCrop?: { x: number; y: number; w: number; h: number } | null,
+    explicitPaths?: DrawingPath[],
+    explicitTexts?: TextItem[]
+  ) => {
     const canvas = canvasRef.current;
     const img = originalImageRef.current;
     if (!canvas || !img) return;
@@ -534,7 +547,8 @@ export default function EditorCanvas({
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
-      paths.forEach((p) => {
+      const pathsToDraw = explicitPaths || paths;
+      pathsToDraw.forEach((p) => {
         if (p.isBlur) {
           drawBlurredPath(ctx, p.path2d, p.width, p.color, topPad);
         } else {
@@ -545,7 +559,9 @@ export default function EditorCanvas({
       });
 
       // Draw texts
-      texts.forEach((t) => {
+      const textsToDraw = explicitTexts || texts;
+      textsToDraw.forEach((t) => {
+
         ctx.fillStyle = t.color;
 
         let fontStr = "sans-serif";
@@ -693,6 +709,10 @@ export default function EditorCanvas({
     }
   }, [currentText, textPositionMode, texts, showTextModal, activeTool]);
 
+  useEffect(() => {
+    redraw();
+  }, [paths, brushSize, selectedDrawColor, selectedBlurColor]);
+
   const getCanvasPoint = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
     if (!canvas || !cropRect) return { x: 0, y: 0 };
@@ -717,6 +737,59 @@ export default function EditorCanvas({
   };
 
   const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
+    if ("touches" in e && e.touches.length === 2) {
+      isPinchZoomingRef.current = true;
+      setIsDrawing(false);
+      currentPathRef.current = null;
+      drawingPointsRef.current = [];
+      setSuggestedShape(null);
+
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+      zoomInitialDistanceRef.current = dist;
+      zoomInitialScaleRef.current = zoomScale;
+      zoomStartRef.current = {
+        x: ((touch1.clientX + touch2.clientX) / 2) - zoomOffset.x,
+        y: ((touch1.clientY + touch2.clientY) / 2) - zoomOffset.y
+      };
+      return;
+    }
+
+    if ("touches" in e && e.touches.length === 1 && isPinchZoomingRef.current) {
+      return;
+    }
+
+    if ("touches" in e && e.touches.length === 1) {
+      const now = Date.now();
+      const DOUBLE_TAP_DELAY = 300;
+      if (now - editorLastTapRef.current < DOUBLE_TAP_DELAY) {
+        const pt = getCanvasPoint(e);
+        const onText = texts.some((t) => {
+          const height = t.size * 1.5;
+          const width = Math.max(t.text.length * (t.size * 0.6), 30) + 20;
+          return (
+            pt.x > t.x - width / 2 &&
+            pt.x < t.x + width / 2 &&
+            pt.y < t.y + 10 &&
+            pt.y > t.y - height + 10
+          );
+        });
+        if (!onText) {
+          if (zoomScale > 1.1) {
+            setZoomScale(1);
+            setZoomOffset({ x: 0, y: 0 });
+          } else {
+            setZoomScale(3);
+            setZoomOffset({ x: 0, y: 0 });
+          }
+          editorLastTapRef.current = 0;
+          return;
+        }
+      }
+      editorLastTapRef.current = now;
+    }
+
     const pt = getCanvasPoint(e);
 
     // Hit test for texts
@@ -791,14 +864,64 @@ export default function EditorCanvas({
       const isTR = Math.abs(pt.x - (cr.x + cr.w)) < threshold && Math.abs(pt.y - cr.y) < threshold;
       const isBL = Math.abs(pt.x - cr.x) < threshold && Math.abs(pt.y - (cr.y + cr.h)) < threshold;
       const isBR = Math.abs(pt.x - (cr.x + cr.w)) < threshold && Math.abs(pt.y - (cr.y + cr.h)) < threshold;
-      const isInside = pt.x > cr.x + threshold && pt.x < cr.x + cr.w - threshold && pt.y > cr.y + threshold && pt.y < cr.y + cr.h - threshold;
 
-      if (isTL) cropDragModeRef.current = "tl";
-      else if (isTR) cropDragModeRef.current = "tr";
-      else if (isBL) cropDragModeRef.current = "bl";
-      else if (isBR) cropDragModeRef.current = "br";
-      else if (isInside) cropDragModeRef.current = "move";
-      else cropDragModeRef.current = "new";
+      if (isTL) {
+        cropDragModeRef.current = "tl";
+      } else if (isTR) {
+        cropDragModeRef.current = "tr";
+      } else if (isBL) {
+        cropDragModeRef.current = "bl";
+      } else if (isBR) {
+        cropDragModeRef.current = "br";
+      } else {
+        const nearTop = Math.abs(pt.y - cr.y) < threshold && pt.x >= cr.x - threshold && pt.x <= cr.x + cr.w + threshold;
+        const nearBottom = Math.abs(pt.y - (cr.y + cr.h)) < threshold && pt.x >= cr.x - threshold && pt.x <= cr.x + cr.w + threshold;
+        const nearLeft = Math.abs(pt.x - cr.x) < threshold && pt.y >= cr.y - threshold && pt.y <= cr.y + cr.h + threshold;
+        const nearRight = Math.abs(pt.x - (cr.x + cr.w)) < threshold && pt.y >= cr.y - threshold && pt.y <= cr.y + cr.h + threshold;
+
+        let bestEdge: "t" | "b" | "l" | "r" | null = null;
+        let minDist = Infinity;
+
+        if (nearTop) {
+          const dist = Math.abs(pt.y - cr.y);
+          if (dist < minDist) {
+            minDist = dist;
+            bestEdge = "t";
+          }
+        }
+        if (nearBottom) {
+          const dist = Math.abs(pt.y - (cr.y + cr.h));
+          if (dist < minDist) {
+            minDist = dist;
+            bestEdge = "b";
+          }
+        }
+        if (nearLeft) {
+          const dist = Math.abs(pt.x - cr.x);
+          if (dist < minDist) {
+            minDist = dist;
+            bestEdge = "l";
+          }
+        }
+        if (nearRight) {
+          const dist = Math.abs(pt.x - (cr.x + cr.w));
+          if (dist < minDist) {
+            minDist = dist;
+            bestEdge = "r";
+          }
+        }
+
+        if (bestEdge) {
+          cropDragModeRef.current = bestEdge;
+        } else {
+          const isInside = pt.x > cr.x + threshold && pt.x < cr.x + cr.w - threshold && pt.y > cr.y + threshold && pt.y < cr.y + cr.h - threshold;
+          if (isInside) {
+            cropDragModeRef.current = "move";
+          } else {
+            cropDragModeRef.current = "new";
+          }
+        }
+      }
 
       if (cropDragModeRef.current === "new") {
         cropStartRef.current = pt;
@@ -821,6 +944,40 @@ export default function EditorCanvas({
   };
 
   const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if ("touches" in e && e.touches.length === 2) {
+      e.preventDefault();
+      isPinchZoomingRef.current = true;
+      setIsDrawing(false);
+      currentPathRef.current = null;
+      drawingPointsRef.current = [];
+      setSuggestedShape(null);
+
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      if (zoomInitialDistanceRef.current && zoomStartRef.current) {
+        const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+        const factor = dist / zoomInitialDistanceRef.current;
+        const newScale = Math.max(1, Math.min(6, zoomInitialScaleRef.current * factor));
+        setZoomScale(newScale);
+
+        if (newScale > 1) {
+          const midX = (touch1.clientX + touch2.clientX) / 2;
+          const midY = (touch1.clientY + touch2.clientY) / 2;
+          setZoomOffset({
+            x: midX - zoomStartRef.current.x,
+            y: midY - zoomStartRef.current.y
+          });
+        } else {
+          setZoomOffset({ x: 0, y: 0 });
+        }
+      }
+      return;
+    }
+
+    if ("touches" in e && isPinchZoomingRef.current) {
+      return;
+    }
+
     const pt = getCanvasPoint(e);
 
     if (draggingTextIndex !== null) {
@@ -828,19 +985,17 @@ export default function EditorCanvas({
       const newX = pt.x - dragOffsetRef.current.x;
       const newY = pt.y - dragOffsetRef.current.y;
 
-      setTexts((prevTexts) => {
-        const nextTexts = [...prevTexts];
-        if (nextTexts[draggingTextIndex]) {
-          nextTexts[draggingTextIndex] = {
-            ...nextTexts[draggingTextIndex],
-            x: newX,
-            y: newY,
-            positionMode: "Default", // switch to Default position once manually moved
-          };
-        }
-        return nextTexts;
-      });
-      redraw();
+      const nextTexts = [...texts];
+      if (nextTexts[draggingTextIndex]) {
+        nextTexts[draggingTextIndex] = {
+          ...nextTexts[draggingTextIndex],
+          x: newX,
+          y: newY,
+          positionMode: "Default",
+        };
+      }
+      setTexts(nextTexts);
+      redraw(undefined, undefined, nextTexts);
       return;
     }
 
@@ -914,7 +1069,34 @@ export default function EditorCanvas({
     redraw();
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e?: React.MouseEvent | React.TouchEvent) => {
+    if (e && "touches" in e) {
+      if (e.touches.length === 0) {
+        if (isPinchZoomingRef.current) {
+          isPinchZoomingRef.current = false;
+          zoomStartRef.current = null;
+          zoomInitialDistanceRef.current = null;
+          if (zoomScale <= 1.05) {
+            setZoomScale(1);
+            setZoomOffset({ x: 0, y: 0 });
+          }
+          return;
+        }
+      } else if (e.touches.length === 1 && isPinchZoomingRef.current) {
+        const touch = e.touches[0];
+        zoomStartRef.current = {
+          x: touch.clientX - zoomOffset.x,
+          y: touch.clientY - zoomOffset.y
+        };
+        zoomInitialDistanceRef.current = null;
+        return;
+      }
+    }
+
+    if (isPinchZoomingRef.current) {
+      return;
+    }
+
     if (draggingTextIndex !== null) {
       setDraggingTextIndex(null);
       redraw();
@@ -960,7 +1142,7 @@ export default function EditorCanvas({
         activeTool === "draw" ? selectedDrawColor : selectedBlurColor;
       const width = brushSize;
 
-      setPaths([
+      const newPaths = [
         ...paths,
         {
           points: [...drawingPointsRef.current],
@@ -969,13 +1151,16 @@ export default function EditorCanvas({
           width: width,
           isBlur: activeTool === "blur",
         },
-      ]);
+      ];
+      setPaths(newPaths);
 
       if (activeTool === "draw") {
         const shape = detectShapeWeb(drawingPointsRef.current);
         setSuggestedShape(shape);
       }
       currentPathRef.current = null;
+      redraw(undefined, newPaths);
+      return;
     }
 
     redraw();
@@ -1014,30 +1199,35 @@ export default function EditorCanvas({
       fontName: currentTextFont,
     };
 
+    let finalTexts;
     if (editingTextIndex >= 0) {
       const newTexts = [...texts];
       newTexts[editingTextIndex] = newText;
       setTexts(newTexts);
+      finalTexts = newTexts;
     } else {
-      setTexts([...texts, newText]);
+      finalTexts = [...texts, newText];
+      setTexts(finalTexts);
     }
 
     setEditingTextIndex(-1);
     setShowTextModal(false);
     setCurrentText("");
-    redraw();
+    redraw(undefined, undefined, finalTexts);
   };
 
   const handleDeleteText = () => {
+    let finalTexts = texts;
     if (editingTextIndex >= 0) {
       const newTexts = [...texts];
       newTexts.splice(editingTextIndex, 1);
       setTexts(newTexts);
+      finalTexts = newTexts;
     }
     setEditingTextIndex(-1);
     setShowTextModal(false);
     setCurrentText("");
-    redraw();
+    redraw(undefined, undefined, finalTexts);
   };
 
   const handleSave = () => {
@@ -1114,7 +1304,12 @@ export default function EditorCanvas({
           </div>
         )}
         <div
-          className={`relative flex items-center justify-center transition-all duration-500 ${canvasSize.width === 0 ? "invisible" : ""}`}
+          className={`relative flex items-center justify-center ${canvasSize.width === 0 ? "invisible" : ""}`}
+          style={{
+            transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoomScale})`,
+            transformOrigin: "center center",
+            transition: isPinchZoomingRef.current ? "none" : "transform 0.15s ease-out",
+          }}
         >
           <canvas
             ref={canvasRef}
@@ -1145,7 +1340,7 @@ export default function EditorCanvas({
                 newPaths.splice(editingPathIndex, 1);
                 setPaths(newPaths);
                 setEditingPathIndex(-1);
-                setTimeout(() => redraw(), 0);
+                redraw(undefined, newPaths);
               }}
               className="bg-red-600 text-white px-6 py-2 rounded-full font-bold shadow-xl border border-white/20 flex items-center gap-2"
             >
@@ -1162,6 +1357,7 @@ export default function EditorCanvas({
                 if (paths.length === 0 || drawingPointsRef.current.length === 0)
                   return;
                 const newRefined = new Path2D();
+                let newPoints: { x: number; y: number }[] = [];
                 if (suggestedShape === "Line") {
                   const s = drawingPointsRef.current[0];
                   const e =
@@ -1170,6 +1366,7 @@ export default function EditorCanvas({
                     ];
                   newRefined.moveTo(s.x, s.y);
                   newRefined.lineTo(e.x, e.y);
+                  newPoints = [s, e];
                 } else {
                   const points = drawingPointsRef.current;
                   const minX = Math.min(...points.map((p) => p.x));
@@ -1182,16 +1379,25 @@ export default function EditorCanvas({
                   const cy = minY + h / 2;
                   const r = (w + h) / 4;
                   newRefined.arc(cx, cy, r, 0, Math.PI * 2);
+
+                  const steps = 100;
+                  for (let i = 0; i <= steps; i++) {
+                    const theta = (i / steps) * Math.PI * 2;
+                    newPoints.push({
+                      x: cx + r * Math.cos(theta),
+                      y: cy + r * Math.sin(theta),
+                    });
+                  }
                 }
                 setPaths((prev) => {
                   const next = [...prev];
                   const last = next[next.length - 1];
                   if (!last) return prev;
-                  next[next.length - 1] = { ...last, path2d: newRefined };
+                  next[next.length - 1] = { ...last, path2d: newRefined, points: newPoints };
+                  redraw(undefined, next);
                   return next;
                 });
                 setSuggestedShape(null);
-                setTimeout(() => redraw(), 0);
               }}
               className="bg-blue-600 shadow-xl shadow-blue-900/40 text-white px-6 py-3 rounded-full font-bold animate-pulse flex items-center gap-2 border border-white/20 whitespace-nowrap"
             >
@@ -1253,6 +1459,7 @@ export default function EditorCanvas({
                 h: originalImageRef.current.height,
               };
               fitImageToContainer(originalImageRef.current, rect);
+              setTimeout(() => redraw(undefined, [], []), 50); // Ensure clear renders
             }
           }}
           className="flex flex-col items-center gap-1 p-2 text-red-400 opacity-80 hover:opacity-100 transition-opacity"

@@ -1145,3 +1145,163 @@ export async function applyStyle(
 export async function autoProcessImage(originalSrc: string): Promise<string> {
   return applyStyle(originalSrc, "Minimal");
 }
+
+export async function burnEditsToImage(
+  styledImageDataUrl: string,
+  paths: any[],
+  texts: any[],
+): Promise<string> {
+  if (paths.length === 0 && texts.length === 0) {
+    return styledImageDataUrl;
+  }
+
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(styledImageDataUrl);
+          return;
+        }
+
+        // Draw background styled image
+        ctx.drawImage(img, 0, 0);
+
+        // Pre-render a blurred canvas if we have any blur paths
+        let blurCanvas: HTMLCanvasElement | null = null;
+        const hasBlurPaths = paths.some((p) => p.isBlur);
+        if (hasBlurPaths) {
+          blurCanvas = document.createElement("canvas");
+          blurCanvas.width = canvas.width;
+          blurCanvas.height = canvas.height;
+          const bCtx = blurCanvas.getContext("2d");
+          if (bCtx) {
+            bCtx.drawImage(img, 0, 0);
+            bCtx.save();
+            bCtx.filter = "blur(20px)";
+            bCtx.drawImage(blurCanvas, 0, 0);
+            bCtx.restore();
+          }
+        }
+
+        // Help draw blurred path locally
+        const drawBlurredPathLocal = (
+          pathPoints: { x: number; y: number }[],
+          width: number,
+          color: string | undefined
+        ) => {
+          if (!blurCanvas) return;
+          const scratch = document.createElement("canvas");
+          scratch.width = canvas.width;
+          scratch.height = canvas.height;
+          const sCtx = scratch.getContext("2d");
+          if (!sCtx) return;
+
+          sCtx.save();
+          sCtx.lineCap = "round";
+          sCtx.lineJoin = "round";
+          sCtx.shadowColor = "#FFFFFF";
+          sCtx.shadowBlur = width * 0.45;
+          sCtx.strokeStyle = "#FFFFFF";
+          sCtx.lineWidth = width * 0.75;
+          sCtx.beginPath();
+          if (pathPoints.length > 0) {
+            sCtx.moveTo(pathPoints[0].x, pathPoints[0].y);
+            for (let i = 1; i < pathPoints.length; i++) {
+              sCtx.lineTo(pathPoints[i].x, pathPoints[i].y);
+            }
+          }
+          sCtx.stroke();
+          sCtx.restore();
+
+          sCtx.save();
+          sCtx.globalCompositeOperation = "source-in";
+          sCtx.drawImage(blurCanvas, 0, 0);
+          sCtx.restore();
+
+          if (color && color !== "transparent") {
+            sCtx.save();
+            sCtx.globalCompositeOperation = "source-over";
+            sCtx.lineCap = "round";
+            sCtx.lineJoin = "round";
+            sCtx.shadowColor = color;
+            sCtx.shadowBlur = width * 0.45;
+            sCtx.strokeStyle = color;
+            sCtx.lineWidth = width * 0.75;
+            sCtx.globalAlpha = 1.0;
+            sCtx.beginPath();
+            if (pathPoints.length > 0) {
+              sCtx.moveTo(pathPoints[0].x, pathPoints[0].y);
+              for (let i = 1; i < pathPoints.length; i++) {
+                sCtx.lineTo(pathPoints[i].x, pathPoints[i].y);
+              }
+            }
+            sCtx.stroke();
+            sCtx.restore();
+          }
+
+          ctx.save();
+          ctx.drawImage(scratch, 0, 0);
+          ctx.restore();
+        };
+
+        // Draw drawings/paths
+        paths.forEach((p) => {
+          if (p.isBlur) {
+            drawBlurredPathLocal(p.points, p.width, p.color);
+          } else {
+            ctx.save();
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            ctx.strokeStyle = p.color;
+            ctx.lineWidth = p.width;
+            ctx.beginPath();
+            if (p.points && p.points.length > 0) {
+              ctx.moveTo(p.points[0].x, p.points[0].y);
+              for (let i = 1; i < p.points.length; i++) {
+                ctx.lineTo(p.points[i].x, p.points[i].y);
+              }
+            }
+            ctx.stroke();
+            ctx.restore();
+          }
+        });
+
+        // Draw text items
+        texts.forEach((t) => {
+          ctx.save();
+          ctx.fillStyle = t.color;
+
+          let fontStr = "sans-serif";
+          if (t.fontName === "Serif") fontStr = "serif";
+          if (t.fontName === "Monospace") fontStr = "monospace";
+          if (t.fontName === "Cursive") fontStr = "cursive";
+          ctx.font = `bold ${t.size}px ${fontStr}`;
+
+          ctx.textAlign = "center";
+
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = Math.max(2, t.size * 0.08);
+          ctx.strokeText(t.text, t.x, t.y);
+          ctx.fillText(t.text, t.x, t.y);
+          ctx.restore();
+        });
+
+        resolve(canvas.toDataURL("image/png"));
+      } catch (err) {
+        console.error("Failed burning edits:", err);
+        resolve(styledImageDataUrl);
+      }
+    };
+    img.onerror = (e) => {
+      console.error(e);
+      resolve(styledImageDataUrl);
+    };
+    img.src = styledImageDataUrl;
+  });
+}

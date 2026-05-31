@@ -30,6 +30,7 @@ import {
   SensitiveArea,
   Styles,
   PhoneLayouts,
+  burnEditsToImage,
 } from "./lib/imageProcessor";
 import EditorCanvas from "./EditorCanvas";
 import { translations, LanguageKey } from "./i18n";
@@ -257,6 +258,7 @@ export default function App() {
   const prevStyleRef = React.useRef(selectedStyle);
   const prevLayoutRef = React.useRef(selectedLayout);
   const prevBgRef = React.useRef(customBgColor);
+  const prevOriginalImageRef = React.useRef<string | null>(null);
 
   // Capacitor AdMob Initialization
   React.useEffect(() => {
@@ -285,21 +287,32 @@ export default function App() {
       )
         .then((res) => {
           setBaseStyledImage(res);
-          if (!showEditor) {
-            setProcessedImage(res);
-          }
           
           // Only clear manual edits if structural options actually changed in the sidebar
           const styleChanged = prevStyleRef.current !== selectedStyle;
           const layoutChanged = prevLayoutRef.current !== selectedLayout;
           const bgChanged = prevBgRef.current !== customBgColor;
+          const originalImageChanged = prevOriginalImageRef.current !== originalImage;
 
-          if (styleChanged || layoutChanged || bgChanged) {
-            setCleanImage(null);
+          if (originalImageChanged) {
             setEditorPaths([]);
             setEditorTexts([]);
+            setProcessedImage(res);
+          } else if (styleChanged || layoutChanged || bgChanged) {
+            burnEditsToImage(res, editorPaths, editorTexts).then((finalCombined) => {
+              setProcessedImage(finalCombined);
+            });
+          } else {
+            if (editorPaths.length > 0 || editorTexts.length > 0) {
+              burnEditsToImage(res, editorPaths, editorTexts).then((finalCombined) => {
+                setProcessedImage(finalCombined);
+              });
+            } else {
+              setProcessedImage(res);
+            }
           }
 
+          prevOriginalImageRef.current = originalImage;
           prevStyleRef.current = selectedStyle;
           prevLayoutRef.current = selectedLayout;
           prevBgRef.current = customBgColor;
@@ -316,7 +329,8 @@ export default function App() {
     memeBottomText,
     customBgColor,
     customCropRect,
-    showEditor,
+    editorPaths,
+    editorTexts,
   ]);
 
   // Deselect custom color if style or layout changes, EXCEPT when changing the custom color itself
@@ -356,7 +370,16 @@ export default function App() {
         const resizedResult = canvas.toDataURL("image/jpeg", 0.9);
         setOriginalImage(resizedResult);
         setCleanImage(resizedResult);
-        setCustomCropRect(null);
+        
+        const topH = Math.round(height * 0.04);
+        const bottomH = Math.round(height * 0.05);
+        setCustomCropRect({
+          x: 0,
+          y: topH,
+          w: width,
+          h: height - topH - bottomH
+        });
+        
         setAppState("processing");
 
         setTimeout(() => {
@@ -798,34 +821,34 @@ export default function App() {
               </div>
 
               {/* Multi-Function Sleek Bottom Row Buttons */}
-              <div className="grid grid-cols-4 gap-1 pt-1.5 border-t border-gray-100/80 mt-1 shrink-0">
+              <div className="w-full max-w-[270px] mx-auto grid grid-cols-4 gap-1 pt-1.5 border-t border-gray-100/80 mt-1 shrink-0 px-1">
                 <button
                   onClick={() => setShowEditor(true)}
-                  className="h-6.5 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer px-1"
+                  className="h-5.5 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-0.5 transition-all shadow-sm cursor-pointer px-1"
                 >
-                  <Edit2 className="w-2.5 h-2.5 shrink-0" />
-                  <span className="text-[9.5px] tracking-tight truncate font-bold">{t("editBtn")}</span>
+                  <Edit2 className="w-2.0 h-2.0 shrink-0" />
+                  <span className="text-[8.5px] tracking-tight truncate font-bold">{t("editBtn")}</span>
                 </button>
                 <button
                   onClick={shareImage}
-                  className="h-6.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer px-1"
+                  className="h-5.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-0.5 transition-all shadow-sm cursor-pointer px-1"
                 >
-                  <Share2 className="w-2.5 h-2.5 shrink-0" />
-                  <span className="text-[9.5px] tracking-tight truncate font-bold">{t("shareBtn")}</span>
+                  <Share2 className="w-2.0 h-2.0 shrink-0" />
+                  <span className="text-[8.5px] tracking-tight truncate font-bold">{t("shareBtn")}</span>
                 </button>
                 <button
                   onClick={downloadImage}
-                  className="h-6.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer px-1"
+                  className="h-5.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-0.5 transition-all shadow-sm cursor-pointer px-1"
                 >
-                  <Download className="w-2.5 h-2.5 shrink-0" />
-                  <span className="text-[9.5px] tracking-tight truncate font-bold">{t("saveBtn")}</span>
+                  <Download className="w-2.0 h-2.0 shrink-0" />
+                  <span className="text-[8.5px] tracking-tight truncate font-bold">{t("saveBtn")}</span>
                 </button>
                 <button
                   onClick={() => setAppState("upload")}
-                  className="h-6.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-1 transition-all shadow-sm cursor-pointer px-1"
+                  className="h-5.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-0.5 transition-all shadow-sm cursor-pointer px-1"
                 >
-                  <X className="w-2.5 h-2.5 shrink-0" />
-                  <span className="text-[9.5px] tracking-tight truncate font-bold">{t("startOverBtn")}</span>
+                  <X className="w-2.0 h-2.0 shrink-0" />
+                  <span className="text-[8.5px] tracking-tight truncate font-bold">{t("startOverBtn")}</span>
                 </button>
               </div>
             </div>
@@ -1242,7 +1265,12 @@ export default function App() {
                 setEditorPaths(finalPaths);
                 setEditorTexts(finalTexts);
                 if (customCrop) {
-                  setCustomCropRect(customCrop);
+                  setCustomCropRect(prev => {
+                    if (prev && prev.x === customCrop.x && prev.y === customCrop.y && prev.w === customCrop.w && prev.h === customCrop.h) {
+                      return prev;
+                    }
+                    return customCrop;
+                  });
                 }
                 setShowEditor(false);
               }}
