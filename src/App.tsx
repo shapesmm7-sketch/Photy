@@ -34,6 +34,7 @@ import {
 } from "./lib/imageProcessor";
 import EditorCanvas from "./EditorCanvas";
 import { translations, LanguageKey } from "./i18n";
+import { Share } from "@capacitor/share";
 import {
   initializeAdMob,
   showBannerAd,
@@ -109,7 +110,7 @@ export default function App() {
   // NEW STATES
   const [editorPaths, setEditorPaths] = useState<any[]>([]);
   const [editorTexts, setEditorTexts] = useState<any[]>([]);
-  const [selectedStyle, setSelectedStyle] = useState("Money");
+  const [selectedStyle, setSelectedStyle] = useState("Original");
   const [selectedLayout, setSelectedLayout] = useState("None");
   const [isPrivacyScanning, setIsPrivacyScanning] = useState(false);
   const [blurStrength, setBlurStrength] = useState(15);
@@ -395,10 +396,42 @@ export default function App() {
 
   const executeDownload = () => {
     if (!processedImage) return;
-    const link = document.createElement("a");
-    link.href = processedImage;
-    link.download = "edited_screenshot.png";
-    link.click();
+
+    try {
+      // Direct binary Blob conversion to make saving highly compatible with Android WebView and iOS Mobile browsers
+      const parts = processedImage.split(';base64,');
+      const contentType = parts[0].split(':')[1];
+      const raw = window.atob(parts[1]);
+      const rawLength = raw.length;
+      const uInt8Array = new Uint8Array(rawLength);
+      
+      for (let i = 0; i < rawLength; ++i) {
+        uInt8Array[i] = raw.charCodeAt(i);
+      }
+      
+      const blob = new Blob([uInt8Array], { type: contentType });
+      const blobUrl = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = "shot_clean_edited.png";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Clean up the memory object URL shortly after triggering
+      setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+      }, 3000);
+    } catch (e) {
+      console.warn("Blob conversion failed, attempting direct base64 download fallback", e);
+      const link = document.createElement("a");
+      link.href = processedImage;
+      link.download = "edited_screenshot.png";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const downloadImage = () => {
@@ -418,18 +451,38 @@ export default function App() {
         type: blob.type,
       });
 
-      if (navigator.share && navigator.canShare({ files: [file] })) {
+      // Attempt the full Web Share API for native file sharing
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: "Edited Screenshot",
+        });
+      } else if (navigator.share) {
+        // Fallback to simple link/text share if file share is restricted
         await navigator.share({
           title: "Edited Screenshot",
-          files: [file],
+          text: "Check out my screenshot edited with Shot Clean!",
+          url: window.location.origin
         });
       } else {
-        alert(
-          "Web Share API is not supported in this browser, or cannot share files.",
-        );
+        // Ultimate fallback: save to clipboard + trigger direct download
+        if (navigator.clipboard && window.ClipboardItem) {
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                [blob.type]: blob
+              })
+            ]);
+            console.log("Screenshot copied to clipboard as share fallback.");
+          } catch (clipErr) {
+            console.warn("Clipboard share backup failed:", clipErr);
+          }
+        }
+        executeDownload();
       }
     } catch (err) {
-      console.error(err);
+      console.error("Web Share failed, downloading file instead", err);
+      executeDownload();
     }
   };
 
@@ -442,23 +495,46 @@ export default function App() {
   };
 
   const handleShareSystem = async () => {
+    try {
+      // First try to use Capacitor Native Share if supported
+      await Share.share({
+        title: t("appName"),
+        text: t("shareText"),
+        url: "https://play.google.com/store/apps/details?id=com.shotclean.myapp",
+        dialogTitle: t("shareApp"),
+      });
+      return;
+    } catch (e) {
+      console.log("Capacitor native share not available or failed, trying Web Share API...", e);
+    }
+
     if (navigator.share) {
       try {
         await navigator.share({
           title: t("appName"),
           text: t("shareText"),
-          url: window.location.origin,
+          url: "https://play.google.com/store/apps/details?id=com.shotclean.myapp",
         });
       } catch (e) {
         console.log("User cancelled web share");
       }
     } else {
-      alert(t("shareError"));
+      try {
+        await navigator.clipboard.writeText("https://play.google.com/store/apps/details?id=com.shotclean.myapp");
+        alert(t("shareText") + "\n\nLink copied to clipboard!");
+      } catch (err) {
+        alert("https://play.google.com/store/apps/details?id=com.shotclean.myapp");
+      }
     }
   };
 
   const handleRateUs = () => {
-    alert(t("rateUsAlert"));
+    const playStoreUrl = "https://play.google.com/store/apps/details?id=com.shotclean.myapp";
+    try {
+      window.open(playStoreUrl, "_system");
+    } catch (e) {
+      window.open(playStoreUrl, "_blank");
+    }
   };
 
   return (
@@ -1278,6 +1354,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
     </div>
   );
 }

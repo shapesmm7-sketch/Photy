@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.shotclean.app',
+  appId: 'com.shotclean.myapp',
   appName: 'Shot Clean',
   webDir: 'dist',
   server: {

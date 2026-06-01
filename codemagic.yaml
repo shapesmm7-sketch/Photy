@@ -3,12 +3,32 @@ workflows:
     name: Shot Clean Android Build
     max_build_duration: 60
     environment:
+      groups:
+        - Android signing
       java: 21
       node: 22
     scripts:
       - name: Install dependencies
         script: |
           npm install
+      - name: Generate and configure App Icon
+        script: |
+          echo "Setting up app launcher icon..."
+          mkdir -p assets
+          if [ -f "icon.png" ]; then
+            echo "Found custom icon.png in root directory. Copying to assets/icon.png..."
+            cp icon.png assets/icon.png
+          elif [ -f "src/assets/icon.png" ]; then
+            echo "Found custom icon.png in src/assets/icon.png. Copying to assets/icon.png..."
+            cp src/assets/icon.png assets/icon.png
+          fi
+          
+          if [ -f "assets/icon.png" ]; then
+            echo "Generating brand launcher icons with @capacitor/assets..."
+            npx -y @capacitor/assets generate --android
+          else
+            echo "No custom icon.png found yet. Defaulting to pre-configured resources."
+          fi
       - name: Build Web App
         script: |
           npm run build
@@ -19,7 +39,16 @@ workflows:
         script: |
           cd android
           echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-      - name: Build Android Debug APK
+      - name: Restore Keystore from Base64
+        script: |
+          if [ ! -z "$FAD_ANDROID_KEYSTORE" ]; then
+            echo "Decoding Keystore from FAD_ANDROID_KEYSTORE environment variable..."
+            echo "$FAD_ANDROID_KEYSTORE" | base64 --decode > android/app/shotclean.keystore
+            echo "Keystore restored successfully."
+          else
+            echo "FAD_ANDROID_KEYSTORE variable not found, using existing file if available."
+          fi
+      - name: Build Android App (Release and Debug)
         script: |
           cd android
           # Fix for potentially corrupt wrapper jarfile
@@ -28,7 +57,7 @@ workflows:
           chmod +x gradlew
           # Run sync again to ensure everything is matched with root
           npx cap sync android
-          ./gradlew clean assembleDebug --no-daemon --no-build-cache --stacktrace --info -Dorg.gradle.vfs.watch=false
+          ./gradlew clean assembleRelease bundleRelease --no-daemon --no-build-cache --stacktrace --info -Dorg.gradle.vfs.watch=false
     artifacts:
       - android/app/build/outputs/apk/**/*.apk
       - android/app/build/outputs/bundle/**/*.aab

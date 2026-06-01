@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.shotclean.app"
+    namespace = "com.shotclean.myapp"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.shotclean.app"
+        applicationId "com.shotclean.myapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -16,8 +16,27 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            def keystoreFile = file("shotclean.keystore")
+            if (System.getenv("FAD_ANDROID_KEYSTORE_PASSWORD") != null) {
+                storeFile keystoreFile
+                storePassword System.getenv("FAD_ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("FAD_ANDROID_KEY_ALIAS") ?: "shotclean"
+                keyPassword System.getenv("FAD_ANDROID_KEY_PASSWORD") ?: System.getenv("FAD_ANDROID_KEYSTORE_PASSWORD")
+            } else if (keystoreFile.exists()) {
+                storeFile keystoreFile
+                storePassword "Burubi23re%"
+                keyAlias "shotclean"
+                keyPassword "Burubi23re%"
+            }
+        }
+    }
     buildTypes {
         release {
+            if (signingConfigs.hasProperty('release')) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

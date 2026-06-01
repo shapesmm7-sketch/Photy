@@ -1,10 +1,10 @@
 export const translations = {
   en: {
     appName: "Shot Clean",
-    subtitle: "Viral screenshots, one tap away. Professional styles and memes.",
-    uploadBtn: "Upload Screenshot",
+    subtitle: "Auto screenshots/photo editor, phone layouts,Blur,crop",
+    uploadBtn: "Upload Screenshot/Photo",
     viralStylesTitle: "Viral Styles",
-    viralStylesDesc: "Professional Card & Meme Layouts",
+    viralStylesDesc: "Realistic Phone Layouts",
     enhancing: "Enhancing screenshot...",
     perfecting: "Perfecting your layout",
     editBtn: "Edit",
@@ -15,8 +15,8 @@ export const translations = {
     darkMode: "Dark Mode",
     shareApp: "Share App",
     rateUs: "Rate Us",
-    rateUsSubtitle: "Leave a 5-star review",
-    rateUsAlert: "Thank you for trying Shot Clean! If this were a live app store app, we would redirect you to leave a 5-star review!",
+    rateUsSubtitle: "Rate us on Play Store",
+    rateUsAlert: "Thank you for trying Shot Clean! Support us by leaving a review on the app store.",
     shareText: "Check out Shot Clean! I use it to transform my screenshots into viral posts.",
     shareError: "Web Share is not supported on this browser.",
     language: "Language",
@@ -38,7 +38,11 @@ export const translations = {
     adCount: "Ad ",
     adWait: "Wait ",
     nextAd: "Next Ad",
-    claimReward: "Claim Reward"
+    claimReward: "Claim Reward",
+    mobileSaveDesc: "To save directly to your phone, touch and hold (long-press) the image below and select 'Save image' or 'Download image'.",
+    mobileShareDesc: "Sharing is not supported on this device. Touch and hold (long-press) the image below and select 'Share image' to share directly.",
+    mobileDownloadRetry: "Try Standard Download Anyway",
+    mobileClose: "Close"
   },
   es: {
     appName: "Shot Clean",
@@ -56,8 +60,8 @@ export const translations = {
     darkMode: "Modo Oscuro",
     shareApp: "Compartir App",
     rateUs: "Califícanos",
-    rateUsSubtitle: "Deja una reseña de 5 estrellas",
-    rateUsAlert: "¡Gracias por probar Shot Clean! Si esto fuera una aplicación en vivo, ¡te llevaríamos a dejar una reseña!",
+    rateUsSubtitle: "Califícanos en Play Store",
+    rateUsAlert: "¡Gracias por probar Shot Clean! Apóyanos dejando una reseña en la tienda de aplicaciones.",
     shareText: "¡Mira Shot Clean! Lo uso para transformar mis capturas en posts virales.",
     shareError: "Compartir web no es compatible con este navegador.",
     language: "Idioma",
@@ -79,7 +83,11 @@ export const translations = {
     adCount: "Anuncio ",
     adWait: "Espera ",
     nextAd: "Siguiente Anuncio",
-    claimReward: "Reclamar Recompensa"
+    claimReward: "Reclamar Recompensa",
+    mobileSaveDesc: "Para guardar directamente en tu teléfono, mantén presionada la imagen de abajo y selecciona 'Guardar imagen' o 'Descargar imagen'.",
+    mobileShareDesc: "Compartir no es compatible con este dispositivo. Mantén presionada la imagen de abajo y selecciona 'Compartir imagen'.",
+    mobileDownloadRetry: "Intentar descarga estándar de todos modos",
+    mobileClose: "Cerrar"
   },
   fr: {
     appName: "Shot Clean",
@@ -97,8 +105,8 @@ export const translations = {
     darkMode: "Mode Sombre",
     shareApp: "Partager l'App",
     rateUs: "Évaluez-nous",
-    rateUsSubtitle: "Laissez un avis 5 étoiles",
-    rateUsAlert: "Merci d'avoir essayé Shot Clean !",
+    rateUsSubtitle: "Évaluez-nous sur Play Store",
+    rateUsAlert: "Merci d'avoir essayé Shot Clean ! Soutenez-nous en laissant un avis sur le store.",
     shareText: "Regardez Shot Clean ! Je l'utilise pour mes captures d'écran.",
     shareError: "Le partage web n'est pas supporté.",
     language: "Langue",
@@ -120,7 +128,11 @@ export const translations = {
     adCount: "Pub ",
     adWait: "Patientez ",
     nextAd: "Pub Suivante",
-    claimReward: "Obtenir Récompense"
+    claimReward: "Obtenir Récompense",
+    mobileSaveDesc: "Pour sauvegarder sur votre téléphone, appuyez longuement sur l'image ci-dessous et sélectionnez 'Enregistrer l'image'.",
+    mobileShareDesc: "Le partage n'est pas supporté. Appuyez longuement sur l'image ci-dessous et sélectionnez 'Partager l'image'.",
+    mobileDownloadRetry: "Essayer de télécharger quand même",
+    mobileClose: "Fermer"
   },
   de: {
     appName: "Shot Clean",
@@ -138,8 +150,8 @@ export const translations = {
     darkMode: "Dunkelmodus",
     shareApp: "App teilen",
     rateUs: "Bewerten Sie uns",
-    rateUsSubtitle: "Hinterlassen Sie 5 Sterne",
-    rateUsAlert: "Danke, dass Sie Shot Clean ausprobieren!",
+    rateUsSubtitle: "Bewerten Sie uns im Play Store",
+    rateUsAlert: "Danke, dass Sie Shot Clean ausprobieren! Unterstützen Sie uns mit einer Bewertung im App Store.",
     shareText: "Schau dir Shot Clean an!",
     shareError: "Web Share wird nicht unterstützt.",
     language: "Sprache",
@@ -161,7 +173,11 @@ export const translations = {
     adCount: "Werbung ",
     adWait: "Warte ",
     nextAd: "Nächste Werbung",
-    claimReward: "Belohnung einfordern"
+    claimReward: "Belohnung einfordern",
+    mobileSaveDesc: "Um das Bild direkt auf Ihrem Telefon zu speichern, halten Sie das Bild unten gedrückt und wählen Sie 'Bild speichern'.",
+    mobileShareDesc: "Teilen wird auf diesem Gerät nicht unterstützt. Bild unten gedrückt halten und 'Bild teilen' wählen.",
+    mobileDownloadRetry: "Trotzdem Standard-Download versuchen",
+    mobileClose: "Schließen"
   },
   hi: {
     appName: "Shot Clean",
@@ -179,8 +195,8 @@ export const translations = {
     darkMode: "डार्क मोड",
     shareApp: "ऐप शेयर करें",
     rateUs: "हमें रेट करें",
-    rateUsSubtitle: "5-स्टार रिव्यू दें",
-    rateUsAlert: "Shot Clean आज़माने के लिए धन्यवाद!",
+    rateUsSubtitle: "प्ले स्टोर पर हमें रेट करें",
+    rateUsAlert: "Shot Clean आज़माने के लिए धन्यवाद! ऐप स्टोर पर रिव्यू देकर हमारा समर्थन करें।",
     shareText: "Shot Clean देखें! मैं इसका उपयोग वायरल पोस्ट के लिए करता हूँ।",
     shareError: "वेब शेयर समर्थित नहीं है।",
     language: "भाषा",
@@ -202,7 +218,11 @@ export const translations = {
     adCount: "विज्ञापन ",
     adWait: "प्रतीक्षा करें ",
     nextAd: "अगला विज्ञापन",
-    claimReward: "रिवॉर्ड पाएं"
+    claimReward: "रिवॉर्ड पाएं",
+    mobileSaveDesc: "अपने फोन में सेव करने के लिए, नीचे दी गई इमेज को दबाकर रखें (लॉन्ग-प्रेस करें) और 'इमेज सेव करें' या 'डाउनलोड करें' चुनें।",
+    mobileShareDesc: "इस डिवाइस पर शेयर समर्थित नहीं है। नीचे दी गई इमेज को दबाकर रखें और 'इमेज शेयर करें' चुनें।",
+    mobileDownloadRetry: "फिर भी स्टैण्डर्ड डाउनलोड आज़माएं",
+    mobileClose: "बंद करें"
   },
   zh: {
     appName: "Shot Clean",
@@ -220,8 +240,8 @@ export const translations = {
     darkMode: "深色模式",
     shareApp: "分享应用",
     rateUs: "评价我们",
-    rateUsSubtitle: "留下5星好评",
-    rateUsAlert: "感谢试用Shot Clean！",
+    rateUsSubtitle: "在 Play 商店评价我们",
+    rateUsAlert: "感谢试用 Shot Clean！请在应用商店留下您的评价以支持我们。",
     shareText: "看看Shot Clean！我用它来美化截图。",
     shareError: "该浏览器不支持网络分享。",
     language: "语言",
@@ -243,7 +263,11 @@ export const translations = {
     adCount: "广告 ",
     adWait: "等待 ",
     nextAd: "下一个广告",
-    claimReward: "领取奖励"
+    claimReward: "领取奖励",
+    mobileSaveDesc: "要直接保存到手机，请长按下方图片并选择“保存图片”或“下载图片”。",
+    mobileShareDesc: "此设备不支持直接分享。请长按下方图片，然后选择“分享图片”进行分享。",
+    mobileDownloadRetry: "尝试普通下载",
+    mobileClose: "关闭"
   }
 };
 export type LanguageKey = keyof typeof translations;
