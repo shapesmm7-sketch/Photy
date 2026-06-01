@@ -25,6 +25,7 @@ interface TextItem {
   size: number;
   positionMode: "Top" | "Default" | "Bottom";
   fontName: string;
+  rotation?: number;
 }
 
 const fontNames = ["Default", "Serif", "SansSerif", "Monospace", "Cursive"];
@@ -132,6 +133,13 @@ export default function EditorCanvas({
   const zoomInitialScaleRef = useRef<number>(1);
   const zoomInitialDistanceRef = useRef<number | null>(null);
   const isPinchZoomingRef = useRef<boolean>(false);
+  
+  const isPinchingTextRef = useRef<boolean>(false);
+  const textInitialAngleRef = useRef<number>(0);
+  const textInitialBaseRotationRef = useRef<number>(0);
+  const textInitialMidpointRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const textInitialPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
   const editorLastTapRef = useRef<number>(0);
 
   // Drawing state
@@ -199,6 +207,7 @@ export default function EditorCanvas({
   const [currentTextSize, setCurrentTextSize] = useState(80);
   const [currentTextColor, setCurrentTextColor] = useState("#FFFFFF");
   const [currentTextFont, setCurrentTextFont] = useState("Default");
+  const [currentTextRotation, setCurrentTextRotation] = useState(0);
 
   // Text drag & double-tap states
   const [draggingTextIndex, setDraggingTextIndex] = useState<number | null>(
@@ -572,11 +581,19 @@ export default function EditorCanvas({
 
         ctx.textAlign = "center";
 
+        ctx.save();
+        ctx.translate(t.x, t.y);
+        if (t.rotation) {
+          ctx.rotate(t.rotation);
+        }
+
         // Draw dark readable outline behind text
         ctx.strokeStyle = "#000000";
         ctx.lineWidth = Math.max(2, t.size * 0.08);
-        ctx.strokeText(t.text, t.x, t.y);
-        ctx.fillText(t.text, t.x, t.y);
+        ctx.strokeText(t.text, 0, 0);
+        ctx.fillText(t.text, 0, 0);
+        
+        ctx.restore();
       });
 
       // Draw temporary preview text if modal is open
@@ -599,12 +616,20 @@ export default function EditorCanvas({
         ctx.font = `bold ${size}px ${fontStr}`;
         ctx.textAlign = "center";
 
+        ctx.save();
+        ctx.translate(x, y);
+        if (currentTextRotation) {
+          ctx.rotate(currentTextRotation);
+        }
+
         // Draw dark readable outline behind temporary preview text
         ctx.strokeStyle = "#000000";
         ctx.lineWidth = Math.max(2, size * 0.08);
-        ctx.strokeText(currentText, x, y);
+        ctx.strokeText(currentText, 0, 0);
 
-        ctx.fillText(currentText, x, y);
+        ctx.fillText(currentText, 0, 0);
+        ctx.restore();
+        
         ctx.globalAlpha = 1.0;
       }
     }
@@ -738,14 +763,30 @@ export default function EditorCanvas({
 
   const handlePointerDown = (e: React.MouseEvent | React.TouchEvent) => {
     if ("touches" in e && e.touches.length === 2) {
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+
+      if (draggingTextIndex !== null) {
+        isPinchingTextRef.current = true;
+        textInitialAngleRef.current = Math.atan2(touch2.clientY - touch1.clientY, touch2.clientX - touch1.clientX);
+        textInitialBaseRotationRef.current = texts[draggingTextIndex].rotation || 0;
+        textInitialMidpointRef.current = {
+          x: (touch1.clientX + touch2.clientX) / 2,
+          y: (touch1.clientY + touch2.clientY) / 2
+        };
+        textInitialPosRef.current = {
+          x: texts[draggingTextIndex].x,
+          y: texts[draggingTextIndex].y
+        };
+        return;
+      }
+
       isPinchZoomingRef.current = true;
       setIsDrawing(false);
       currentPathRef.current = null;
       drawingPointsRef.current = [];
       setSuggestedShape(null);
 
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
       const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
       zoomInitialDistanceRef.current = dist;
       zoomInitialScaleRef.current = zoomScale;
@@ -819,6 +860,7 @@ export default function EditorCanvas({
         setCurrentTextColor(t.color);
         setCurrentTextSize(t.size);
         setCurrentTextFont(t.fontName);
+        setCurrentTextRotation(t.rotation || 0);
         setTextPositionMode(t.positionMode);
         setActiveTool("text");
         setShowTextModal(true);
@@ -946,14 +988,45 @@ export default function EditorCanvas({
   const handlePointerMove = (e: React.MouseEvent | React.TouchEvent) => {
     if ("touches" in e && e.touches.length === 2) {
       e.preventDefault();
+
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+
+      if (isPinchingTextRef.current && draggingTextIndex !== null) {
+        const currentAngle = Math.atan2(touch2.clientY - touch1.clientY, touch2.clientX - touch1.clientX);
+        const deltaAngle = currentAngle - textInitialAngleRef.current;
+        
+        const rect = canvasRef.current!.getBoundingClientRect();
+        const scaleX = canvasRef.current!.width / rect.width;
+        const scaleY = canvasRef.current!.height / rect.height;
+
+        const currentMidpoint = {
+          x: (touch1.clientX + touch2.clientX) / 2,
+          y: (touch1.clientY + touch2.clientY) / 2
+        };
+
+        const deltaX = (currentMidpoint.x - textInitialMidpointRef.current.x) * scaleX;
+        const deltaY = (currentMidpoint.y - textInitialMidpointRef.current.y) * scaleY;
+        
+        const nextTexts = [...texts];
+        if (nextTexts[draggingTextIndex]) {
+          nextTexts[draggingTextIndex] = {
+            ...nextTexts[draggingTextIndex],
+            x: textInitialPosRef.current.x + deltaX,
+            y: textInitialPosRef.current.y + deltaY,
+            rotation: textInitialBaseRotationRef.current + deltaAngle,
+          };
+        }
+        setTexts(nextTexts);
+        redraw(undefined, undefined, nextTexts);
+        return;
+      }
+
       isPinchZoomingRef.current = true;
       setIsDrawing(false);
       currentPathRef.current = null;
       drawingPointsRef.current = [];
       setSuggestedShape(null);
-
-      const touch1 = e.touches[0];
-      const touch2 = e.touches[1];
       if (zoomInitialDistanceRef.current && zoomStartRef.current) {
         const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
         const factor = dist / zoomInitialDistanceRef.current;
@@ -1070,6 +1143,8 @@ export default function EditorCanvas({
   };
 
   const handlePointerUp = (e?: React.MouseEvent | React.TouchEvent) => {
+    isPinchingTextRef.current = false;
+    
     if (e && "touches" in e) {
       if (e.touches.length === 0) {
         if (isPinchZoomingRef.current) {
@@ -1110,6 +1185,7 @@ export default function EditorCanvas({
       activeTool === "crop" &&
       originalImageRef.current
     ) {
+      let newRect: { x: number; y: number; w: number; h: number } | null = null;
       if (cropDragModeRef.current === "new" && cropStartRef.current && cropEndRef.current) {
         const sx = Math.min(cropStartRef.current.x, cropEndRef.current.x);
         const sy = Math.min(cropStartRef.current.y, cropEndRef.current.y);
@@ -1124,19 +1200,43 @@ export default function EditorCanvas({
           const wVal = Math.max(20, Math.min(img.width - xCoord, Math.round(w)));
           const hVal = Math.max(20, Math.min(img.height - yCoord, Math.round(h)));
   
-          setCropRect({ x: xCoord, y: yCoord, w: wVal, h: hVal });
-          setPaths([]); // paths will be misaligned
+          newRect = { x: xCoord, y: yCoord, w: wVal, h: hVal };
         }
       } else if (cropDragModeRef.current !== "new" && tempCropRectRef.current) {
-         setCropRect(tempCropRectRef.current);
-         setPaths([]);
+         newRect = tempCropRectRef.current;
+      }
+      
+      if (newRect && cropRect) {
+        const dx = cropRect.x - newRect.x;
+        const dy = cropRect.y - newRect.y;
+
+        if (dx !== 0 || dy !== 0) {
+          // Shift texts
+          const nextTexts = texts.map((t) => ({ ...t, x: t.x + dx, y: t.y + dy }));
+          setTexts(nextTexts);
+
+          // Shift paths
+          const nextPaths = paths.map((p) => {
+            const nextPoints = p.points.map((pt) => ({ x: pt.x + dx, y: pt.y + dy }));
+            const path2d = new Path2D();
+            if (nextPoints.length > 0) {
+              path2d.moveTo(nextPoints[0].x, nextPoints[0].y);
+              for (let i = 1; i < nextPoints.length; i++) {
+                path2d.lineTo(nextPoints[i].x, nextPoints[i].y);
+              }
+            }
+            return { ...p, points: nextPoints, path2d };
+          });
+          setPaths(nextPaths);
+        }
+
+        setCropRect(newRect);
       }
       
       cropStartRef.current = null;
       cropEndRef.current = null;
       tempCropRectRef.current = null;
       cropDragModeRef.current = "none";
-      // Removed setActiveTool("none") so user can preview crop and do more modifications before save
     } else if (currentPathRef.current && canvasRef.current) {
       const color =
         activeTool === "draw" ? selectedDrawColor : selectedBlurColor;
@@ -1197,6 +1297,7 @@ export default function EditorCanvas({
       size: currentTextSize,
       positionMode: textPositionMode,
       fontName: currentTextFont,
+      rotation: currentTextRotation,
     };
 
     let finalTexts;
@@ -1212,6 +1313,7 @@ export default function EditorCanvas({
 
     setEditingTextIndex(-1);
     setShowTextModal(false);
+    setActiveTool("none");
     setCurrentText("");
     redraw(undefined, undefined, finalTexts);
   };
@@ -1226,6 +1328,7 @@ export default function EditorCanvas({
     }
     setEditingTextIndex(-1);
     setShowTextModal(false);
+    setActiveTool("none");
     setCurrentText("");
     redraw(undefined, undefined, finalTexts);
   };
@@ -1410,29 +1513,35 @@ export default function EditorCanvas({
       <div className="flex justify-around items-center p-4 bg-[#111] pb-safe z-10 border-t border-white/10">
         <ToolButton
           active={activeTool === "crop"}
-          onClick={() => setActiveTool("crop")}
+          onClick={() => setActiveTool(activeTool === "crop" ? "none" : "crop")}
           icon={<Crop />}
           label="Crop"
         />
         <ToolButton
           active={activeTool === "draw"}
-          onClick={() => setActiveTool("draw")}
+          onClick={() => setActiveTool(activeTool === "draw" ? "none" : "draw")}
           icon={<PenTool />}
           label="Draw"
         />
         <ToolButton
           active={activeTool === "blur"}
-          onClick={() => setActiveTool("blur")}
+          onClick={() => setActiveTool(activeTool === "blur" ? "none" : "blur")}
           icon={<Droplets />}
           label="Blur"
         />
         <ToolButton
           active={activeTool === "text"}
           onClick={() => {
-            setActiveTool("text");
-            setCurrentText("");
-            setTextPositionMode("Default");
-            setShowTextModal(true);
+            if (activeTool === "text") {
+              setActiveTool("none");
+              setShowTextModal(false);
+            } else {
+              setActiveTool("text");
+              setCurrentText("");
+              setCurrentTextRotation(0);
+              setTextPositionMode("Default");
+              setShowTextModal(true);
+            }
           }}
           icon={<Type />}
           label="Text"
@@ -1627,6 +1736,22 @@ export default function EditorCanvas({
                   />
                 </div>
 
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
+                    Rotation
+                  </label>
+                  <input
+                    type="range"
+                    min="-180"
+                    max="180"
+                    value={Math.round((currentTextRotation * 180) / Math.PI)}
+                    onChange={(e) =>
+                      setCurrentTextRotation((Number(e.target.value) * Math.PI) / 180)
+                    }
+                    className="w-full mt-2"
+                  />
+                </div>
+
                 <div className="space-y-2">
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
                     Position
@@ -1692,6 +1817,7 @@ export default function EditorCanvas({
                     onClick={() => {
                       setShowTextModal(false);
                       setEditingTextIndex(-1);
+                      setActiveTool("none");
                     }}
                     className="flex-1 py-2 bg-gray-200 text-gray-700 hover:bg-gray-300 rounded-xl font-bold text-sm"
                   >

@@ -834,9 +834,16 @@ export async function applyStyle(
 
         // Base dimensions for the card content
         const cropLeft = customCropRect ? customCropRect.x : 0;
-        const cropTop = customCropRect ? customCropRect.y : Math.round(img.height * 0.04);
+        const cropTop = customCropRect
+          ? customCropRect.y
+          : Math.round(img.height * 0.04);
         const croppedWidth = customCropRect ? customCropRect.w : img.width;
-        const croppedHeight = customCropRect ? customCropRect.h : Math.max(1, Math.round(img.height - (img.height * 0.04) - (img.height * 0.05)));
+        const croppedHeight = customCropRect
+          ? customCropRect.h
+          : Math.max(
+              1,
+              Math.round(img.height - img.height * 0.04 - img.height * 0.05),
+            );
 
         // Processing on source canvas
         const sourceCanvas = document.createElement("canvas");
@@ -926,10 +933,18 @@ export async function applyStyle(
         }
 
         // Final Canvas Setup
-        const basePaddingFactor =
-          layout.name !== "None"
-            ? Math.max(config.paddingFactor, 0.25)
-            : config.paddingFactor;
+        let basePaddingFactor = config.paddingFactor;
+        let baseRadiusFactor = config.cornerRadiusFactor;
+        let baseShadowAlpha = config.shadowAlpha;
+        if (layout.name !== "None") {
+          basePaddingFactor = Math.max(config.paddingFactor, 0.25);
+        } else if (customBg && styleName === "Original") {
+          // Add default padding if custom background color is selected on Original style without layout
+          basePaddingFactor = 0.15;
+          baseRadiusFactor = 0.04;
+          baseShadowAlpha = 0.15;
+        }
+
         const padding =
           Math.max(croppedWidth, croppedHeight) * basePaddingFactor;
 
@@ -978,9 +993,8 @@ export async function applyStyle(
 
         // Decorative lines for layouts removed per user request
 
-
         const radius =
-          Math.max(croppedWidth, croppedHeight) * config.cornerRadiusFactor;
+          Math.max(croppedWidth, croppedHeight) * baseRadiusFactor;
 
         // Main drawing
         if (layout.name === "None") {
@@ -1021,9 +1035,9 @@ export async function applyStyle(
             }
           }
 
-          if (config.shadowAlpha > 0) {
+          if (baseShadowAlpha > 0) {
             ctx.save();
-            ctx.shadowColor = `rgba(0, 0, 0, ${config.shadowAlpha})`;
+            ctx.shadowColor = `rgba(0, 0, 0, ${baseShadowAlpha})`;
             ctx.shadowBlur = canvas.width * 0.03;
             ctx.shadowOffsetY = canvas.width * 0.015;
             ctx.beginPath();
@@ -1193,7 +1207,7 @@ export async function burnEditsToImage(
         const drawBlurredPathLocal = (
           pathPoints: { x: number; y: number }[],
           width: number,
-          color: string | undefined
+          color: string | undefined,
         ) => {
           if (!blurCanvas) return;
           const scratch = document.createElement("canvas");
@@ -1285,10 +1299,15 @@ export async function burnEditsToImage(
 
           ctx.textAlign = "center";
 
+          ctx.translate(t.x, t.y);
+          if (t.rotation) {
+            ctx.rotate(t.rotation);
+          }
+
           ctx.strokeStyle = "#000000";
           ctx.lineWidth = Math.max(2, t.size * 0.08);
-          ctx.strokeText(t.text, t.x, t.y);
-          ctx.fillText(t.text, t.x, t.y);
+          ctx.strokeText(t.text, 0, 0);
+          ctx.fillText(t.text, 0, 0);
           ctx.restore();
         });
 

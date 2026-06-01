@@ -105,7 +105,12 @@ export default function App() {
   const [cleanImage, setCleanImage] = useState<string | null>(null); // Clean version for editor (un-baked)
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [baseStyledImage, setBaseStyledImage] = useState<string | null>(null);
-  const [customCropRect, setCustomCropRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [customCropRect, setCustomCropRect] = useState<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
   const [showEditor, setShowEditor] = useState(false);
 
   // NEW STATES
@@ -122,6 +127,9 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [language, setLanguage] = useState<LanguageKey>("en");
+  const [activeTab, setActiveTab] = useState<"styles" | "layouts" | "colors">(
+    "layouts",
+  );
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [selectedPremiumPlan, setSelectedPremiumPlan] = useState<
     "monthly" | "6months" | "12months"
@@ -150,7 +158,10 @@ export default function App() {
   const handleTouchStart = (e: React.TouchEvent) => {
     const now = Date.now();
     const DOUBLE_TAP_DELAY = 300;
-    if (now - zoomLastTapRef.current < DOUBLE_TAP_DELAY && e.touches.length === 1) {
+    if (
+      now - zoomLastTapRef.current < DOUBLE_TAP_DELAY &&
+      e.touches.length === 1
+    ) {
       handleDoubleTap(e.touches[0].clientX, e.touches[0].clientY);
       zoomLastTapRef.current = 0;
       return;
@@ -160,17 +171,20 @@ export default function App() {
     if (e.touches.length === 1) {
       zoomStartRef.current = {
         x: e.touches[0].clientX - zoomOffset.x,
-        y: e.touches[0].clientY - zoomOffset.y
+        y: e.touches[0].clientY - zoomOffset.y,
       };
     } else if (e.touches.length === 2) {
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
-      const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+      const dist = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY,
+      );
       zoomInitialDistanceRef.current = dist;
       zoomInitialScaleRef.current = zoomScale;
       zoomStartRef.current = {
-        x: ((touch1.clientX + touch2.clientX) / 2) - zoomOffset.x,
-        y: ((touch1.clientY + touch2.clientY) / 2) - zoomOffset.y
+        x: (touch1.clientX + touch2.clientX) / 2 - zoomOffset.x,
+        y: (touch1.clientY + touch2.clientY) / 2 - zoomOffset.y,
       };
     }
   };
@@ -181,15 +195,25 @@ export default function App() {
       const touch = e.touches[0];
       setZoomOffset({
         x: touch.clientX - zoomStartRef.current.x,
-        y: touch.clientY - zoomStartRef.current.y
+        y: touch.clientY - zoomStartRef.current.y,
       });
-    } else if (e.touches.length === 2 && zoomInitialDistanceRef.current && zoomStartRef.current) {
+    } else if (
+      e.touches.length === 2 &&
+      zoomInitialDistanceRef.current &&
+      zoomStartRef.current
+    ) {
       if (e.cancelable) e.preventDefault();
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
-      const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+      const dist = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY,
+      );
       const factor = dist / zoomInitialDistanceRef.current;
-      const newScale = Math.max(1, Math.min(4, zoomInitialScaleRef.current * factor));
+      const newScale = Math.max(
+        1,
+        Math.min(4, zoomInitialScaleRef.current * factor),
+      );
       setZoomScale(newScale);
 
       if (newScale > 1) {
@@ -197,7 +221,7 @@ export default function App() {
         const midY = (touch1.clientY + touch2.clientY) / 2;
         setZoomOffset({
           x: midX - zoomStartRef.current.x,
-          y: midY - zoomStartRef.current.y
+          y: midY - zoomStartRef.current.y,
         });
       } else {
         setZoomOffset({ x: 0, y: 0 });
@@ -217,7 +241,7 @@ export default function App() {
       const touch = e.touches[0];
       zoomStartRef.current = {
         x: touch.clientX - zoomOffset.x,
-        y: touch.clientY - zoomOffset.y
+        y: touch.clientY - zoomOffset.y,
       };
       zoomInitialDistanceRef.current = null;
     }
@@ -233,7 +257,7 @@ export default function App() {
       setIsMouseDragging(true);
       zoomStartRef.current = {
         x: e.clientX - zoomOffset.x,
-        y: e.clientY - zoomOffset.y
+        y: e.clientY - zoomOffset.y,
       };
     }
   };
@@ -242,7 +266,7 @@ export default function App() {
     if (isMouseDragging && zoomStartRef.current) {
       setZoomOffset({
         x: e.clientX - zoomStartRef.current.x,
-        y: e.clientY - zoomStartRef.current.y
+        y: e.clientY - zoomStartRef.current.y,
       });
     }
   };
@@ -289,26 +313,31 @@ export default function App() {
       )
         .then((res) => {
           setBaseStyledImage(res);
-          
+
           // Only clear manual edits if structural options actually changed in the sidebar
           const styleChanged = prevStyleRef.current !== selectedStyle;
           const layoutChanged = prevLayoutRef.current !== selectedLayout;
           const bgChanged = prevBgRef.current !== customBgColor;
-          const originalImageChanged = prevOriginalImageRef.current !== originalImage;
+          const originalImageChanged =
+            prevOriginalImageRef.current !== originalImage;
 
           if (originalImageChanged) {
             setEditorPaths([]);
             setEditorTexts([]);
             setProcessedImage(res);
           } else if (styleChanged || layoutChanged || bgChanged) {
-            burnEditsToImage(res, editorPaths, editorTexts).then((finalCombined) => {
-              setProcessedImage(finalCombined);
-            });
+            burnEditsToImage(res, editorPaths, editorTexts).then(
+              (finalCombined) => {
+                setProcessedImage(finalCombined);
+              },
+            );
           } else {
             if (editorPaths.length > 0 || editorTexts.length > 0) {
-              burnEditsToImage(res, editorPaths, editorTexts).then((finalCombined) => {
-                setProcessedImage(finalCombined);
-              });
+              burnEditsToImage(res, editorPaths, editorTexts).then(
+                (finalCombined) => {
+                  setProcessedImage(finalCombined);
+                },
+              );
             } else {
               setProcessedImage(res);
             }
@@ -342,6 +371,8 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setActiveTab("layouts");
+
     const reader = new FileReader();
     reader.onload = async (event) => {
       const img = new Image();
@@ -372,16 +403,16 @@ export default function App() {
         const resizedResult = canvas.toDataURL("image/jpeg", 0.9);
         setOriginalImage(resizedResult);
         setCleanImage(resizedResult);
-        
+
         const topH = Math.round(height * 0.04);
         const bottomH = Math.round(height * 0.05);
         setCustomCropRect({
           x: 0,
           y: topH,
           w: width,
-          h: height - topH - bottomH
+          h: height - topH - bottomH,
         });
-        
+
         setAppState("processing");
 
         setTimeout(() => {
@@ -402,25 +433,30 @@ export default function App() {
       try {
         const NativeMedia = registerPlugin<any>("NativeMedia");
         await NativeMedia.saveImage({ base64: processedImage });
-        alert("Image saved directly to your phone gallery under 'Pictures/MyApp'!");
+        alert(
+          "Image saved directly to your phone gallery under 'Pictures/MyApp'!",
+        );
         return;
       } catch (nativeErr: any) {
-        console.error("Native save failed, trying Web download fallback:", nativeErr);
+        console.error(
+          "Native save failed, trying Web download fallback:",
+          nativeErr,
+        );
       }
     }
 
     try {
       // Direct binary Blob conversion to make saving highly compatible with Android WebView and iOS Mobile browsers
-      const parts = processedImage.split(';base64,');
-      const contentType = parts[0].split(':')[1];
+      const parts = processedImage.split(";base64,");
+      const contentType = parts[0].split(":")[1];
       const raw = window.atob(parts[1]);
       const rawLength = raw.length;
       const uInt8Array = new Uint8Array(rawLength);
-      
+
       for (let i = 0; i < rawLength; ++i) {
         uInt8Array[i] = raw.charCodeAt(i);
       }
-      
+
       const blob = new Blob([uInt8Array], { type: contentType });
       const blobUrl = URL.createObjectURL(blob);
 
@@ -436,7 +472,10 @@ export default function App() {
         URL.revokeObjectURL(blobUrl);
       }, 3000);
     } catch (e) {
-      console.warn("Blob conversion failed, attempting direct base64 download fallback", e);
+      console.warn(
+        "Blob conversion failed, attempting direct base64 download fallback",
+        e,
+      );
       const link = document.createElement("a");
       link.href = processedImage;
       link.download = "edited_screenshot.png";
@@ -463,7 +502,10 @@ export default function App() {
         await NativeMedia.shareImage({ base64: processedImage });
         return;
       } catch (nativeErr: any) {
-        console.error("Native share failed, trying Web share fallback:", nativeErr);
+        console.error(
+          "Native share failed, trying Web share fallback:",
+          nativeErr,
+        );
       }
     }
 
@@ -475,7 +517,11 @@ export default function App() {
       });
 
       // Attempt the full Web Share API for native file sharing
-      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (
+        navigator.share &&
+        navigator.canShare &&
+        navigator.canShare({ files: [file] })
+      ) {
         await navigator.share({
           files: [file],
           title: "Edited Screenshot",
@@ -485,7 +531,7 @@ export default function App() {
         await navigator.share({
           title: "Edited Screenshot",
           text: "Check out my screenshot edited with Shot Clean!",
-          url: window.location.origin
+          url: window.location.origin,
         });
       } else {
         // Ultimate fallback: save to clipboard + trigger direct download
@@ -493,8 +539,8 @@ export default function App() {
           try {
             await navigator.clipboard.write([
               new ClipboardItem({
-                [blob.type]: blob
-              })
+                [blob.type]: blob,
+              }),
             ]);
             console.log("Screenshot copied to clipboard as share fallback.");
           } catch (clipErr) {
@@ -528,7 +574,10 @@ export default function App() {
       });
       return;
     } catch (e) {
-      console.log("Capacitor native share not available or failed, trying Web Share API...", e);
+      console.log(
+        "Capacitor native share not available or failed, trying Web Share API...",
+        e,
+      );
     }
 
     if (navigator.share) {
@@ -543,16 +592,21 @@ export default function App() {
       }
     } else {
       try {
-        await navigator.clipboard.writeText("https://play.google.com/store/apps/details?id=com.shotclean.myapp");
+        await navigator.clipboard.writeText(
+          "https://play.google.com/store/apps/details?id=com.shotclean.myapp",
+        );
         alert(t("shareText") + "\n\nLink copied to clipboard!");
       } catch (err) {
-        alert("https://play.google.com/store/apps/details?id=com.shotclean.myapp");
+        alert(
+          "https://play.google.com/store/apps/details?id=com.shotclean.myapp",
+        );
       }
     }
   };
 
   const handleRateUs = () => {
-    const playStoreUrl = "https://play.google.com/store/apps/details?id=com.shotclean.myapp";
+    const playStoreUrl =
+      "https://play.google.com/store/apps/details?id=com.shotclean.myapp";
     try {
       window.open(playStoreUrl, "_system");
     } catch (e) {
@@ -564,8 +618,6 @@ export default function App() {
     <div
       className={`min-h-screen font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col ${isNative ? "" : "pt-safe"} ${isDarkMode ? "bg-slate-900 text-white" : "bg-blue-600 text-gray-900"}`}
     >
-
-
       <AnimatePresence mode="wait">
         {/* ... upload and processing screens same ... */}
         {appState === "upload" && (
@@ -678,7 +730,7 @@ export default function App() {
                 <X className="w-4 h-4" />
               </button>
 
-              <div 
+              <div
                 className="relative h-full w-full flex items-center justify-center"
                 style={{ touchAction: "none" }}
                 onTouchStart={handleTouchStart}
@@ -693,11 +745,16 @@ export default function App() {
                 <img
                   src={processedImage}
                   className={`max-h-full max-w-full object-contain rounded-xl shadow-xl ${
-                    zoomScale > 1.1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in"
+                    zoomScale > 1.1
+                      ? "cursor-grab active:cursor-grabbing"
+                      : "cursor-zoom-in"
                   }`}
                   style={{
                     transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoomScale})`,
-                    transition: isMouseDragging || zoomStartRef.current ? "none" : "transform 0.15s ease-out",
+                    transition:
+                      isMouseDragging || zoomStartRef.current
+                        ? "none"
+                        : "transform 0.15s ease-out",
                     transformOrigin: "center center",
                   }}
                   alt="Preview"
@@ -723,231 +780,270 @@ export default function App() {
             <div className="h-[30%] max-h-[30%] shrink-0 bg-white flex flex-col justify-between overflow-hidden p-2.5">
               {/* Selectors Wrapper: Scrollable to avoid overflow on tiny screens */}
               <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 mt-0.5">
-                {/* Viral Styles */}
-                <div>
-                  <div className="flex items-center gap-1 mb-1 px-1">
-                    <Palette className="w-3 h-3 text-gray-400" />
-                    <span className="text-[8px] font-black text-gray-400 tracking-wider uppercase">
-                      {t("viralStylesTitle")}
-                    </span>
-                  </div>
-                  <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar items-center px-1">
-                    {Object.keys(Styles).map((style) => {
-                      const isSelected = selectedStyle === style;
-
-                      return (
-                        <button
-                          key={style}
-                          onClick={() => {
-                            setSelectedStyle(style);
-                            setCustomBgColor(null);
-                          }}
-                          className="flex flex-col items-center gap-1 shrink-0 group"
-                        >
-                          <div
-                            className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center text-xs font-black transition-all border ${isSelected ? "border-blue-600 scale-105 shadow-md shadow-blue-50" : "border-gray-100"} ${
-                              style === "Original"
-                                ? "bg-white"
-                                : style === "Minimal"
-                                  ? "bg-[#F8FAFC]"
-                                  : style === "Dark"
-                                    ? "bg-[#0F172A]"
-                                    : style === "Instagram"
-                                      ? "bg-gradient-to-br from-[#f09433] via-[#dc2743] to-[#bc1888]"
-                                      : style === "Shadow"
-                                        ? "bg-[#E2E8F0]"
-                                        : style === "Meme"
-                                          ? "bg-black"
-                                          : style === "Money"
-                                            ? "bg-[#065F46]"
-                                            : style === "Focus"
-                                              ? "bg-[#1F2937]"
-                                              : style === "Viral"
-                                                ? "bg-red-500"
-                                                : style === "Chat"
-                                                  ? "bg-[#ECFDF5]"
-                                                  : "bg-[#F1F5F9]"
-                            }`}
-                          >
-                            <span
-                              className={`${style === "Dark" || style === "Money" || style === "Focus" || style === "Instagram" || style === "Meme" || style === "Viral" ? "text-white" : "text-gray-900"}`}
-                            >
-                              {style[0]}
-                            </span>
-                          </div>
-                          <span
-                            className={`text-[8px] leading-none ${isSelected ? "text-blue-600 font-bold" : "text-gray-400 font-medium"}`}
-                          >
-                            {style}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                {/* Tabs for Organization */}
+                <div className="flex w-full rounded-full bg-slate-100/80 p-1 mb-2 shrink-0 border border-slate-200/60 shadow-inner">
+                  <button
+                    onClick={() => setActiveTab("styles")}
+                    className={`flex-1 rounded-full py-1.5 text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                      activeTab === "styles"
+                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 scale-100"
+                        : "text-blue-600 bg-blue-100/50 hover:bg-blue-100 hover:text-blue-700 scale-95"
+                    }`}
+                  >
+                    <Palette className="w-3.5 h-3.5" />
+                    {t("viralStylesTitle")}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("layouts")}
+                    className={`flex-1 rounded-full py-1.5 text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                      activeTab === "layouts"
+                        ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/25 scale-100"
+                        : "text-emerald-600 bg-emerald-100/50 hover:bg-emerald-100 hover:text-emerald-700 scale-95"
+                    }`}
+                  >
+                    <Smartphone className="w-3.5 h-3.5" />
+                    {t("phoneLayouts")}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("colors")}
+                    className={`flex-1 rounded-full py-1.5 text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                      activeTab === "colors"
+                        ? "bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow-md shadow-rose-500/25 scale-100"
+                        : "text-rose-600 bg-rose-100/50 hover:bg-rose-100 hover:text-rose-700 scale-95"
+                    }`}
+                  >
+                    <PaintBucket className="w-3.5 h-3.5" />
+                    {t("canvasColor")}
+                  </button>
                 </div>
 
-                {/* Phone Layouts */}
-                <div>
-                  <div className="flex items-center gap-1 mb-1 px-1">
-                    <Smartphone className="w-3 h-3 text-gray-400" />
-                    <span className="text-[8px] font-black text-gray-400 tracking-wider uppercase">
-                      {t("phoneLayouts")}
-                    </span>
-                  </div>
-                  <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar px-1 items-center">
-                    {Object.keys(PhoneLayouts).map((layoutName) => {
-                      const isSelected = selectedLayout === layoutName;
-                      const config = PhoneLayouts[layoutName];
+                {activeTab === "styles" && (
+                  <div>
+                    {/* Viral Styles */}
+                    <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar items-center px-1">
+                      {Object.keys(Styles).map((style) => {
+                        const isSelected = selectedStyle === style;
 
-                      return (
+                        return (
+                          <button
+                            key={style}
+                            onClick={() => {
+                              setSelectedStyle(style);
+                              setCustomBgColor(null);
+                            }}
+                            className="flex flex-col items-center gap-1 shrink-0 group"
+                          >
+                            <div
+                              className={`w-7.5 h-7.5 rounded-lg flex items-center justify-center text-xs font-black transition-all border ${isSelected ? "border-blue-600 scale-105 shadow-md shadow-blue-50" : "border-gray-100"} ${
+                                style === "Original"
+                                  ? "bg-white"
+                                  : style === "Minimal"
+                                    ? "bg-[#F8FAFC]"
+                                    : style === "Dark"
+                                      ? "bg-[#0F172A]"
+                                      : style === "Instagram"
+                                        ? "bg-gradient-to-br from-[#f09433] via-[#dc2743] to-[#bc1888]"
+                                        : style === "Shadow"
+                                          ? "bg-[#E2E8F0]"
+                                          : style === "Meme"
+                                            ? "bg-black"
+                                            : style === "Money"
+                                              ? "bg-[#065F46]"
+                                              : style === "Focus"
+                                                ? "bg-[#1F2937]"
+                                                : style === "Viral"
+                                                  ? "bg-red-500"
+                                                  : style === "Chat"
+                                                    ? "bg-[#ECFDF5]"
+                                                    : "bg-[#F1F5F9]"
+                              }`}
+                            >
+                              <span
+                                className={`${style === "Dark" || style === "Money" || style === "Focus" || style === "Instagram" || style === "Meme" || style === "Viral" ? "text-white" : "text-gray-900"}`}
+                              >
+                                {style[0]}
+                              </span>
+                            </div>
+                            <span
+                              className={`text-[8px] leading-none ${isSelected ? "text-blue-600 font-bold" : "text-gray-400 font-medium"}`}
+                            >
+                              {style}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "layouts" && (
+                  <div>
+                    {/* Phone Layouts */}
+                    <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar px-1 items-center">
+                      {Object.keys(PhoneLayouts).map((layoutName) => {
+                        const isSelected = selectedLayout === layoutName;
+                        const config = PhoneLayouts[layoutName];
+
+                        return (
+                          <button
+                            key={layoutName}
+                            onClick={() => {
+                              setSelectedLayout(layoutName);
+                              setCustomBgColor(null);
+                              if (
+                                layoutName !== "None" &&
+                                selectedStyle !== "Original"
+                              ) {
+                                setSelectedStyle("Original");
+                              }
+                            }}
+                            className="flex flex-col items-center gap-1 shrink-0 group relative"
+                          >
+                            <div
+                              style={{ backgroundColor: config.themeColor }}
+                              className={`w-7 h-10 rounded-lg flex flex-col items-center justify-center transition-all border ${isSelected ? "border-white ring-1 ring-blue-600 scale-105 shadow-md" : "border-black/5 hover:border-black/10 shadow-sm opacity-90 hover:opacity-100"}`}
+                            >
+                              {layoutName === "None" ? (
+                                <X
+                                  className={`w-3.5 h-3.5 ${layoutName === "None" && config.themeColor === "#f3f4f6" ? "text-gray-400" : "text-white"}`}
+                                />
+                              ) : (
+                                <div
+                                  style={{
+                                    transform: config.rotation
+                                      ? `rotate(${config.rotation}deg)`
+                                      : "none",
+                                    aspectRatio: config.isLandscape
+                                      ? "16/9"
+                                      : "9/16",
+                                  }}
+                                  className={`bg-slate-900 rounded-[2px] border border-white/20 shadow relative flex flex-col items-center justify-center ${config.isLandscape ? "w-5 h-3" : "w-3.5 h-6"}`}
+                                >
+                                  <div className="w-[85%] h-[85%] bg-blue-500/20 rounded-[1px] flex items-center justify-center">
+                                    <div className="w-[60%] h-[10%] bg-blue-400/40 rounded-full" />
+                                  </div>
+                                  {!config.isLandscape && (
+                                    <div className="absolute top-[1px] w-[30%] h-[1px] bg-black rounded-full" />
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <span
+                              className={`text-[7px] leading-none uppercase tracking-tighter ${isSelected ? "text-blue-600 font-extrabold" : "text-gray-400 font-bold"}`}
+                            >
+                              {layoutName}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "colors" && (
+                  <div>
+                    {/* Canvas Color */}
+                    <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar px-1 items-center">
+                      <button
+                        onClick={() => setCustomBgColor(null)}
+                        className="flex flex-col items-center gap-1 shrink-0 group relative"
+                      >
+                        <div
+                          className={`w-6.5 h-6.5 rounded-full flex items-center justify-center transition-all border bg-gray-100 ${customBgColor === null ? "border-blue-600 ring-1 ring-blue-600 scale-105 shadow-sm" : "border-gray-200"}`}
+                        >
+                          <X className="w-3 h-3 text-gray-500" />
+                        </div>
+                      </button>
+
+                      {/* Custom Color Picker */}
+                      <div className="flex flex-col items-center gap-1 shrink-0 group relative">
+                        <div
+                          className={`w-6.5 h-6.5 rounded-full transition-all border shadow-sm relative flex items-center justify-center cursor-pointer hover:scale-105 ${
+                            customBgColor &&
+                            !EXTENDED_PALETTE.includes(
+                              customBgColor.toUpperCase(),
+                            )
+                              ? "border-white ring-1 ring-blue-600 scale-105 shadow-md"
+                              : "border-white"
+                          }`}
+                          style={{
+                            background:
+                              "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)",
+                          }}
+                        >
+                          <input
+                            type="color"
+                            title="Pick custom color"
+                            value={customBgColor || "#FFFFFF"}
+                            onChange={(e) => {
+                              setCustomBgColor(e.target.value);
+                            }}
+                            className="absolute inset-[-10px] w-10 h-10 opacity-0 cursor-pointer"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Palette colors */}
+                      {EXTENDED_PALETTE.map((hex) => (
                         <button
-                          key={layoutName}
+                          key={hex}
                           onClick={() => {
-                            setSelectedLayout(layoutName);
-                            setCustomBgColor(null);
-                            if (
-                              layoutName !== "None" &&
-                              selectedStyle !== "Original"
-                            ) {
-                              setSelectedStyle("Original");
-                            }
+                            setCustomBgColor(hex);
                           }}
                           className="flex flex-col items-center gap-1 shrink-0 group relative"
                         >
                           <div
-                            style={{ backgroundColor: config.themeColor }}
-                            className={`w-7 h-10 rounded-lg flex flex-col items-center justify-center transition-all border ${isSelected ? "border-white ring-1 ring-blue-600 scale-105 shadow-md" : "border-black/5 hover:border-black/10 shadow-sm opacity-90 hover:opacity-100"}`}
-                          >
-                            {layoutName === "None" ? (
-                              <X
-                                className={`w-3.5 h-3.5 ${layoutName === "None" && config.themeColor === "#f3f4f6" ? "text-gray-400" : "text-white"}`}
-                              />
-                            ) : (
-                              <div
-                                style={{
-                                  transform: config.rotation
-                                    ? `rotate(${config.rotation}deg)`
-                                    : "none",
-                                  aspectRatio: config.isLandscape
-                                    ? "16/9"
-                                    : "9/16",
-                                }}
-                                className={`bg-slate-900 rounded-[2px] border border-white/20 shadow relative flex flex-col items-center justify-center ${config.isLandscape ? "w-5 h-3" : "w-3.5 h-6"}`}
-                              >
-                                <div className="w-[85%] h-[85%] bg-blue-500/20 rounded-[1px] flex items-center justify-center">
-                                  <div className="w-[60%] h-[10%] bg-blue-400/40 rounded-full" />
-                                </div>
-                                {!config.isLandscape && (
-                                  <div className="absolute top-[1px] w-[30%] h-[1px] bg-black rounded-full" />
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <span
-                            className={`text-[7px] leading-none uppercase tracking-tighter ${isSelected ? "text-blue-600 font-extrabold" : "text-gray-400 font-bold"}`}
-                          >
-                            {layoutName}
-                          </span>
+                            style={{
+                              background: hex.includes(",")
+                                ? `linear-gradient(to bottom right, ${hex})`
+                                : hex,
+                            }}
+                            className={`w-6.5 h-6.5 rounded-full transition-all border ${customBgColor?.toUpperCase() === hex.toUpperCase() ? "border-white ring-1 ring-blue-600 scale-105 shadow-md" : "border-black/5 hover:scale-105"}`}
+                          />
                         </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Canvas Color */}
-                <div>
-                  <div className="flex items-center gap-1 mb-1 px-1">
-                    <PaintBucket className="w-3 h-3 text-gray-400" />
-                    <span className="text-[8px] font-black text-gray-400 tracking-wider uppercase">
-                      {t("canvasColor")}
-                    </span>
-                  </div>
-                  <div className="flex gap-2 overflow-x-auto pb-0.5 no-scrollbar px-1 items-center">
-                    <button
-                      onClick={() => setCustomBgColor(null)}
-                      className="flex flex-col items-center gap-1 shrink-0 group relative"
-                    >
-                      <div
-                        className={`w-6.5 h-6.5 rounded-full flex items-center justify-center transition-all border bg-gray-100 ${customBgColor === null ? "border-blue-600 ring-1 ring-blue-600 scale-105 shadow-sm" : "border-gray-200"}`}
-                      >
-                        <X className="w-3 h-3 text-gray-500" />
-                      </div>
-                    </button>
-
-                    {/* Custom Color Picker */}
-                    <div className="flex flex-col items-center gap-1 shrink-0 group relative">
-                      <div
-                        className={`w-6.5 h-6.5 rounded-full transition-all border shadow-sm relative flex items-center justify-center cursor-pointer hover:scale-105 ${
-                          customBgColor &&
-                          !EXTENDED_PALETTE.includes(customBgColor.toUpperCase())
-                            ? "border-white ring-1 ring-blue-600 scale-105 shadow-md"
-                            : "border-white"
-                        }`}
-                        style={{
-                          background:
-                            "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)",
-                        }}
-                      >
-                        <input
-                          type="color"
-                          title="Pick custom color"
-                          value={customBgColor || "#FFFFFF"}
-                          onChange={(e) => setCustomBgColor(e.target.value)}
-                          className="absolute inset-[-10px] w-10 h-10 opacity-0 cursor-pointer"
-                        />
-                      </div>
+                      ))}
                     </div>
-
-                    {/* Palette colors */}
-                    {EXTENDED_PALETTE.map((hex) => (
-                      <button
-                        key={hex}
-                        onClick={() => setCustomBgColor(hex)}
-                        className="flex flex-col items-center gap-1 shrink-0 group relative"
-                      >
-                        <div
-                          style={{
-                            background: hex.includes(",")
-                              ? `linear-gradient(to bottom right, ${hex})`
-                              : hex,
-                          }}
-                          className={`w-6.5 h-6.5 rounded-full transition-all border ${customBgColor?.toUpperCase() === hex.toUpperCase() ? "border-white ring-1 ring-blue-600 scale-105 shadow-md" : "border-black/5 hover:scale-105"}`}
-                        />
-                      </button>
-                    ))}
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Multi-Function Sleek Bottom Row Buttons */}
-              <div className="w-full max-w-[270px] mx-auto grid grid-cols-4 gap-1 pt-1.5 border-t border-gray-100/80 mt-1 shrink-0 px-1">
+              <div className="w-full max-w-md mx-auto flex items-center justify-between gap-1.5 pt-1.5 mt-auto shrink-0 px-1">
                 <button
                   onClick={() => setShowEditor(true)}
-                  className="h-5.5 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-0.5 transition-all shadow-sm cursor-pointer px-1"
+                  className="flex-1 py-1 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-lg font-bold flex flex-col items-center justify-center gap-[1px] transition-all shadow-sm cursor-pointer"
                 >
-                  <Edit2 className="w-2.0 h-2.0 shrink-0" />
-                  <span className="text-[8.5px] tracking-tight truncate font-bold">{t("editBtn")}</span>
+                  <Edit2 className="w-3 h-3 shrink-0" />
+                  <span className="text-[8.5px] tracking-tight truncate">
+                    {t("editBtn")}
+                  </span>
                 </button>
                 <button
                   onClick={shareImage}
-                  className="h-5.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-0.5 transition-all shadow-sm cursor-pointer px-1"
+                  className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 rounded-lg font-bold flex flex-col items-center justify-center gap-[1px] transition-all cursor-pointer"
                 >
-                  <Share2 className="w-2.0 h-2.0 shrink-0" />
-                  <span className="text-[8.5px] tracking-tight truncate font-bold">{t("shareBtn")}</span>
+                  <Share2 className="w-3 h-3 shrink-0" />
+                  <span className="text-[8.5px] tracking-tight truncate">
+                    {t("shareBtn")}
+                  </span>
                 </button>
                 <button
                   onClick={downloadImage}
-                  className="h-5.5 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-0.5 transition-all shadow-sm cursor-pointer px-1"
+                  className="flex-1 py-1 bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white rounded-lg font-bold flex flex-col items-center justify-center gap-[1px] transition-all shadow-sm cursor-pointer"
                 >
-                  <Download className="w-2.0 h-2.0 shrink-0" />
-                  <span className="text-[8.5px] tracking-tight truncate font-bold">{t("saveBtn")}</span>
+                  <Download className="w-3 h-3 shrink-0" />
+                  <span className="text-[8.5px] tracking-tight truncate">
+                    {t("saveBtn")}
+                  </span>
                 </button>
                 <button
                   onClick={() => setAppState("upload")}
-                  className="h-5.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-md font-bold flex items-center justify-center gap-0.5 transition-all shadow-sm cursor-pointer px-1"
+                  className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 rounded-lg font-bold flex flex-col items-center justify-center gap-[1px] transition-all cursor-pointer"
                 >
-                  <X className="w-2.0 h-2.0 shrink-0" />
-                  <span className="text-[8.5px] tracking-tight truncate font-bold">{t("startOverBtn")}</span>
+                  <X className="w-3 h-3 shrink-0" />
+                  <span className="text-[8.5px] tracking-tight truncate">
+                    {t("startOverBtn")}
+                  </span>
                 </button>
               </div>
             </div>
@@ -1364,8 +1460,14 @@ export default function App() {
                 setEditorPaths(finalPaths);
                 setEditorTexts(finalTexts);
                 if (customCrop) {
-                  setCustomCropRect(prev => {
-                    if (prev && prev.x === customCrop.x && prev.y === customCrop.y && prev.w === customCrop.w && prev.h === customCrop.h) {
+                  setCustomCropRect((prev) => {
+                    if (
+                      prev &&
+                      prev.x === customCrop.x &&
+                      prev.y === customCrop.y &&
+                      prev.w === customCrop.w &&
+                      prev.h === customCrop.h
+                    ) {
                       return prev;
                     }
                     return customCrop;
@@ -1377,7 +1479,6 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }
