@@ -10,12 +10,15 @@ import {
   Check,
   Save,
   Type,
+  Smile,
+  Sun,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { Styles, PhoneLayouts } from "./lib/imageProcessor";
+import { Styles, PhoneLayouts, applyStyle } from "./lib/imageProcessor";
+import { PHONE_FRAMES } from "./lib/phoneFrames";
 import { translations, LanguageKey } from "./i18n";
 
-type Tool = "none" | "crop" | "draw" | "blur" | "text";
+type Tool = "none" | "crop" | "draw" | "blur" | "text" | "sticker" | "adjust";
 
 interface TextItem {
   text: string;
@@ -26,9 +29,41 @@ interface TextItem {
   positionMode: "Top" | "Default" | "Bottom";
   fontName: string;
   rotation?: number;
+  hasShadow?: boolean;
+  isSticker?: boolean;
+  stickerType?: "emoji" | "badge";
+  badgeBg?: string;
 }
 
-const fontNames = ["Default", "Serif", "SansSerif", "Monospace", "Cursive"];
+const fontNames = [
+  "Default",
+  "Inter",
+  "Montserrat",
+  "Playfair Display",
+  "EB Garamond",
+  "Space Grotesk",
+  "Oswald",
+  "Anton",
+  "Pacifico",
+  "Serif",
+  "Monospace",
+  "Cursive"
+];
+
+const fontCSSMap: Record<string, string> = {
+  "Default": "sans-serif",
+  "Inter": "'Inter', sans-serif",
+  "Montserrat": "'Montserrat', sans-serif",
+  "Playfair Display": "'Playfair Display', serif",
+  "EB Garamond": "'EB Garamond', serif",
+  "Space Grotesk": "'Space Grotesk', sans-serif",
+  "Oswald": "'Oswald', sans-serif",
+  "Anton": "'Anton', sans-serif",
+  "Pacifico": "'Pacifico', cursive",
+  "Serif": "serif",
+  "Monospace": "monospace",
+  "Cursive": "cursive"
+};
 const textColors = [
   // Neutrals, Grayscale & Background Matchers
   "#FFFFFF", // Pure White (Common Page BG)
@@ -90,6 +125,9 @@ interface EditorCanvasProps {
     customCropRect?: { x: number; y: number; w: number; h: number } | null,
   ) => void;
   onCancel: () => void;
+  styleName?: string;
+  layoutName?: string;
+  customBg?: string | null;
 }
 
 export default function EditorCanvas({
@@ -100,12 +138,161 @@ export default function EditorCanvas({
   initialTexts = [],
   onSave,
   onCancel,
+  styleName,
+  layoutName,
+  customBg,
 }: EditorCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const blurCanvasRef = useRef<HTMLCanvasElement>(null);
   const scratchCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [activeTool, setActiveTool] = useState<Tool>("none");
+  const [isApplyingCrop, setIsApplyingCrop] = useState(false);
+
+  const getPadding = (w: number, h: number) => {
+    const sName = styleName || "Minimal";
+    const lName = layoutName || "None";
+    const bgVal = customBg || null;
+
+    const config = Styles[sName] || Styles["Minimal"];
+    const layout = PhoneLayouts[lName] || PhoneLayouts["None"];
+
+    let basePaddingFactor = config.paddingFactor;
+    if (layout.name !== "None") {
+      basePaddingFactor = Math.max(config.paddingFactor, 0.25);
+    } else if (bgVal && sName === "Original") {
+      basePaddingFactor = 0.15;
+    }
+
+    return Math.max(w, h) * basePaddingFactor;
+  };
+
+  const getScreenshotCenterAndScale = (rect: { x: number; y: number; w: number; h: number }) => {
+    const sName = styleName || "Minimal";
+    const lName = layoutName || "None";
+    const bgVal = customBg || null;
+
+    const config = Styles[sName] || Styles["Minimal"];
+    const layout = PhoneLayouts[lName] || PhoneLayouts["None"];
+
+    let basePaddingFactor = config.paddingFactor;
+    if (layout.name !== "None") {
+      basePaddingFactor = Math.max(config.paddingFactor, 0.25);
+    } else if (bgVal && sName === "Original") {
+      basePaddingFactor = 0.15;
+    }
+
+    const padding = Math.max(rect.w, rect.h) * basePaddingFactor;
+    const styledW = rect.w + padding * 2;
+    const styledH = rect.h + padding * 2;
+
+    if (layout.name === "None") {
+      return {
+        centerX: rect.w / 2 + padding,
+        centerY: rect.h / 2 + padding,
+        scale: 1,
+      };
+    } else {
+      const px = layout.deviceX !== undefined ? layout.deviceX : 0.5;
+      const py = layout.deviceY !== undefined ? layout.deviceY : 0.5;
+      const deviceScale = layout.deviceScale !== undefined ? layout.deviceScale : 0.85;
+
+      const devX = styledW * px;
+      const devY = styledH * py;
+      const maxWidth = styledW * deviceScale;
+      const maxHeight = styledH * deviceScale;
+
+      let frameW = maxWidth;
+      let frameH = maxHeight;
+      let sRect = { top: 3.5, left: 3.5, width: 93, height: 93, radius: 10 }; // Generic fallback screen rect
+
+      if (layout.deviceType === "custom" && layout.frameId) {
+        const frameData = PHONE_FRAMES.find((f) => f.id === layout.frameId);
+        if (frameData) {
+          sRect = frameData.screenRect;
+          const frameRatio = 9 / 16;
+          frameW = maxWidth;
+          frameH = maxWidth / frameRatio;
+
+          if (frameH > maxHeight) {
+            frameH = maxHeight;
+            frameW = maxHeight * frameRatio;
+          }
+        }
+      } else {
+        let ratio = layout.isLandscape ? 19.5 / 9 : 9 / 19.5;
+        if (layout.deviceType === "ipad") {
+          ratio = layout.isLandscape ? 4 / 3 : 3 / 4;
+        } else if (layout.deviceType === "samsung") {
+          ratio = layout.isLandscape ? 20 / 9 : 9 / 20;
+        }
+        frameW = maxWidth;
+        frameH = maxWidth / ratio;
+        if (frameH > maxHeight) {
+          frameH = maxHeight;
+          frameW = maxHeight * ratio;
+        }
+
+        let swPercent = 90;
+        let shPercent = 90;
+        if (layout.deviceType === "iphone" || layout.deviceType === "samsung") {
+          swPercent = 91;
+          shPercent = 91;
+        } else if (layout.deviceType === "ipad") {
+          swPercent = 88;
+          shPercent = 88;
+        }
+        sRect = {
+          top: (100 - shPercent) / 2,
+          left: (100 - swPercent) / 2,
+          width: swPercent,
+          height: shPercent,
+          radius: 10,
+        };
+      }
+
+      const screenCenterX = -frameW / 2 + (sRect.left / 100) * frameW + ((sRect.width / 100) * frameW) / 2;
+      const screenCenterY = -frameH / 2 + (sRect.top / 100) * frameH + ((sRect.height / 100) * frameH) / 2;
+      const screenW = (sRect.width / 100) * frameW;
+      const screenH = (sRect.height / 100) * frameH;
+
+      const isImgLandscape = rect.w > rect.h;
+      const isScreenLandscape = screenW > screenH;
+      const shouldRotate = isImgLandscape !== isScreenLandscape;
+
+      const virtualImgW = shouldRotate ? rect.h : rect.w;
+      const virtualImgH = shouldRotate ? rect.w : rect.h;
+
+      const imgRatio = virtualImgW / virtualImgH;
+      const screenRatio = screenW / screenH;
+
+      let drawW = screenW;
+      let drawH = screenW / imgRatio;
+      if (imgRatio > screenRatio) {
+        drawW = screenW;
+        drawH = screenW / imgRatio;
+        if (drawH < screenH) {
+          drawH = screenH;
+          drawW = screenH * imgRatio;
+        }
+      } else {
+        drawH = screenH;
+        drawW = screenH * imgRatio;
+        if (drawW < screenW) {
+          drawW = screenW;
+          drawH = screenW / imgRatio;
+        }
+      }
+
+      const scale = drawW / rect.w;
+
+      return {
+        centerX: devX + screenCenterX,
+        centerY: devY + screenCenterY,
+        scale,
+      };
+    }
+  };
   const [isDrawing, setIsDrawing] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
@@ -198,6 +385,39 @@ export default function EditorCanvas({
 
   // Text state
   const [texts, setTexts] = useState<TextItem[]>(initialTexts);
+  const [selectedTextIndex, setSelectedTextIndex] = useState<number | null>(null);
+
+  // Advanced on-screen text/sticker drag/resize/rotate actions
+  const textDragModeRef = useRef<"drag" | "resize_rotate" | null>(null);
+  const initialTextSizeRef = useRef<number>(80);
+  const initialTextRotationRef = useRef<number>(0);
+  const initialPointerAngleRef = useRef<number>(0);
+  const initialPointerDistRef = useRef<number>(100);
+
+  const getTextBounds = (t: TextItem) => {
+    let w = 40;
+    let h = 40;
+    if (t.isSticker) {
+      if (t.stickerType === "badge") {
+        const charCount = t.text.length;
+        const widthPerChar = t.size * 0.55;
+        w = Math.max(charCount * widthPerChar + t.size * 1.0, t.size * 1.5);
+        h = t.size * 1.6;
+      } else {
+        // Emoji
+        w = t.size * 1.25;
+        h = t.size * 1.25;
+      }
+    } else {
+      // Standard text
+      const charCount = t.text.length;
+      const widthPerChar = t.size * 0.55;
+      w = Math.max(charCount * widthPerChar, 30) + 30;
+      h = t.size * 1.35;
+    }
+    return { w, h };
+  };
+
   const [showTextModal, setShowTextModal] = useState(false);
   const [editingTextIndex, setEditingTextIndex] = useState<number>(-1);
   const [currentText, setCurrentText] = useState("");
@@ -208,6 +428,15 @@ export default function EditorCanvas({
   const [currentTextColor, setCurrentTextColor] = useState("#FFFFFF");
   const [currentTextFont, setCurrentTextFont] = useState("Default");
   const [currentTextRotation, setCurrentTextRotation] = useState(0);
+  const [currentTextShadow, setCurrentTextShadow] = useState(false);
+
+  // Sticker & Emoji state
+  const [showStickerPanel, setShowStickerPanel] = useState(false);
+  const [selectedStickerTab, setSelectedStickerTab] = useState<"emoji" | "badge">("emoji");
+  const [selectedStickerColor, setSelectedStickerColor] = useState("#FF3366");
+  const [selectedStickerText, setSelectedStickerText] = useState("HOT");
+  const [selectedStickerSize, setSelectedStickerSize] = useState(72);
+  const [selectedStickerRotation, setSelectedStickerRotation] = useState(0);
 
   // Text drag & double-tap states
   const [draggingTextIndex, setDraggingTextIndex] = useState<number | null>(
@@ -218,6 +447,9 @@ export default function EditorCanvas({
     time: 0,
     textIndex: -1,
   });
+
+  // Base screenshot image adjustments
+  const [brightness, setBrightness] = useState<number>(100);
 
   // Draw and Blur active tool colors
   const [selectedDrawColor, setSelectedDrawColor] = useState<string>("#FF3366");
@@ -524,7 +756,11 @@ export default function EditorCanvas({
 
     let activeRect = currentCrop;
     if (!activeRect) {
-      activeRect = { x: 0, y: 0, w: img.width, h: img.height };
+      if (activeTool === "crop" && cropRect) {
+        activeRect = cropRect;
+      } else {
+        activeRect = { x: 0, y: 0, w: img.width, h: img.height };
+      }
     }
     if (!activeRect) return;
 
@@ -536,6 +772,10 @@ export default function EditorCanvas({
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Base image (cropped region or full original depending on activeRect)
+    ctx.save();
+    if (brightness !== 100) {
+      ctx.filter = `brightness(${brightness}%)`;
+    }
     ctx.drawImage(
       img,
       activeRect.x,
@@ -547,6 +787,7 @@ export default function EditorCanvas({
       activeRect.w,
       activeRect.h,
     );
+    ctx.restore();
 
     ctx.save();
     ctx.translate(0, topPad);
@@ -570,13 +811,9 @@ export default function EditorCanvas({
       // Draw texts
       const textsToDraw = explicitTexts || texts;
       textsToDraw.forEach((t) => {
-
         ctx.fillStyle = t.color;
 
-        let fontStr = "sans-serif";
-        if (t.fontName === "Serif") fontStr = "serif";
-        if (t.fontName === "Monospace") fontStr = "monospace";
-        if (t.fontName === "Cursive") fontStr = "cursive";
+        let fontStr = fontCSSMap[t.fontName] || "sans-serif";
         ctx.font = `bold ${t.size}px ${fontStr}`;
 
         ctx.textAlign = "center";
@@ -587,14 +824,150 @@ export default function EditorCanvas({
           ctx.rotate(t.rotation);
         }
 
-        // Draw dark readable outline behind text
-        ctx.strokeStyle = "#000000";
-        ctx.lineWidth = Math.max(2, t.size * 0.08);
-        ctx.strokeText(t.text, 0, 0);
-        ctx.fillText(t.text, 0, 0);
+        if (t.isSticker) {
+          if (t.stickerType === "badge") {
+            const padX = t.size * 0.5;
+            const padY = t.size * 0.3;
+            const textWidth = ctx.measureText(t.text).width;
+            const bgW = textWidth + padX * 2;
+            const bgH = t.size + padY * 2;
+            const r = bgH / 2;
+
+            ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+            ctx.shadowBlur = Math.max(6, t.size * 0.15);
+            ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
+            ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+
+            ctx.fillStyle = t.badgeBg || "#2563EB";
+            ctx.beginPath();
+            if (ctx.roundRect) {
+              ctx.roundRect(-bgW / 2, -bgH / 2, bgW, bgH, r);
+            } else {
+              const x = -bgW / 2;
+              const y = -bgH / 2;
+              ctx.moveTo(x + r, y);
+              ctx.lineTo(x + bgW - r, y);
+              ctx.quadraticCurveTo(x + bgW, y, x + bgW, y + r);
+              ctx.lineTo(x + bgW, y + bgH - r);
+              ctx.quadraticCurveTo(x + bgW, y + bgH, x + bgW - r, y + bgH);
+              ctx.lineTo(x + r, y + bgH);
+              ctx.quadraticCurveTo(x, y + bgH, x, y + bgH - r);
+              ctx.lineTo(x, y + r);
+              ctx.quadraticCurveTo(x, y, x + r, y);
+            }
+            ctx.fill();
+
+            ctx.shadowColor = "transparent";
+            ctx.fillStyle = t.color || "#FFFFFF";
+            ctx.textBaseline = "middle";
+            ctx.fillText(t.text, 0, 0);
+          } else {
+            // Emoji
+            ctx.font = `${t.size}px sans-serif`;
+            ctx.textBaseline = "middle";
+            ctx.textAlign = "center";
+            if (t.hasShadow) {
+              ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+              ctx.shadowBlur = Math.max(6, t.size * 0.15);
+              ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
+              ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+            }
+            ctx.fillText(t.text, 0, 0);
+          }
+        } else {
+          // Standard text
+          if (t.hasShadow) {
+            ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+            ctx.shadowBlur = Math.max(4, t.size * 0.15);
+            ctx.shadowOffsetX = Math.max(2, t.size * 0.08);
+            ctx.shadowOffsetY = Math.max(2, t.size * 0.08);
+          }
+
+          // Draw dark readable outline behind text
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = Math.max(2, t.size * 0.08);
+          ctx.strokeText(t.text, 0, 0);
+          ctx.fillText(t.text, 0, 0);
+        }
         
         ctx.restore();
       });
+
+      // Draw active selected text bounding box with interactive handles (Delete & Resize/Rotate)
+      if (selectedTextIndex !== null && selectedTextIndex < texts.length) {
+        const t = texts[selectedTextIndex];
+        const bounds = getTextBounds(t);
+        
+        ctx.save();
+        ctx.translate(t.x, t.y);
+        if (t.rotation) {
+          ctx.rotate(t.rotation);
+        }
+
+        // Draw dotted Cyan bounding box
+        ctx.strokeStyle = "#22D3EE";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 3]);
+        ctx.strokeRect(-bounds.w / 2, -bounds.h / 2, bounds.w, bounds.h);
+        ctx.setLineDash([]); // clear dash
+
+        // Corner helper solid circles
+        ctx.fillStyle = "#22D3EE";
+        ctx.beginPath();
+        ctx.arc(-bounds.w / 2, bounds.h / 2, 5, 0, Math.PI * 2);
+        ctx.arc(bounds.w / 2, -bounds.h / 2, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Top-Left RED deletion handle
+        const delRadius = 12;
+        ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = "#EF4444";
+        ctx.beginPath();
+        ctx.arc(-bounds.w / 2, -bounds.h / 2, delRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowColor = "transparent";
+
+        // Draw white 'X' icon
+        ctx.strokeStyle = "#FFFFFF";
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        const offset = 4.5;
+        ctx.moveTo(-bounds.w / 2 - offset, -bounds.h / 2 - offset);
+        ctx.lineTo(-bounds.w / 2 + offset, -bounds.h / 2 + offset);
+        ctx.moveTo(-bounds.w / 2 + offset, -bounds.h / 2 - offset);
+        ctx.lineTo(-bounds.w / 2 - offset, -bounds.h / 2 + offset);
+        ctx.stroke();
+
+        // Bottom-Right TEAL/GREEN Resize and Rotate handle
+        const resRadius = 13;
+        ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = "#10B981";
+        ctx.beginPath();
+        ctx.arc(bounds.w / 2, bounds.h / 2, resRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowColor = "transparent";
+
+        // Draw white diagonal arrows inside bottom-right handle
+        ctx.strokeStyle = "#FFFFFF";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        // Diagonal arrow body line
+        ctx.moveTo(bounds.w / 2 - 4.5, bounds.h / 2 - 4.5);
+        ctx.lineTo(bounds.w / 2 + 4.5, bounds.h / 2 + 4.5);
+        // Arrow heads
+        ctx.moveTo(bounds.w / 2 + 4.5, bounds.h / 2);
+        ctx.lineTo(bounds.w / 2 + 4.5, bounds.h / 2 + 4.5);
+        ctx.lineTo(bounds.w / 2, bounds.h / 2 + 4.5);
+
+        ctx.moveTo(bounds.w / 2 - 4.5, bounds.h / 2);
+        ctx.lineTo(bounds.w / 2 - 4.5, bounds.h / 2 - 4.5);
+        ctx.lineTo(bounds.w / 2, bounds.h / 2 - 4.5);
+        ctx.stroke();
+
+        ctx.restore();
+      }
 
       // Draw temporary preview text if modal is open
       if (showTextModal && currentText.trim() && activeRect) {
@@ -608,11 +981,7 @@ export default function EditorCanvas({
         ctx.fillStyle = currentTextColor;
         ctx.globalAlpha = 0.8;
 
-        let fontStr = "sans-serif";
-        if (currentTextFont === "Serif") fontStr = "serif";
-        if (currentTextFont === "Monospace") fontStr = "monospace";
-        if (currentTextFont === "Cursive") fontStr = "cursive";
-
+        let fontStr = fontCSSMap[currentTextFont] || "sans-serif";
         ctx.font = `bold ${size}px ${fontStr}`;
         ctx.textAlign = "center";
 
@@ -620,6 +989,13 @@ export default function EditorCanvas({
         ctx.translate(x, y);
         if (currentTextRotation) {
           ctx.rotate(currentTextRotation);
+        }
+
+        if (currentTextShadow) {
+          ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+          ctx.shadowBlur = Math.max(4, size * 0.15);
+          ctx.shadowOffsetX = Math.max(2, size * 0.08);
+          ctx.shadowOffsetY = Math.max(2, size * 0.08);
         }
 
         // Draw dark readable outline behind temporary preview text
@@ -732,11 +1108,11 @@ export default function EditorCanvas({
     } else {
       redraw();
     }
-  }, [currentText, textPositionMode, texts, showTextModal, activeTool]);
+  }, [currentText, textPositionMode, texts, showTextModal, activeTool, selectedTextIndex]);
 
   useEffect(() => {
     redraw();
-  }, [paths, brushSize, selectedDrawColor, selectedBlurColor]);
+  }, [paths, brushSize, selectedDrawColor, selectedBlurColor, brightness]);
 
   const getCanvasPoint = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
@@ -807,6 +1183,16 @@ export default function EditorCanvas({
       if (now - editorLastTapRef.current < DOUBLE_TAP_DELAY) {
         const pt = getCanvasPoint(e);
         const onText = texts.some((t) => {
+          if (t.isSticker) {
+            const hitSize = Math.max(t.size * 1.5, 44);
+            const width = t.stickerType === "badge" ? Math.max(t.text.length * (t.size * 0.6), hitSize) + 20 : hitSize;
+            return (
+              pt.x > t.x - width / 2 &&
+              pt.x < t.x + width / 2 &&
+              pt.y > t.y - hitSize / 2 &&
+              pt.y < t.y + hitSize / 2
+            );
+          }
           const height = t.size * 1.5;
           const width = Math.max(t.text.length * (t.size * 0.6), 30) + 20;
           return (
@@ -833,19 +1219,82 @@ export default function EditorCanvas({
 
     const pt = getCanvasPoint(e);
 
-    // Hit test for texts
+    // 1. Check if we have an active selected text and if we hit its handles
+    if (selectedTextIndex !== null && selectedTextIndex < texts.length) {
+      const parentText = texts[selectedTextIndex];
+      const bounds = getTextBounds(parentText);
+      const dx = pt.x - parentText.x;
+      const dy = pt.y - parentText.y;
+      const rot = parentText.rotation || 0;
+      
+      // Convert clicked screen point to parent text's local/rotated coords
+      const localX = dx * Math.cos(-rot) - dy * Math.sin(-rot);
+      const localY = dx * Math.sin(-rot) + dy * Math.cos(-rot);
+
+      const deleteX = -bounds.w / 2;
+      const deleteY = -bounds.h / 2;
+      const resizeX = bounds.w / 2;
+      const resizeY = bounds.h / 2;
+
+      const deleteRadius = 24; // Generous hit area for easy touch/mouse activation
+      const resizeRadius = 24;
+
+      if (Math.hypot(localX - deleteX, localY - deleteY) <= deleteRadius) {
+        // HIT DELETE HANDLE
+        const newTexts = [...texts];
+        newTexts.splice(selectedTextIndex, 1);
+        setTexts(newTexts);
+        setSelectedTextIndex(null);
+        setDraggingTextIndex(null);
+        textDragModeRef.current = null;
+        redraw(undefined, undefined, newTexts);
+        return;
+      }
+
+      if (Math.hypot(localX - resizeX, localY - resizeY) <= resizeRadius) {
+        // HIT RESIZE / ROTATE HANDLE
+        textDragModeRef.current = "resize_rotate";
+        setDraggingTextIndex(selectedTextIndex);
+        initialTextSizeRef.current = parentText.size;
+        initialTextRotationRef.current = parentText.rotation || 0;
+
+        const currentDist = Math.hypot(pt.x - parentText.x, pt.y - parentText.y);
+        initialPointerDistRef.current = currentDist > 0 ? currentDist : 1;
+
+        const currentAngle = Math.atan2(pt.y - parentText.y, pt.x - parentText.x);
+        initialPointerAngleRef.current = currentAngle;
+        return;
+      }
+    }
+
+    // 2. Hit test for texts to select them or start standard dragging
     const clickedTextIndex = texts.findIndex((t) => {
-      const height = t.size * 1.5;
-      const width = Math.max(t.text.length * (t.size * 0.6), 30) + 20;
+      const bounds = getTextBounds(t);
+      const dx = pt.x - t.x;
+      const dy = pt.y - t.y;
+      const rot = t.rotation || 0;
+      const localX = dx * Math.cos(-rot) - dy * Math.sin(-rot);
+      const localY = dx * Math.sin(-rot) + dy * Math.cos(-rot);
+
+      // Give a little margin of buffer for smaller icons or texts
+      const pad = 12;
       return (
-        pt.x > t.x - width / 2 &&
-        pt.x < t.x + width / 2 &&
-        pt.y < t.y + 10 &&
-        pt.y > t.y - height + 10
+        localX > -bounds.w / 2 - pad &&
+        localX < bounds.w / 2 + pad &&
+        localY > -bounds.h / 2 - pad &&
+        localY < bounds.h / 2 + pad
       );
     });
 
     if (clickedTextIndex >= 0) {
+      setSelectedTextIndex(clickedTextIndex);
+      textDragModeRef.current = "drag";
+      setDraggingTextIndex(clickedTextIndex);
+      dragOffsetRef.current = {
+        x: pt.x - texts[clickedTextIndex].x,
+        y: pt.y - texts[clickedTextIndex].y,
+      };
+
       const now = Date.now();
       const doubleTapDelay = 300; // ms
 
@@ -856,26 +1305,34 @@ export default function EditorCanvas({
         // Double Tap: Open edit modal
         const t = texts[clickedTextIndex];
         setEditingTextIndex(clickedTextIndex);
-        setCurrentText(t.text);
-        setCurrentTextColor(t.color);
-        setCurrentTextSize(t.size);
-        setCurrentTextFont(t.fontName);
-        setCurrentTextRotation(t.rotation || 0);
-        setTextPositionMode(t.positionMode);
-        setActiveTool("text");
-        setShowTextModal(true);
+        if (t.isSticker) {
+          setSelectedStickerText(t.text);
+          setSelectedStickerColor(t.badgeBg || t.color);
+          setSelectedStickerSize(t.size);
+          setSelectedStickerRotation(t.rotation || 0);
+          setActiveTool("sticker");
+          setShowStickerPanel(true);
+        } else {
+          setCurrentText(t.text);
+          setCurrentTextColor(t.color);
+          setCurrentTextSize(t.size);
+          setCurrentTextFont(t.fontName);
+          setCurrentTextRotation(t.rotation || 0);
+          setCurrentTextShadow(t.hasShadow || false);
+          setTextPositionMode(t.positionMode);
+          setActiveTool("text");
+          setShowTextModal(true);
+        }
         setDraggingTextIndex(null);
+        textDragModeRef.current = null;
         lastTapRef.current = { time: 0, textIndex: -1 };
       } else {
-        // Single Tap / Hold: Start dragging
-        setDraggingTextIndex(clickedTextIndex);
-        dragOffsetRef.current = {
-          x: pt.x - texts[clickedTextIndex].x,
-          y: pt.y - texts[clickedTextIndex].y,
-        };
         lastTapRef.current = { time: now, textIndex: clickedTextIndex };
       }
       return;
+    } else {
+      // Tap outside all text/stickers: deselect currently active bounding box
+      setSelectedTextIndex(null);
     }
 
     // Hit test for paths (Draw/Blur)
@@ -1055,17 +1512,33 @@ export default function EditorCanvas({
 
     if (draggingTextIndex !== null) {
       e.preventDefault();
-      const newX = pt.x - dragOffsetRef.current.x;
-      const newY = pt.y - dragOffsetRef.current.y;
-
       const nextTexts = [...texts];
       if (nextTexts[draggingTextIndex]) {
-        nextTexts[draggingTextIndex] = {
-          ...nextTexts[draggingTextIndex],
-          x: newX,
-          y: newY,
-          positionMode: "Default",
-        };
+        if (textDragModeRef.current === "resize_rotate") {
+          const parentText = nextTexts[draggingTextIndex];
+          const rCurrent = Math.hypot(pt.x - parentText.x, pt.y - parentText.y);
+          const sizeNew = Math.max(12, Math.min(300, Math.round(initialTextSizeRef.current * (rCurrent / initialPointerDistRef.current))));
+          
+          const currentAngle = Math.atan2(pt.y - parentText.y, pt.x - parentText.x);
+          const angleDiff = currentAngle - initialPointerAngleRef.current;
+          const rotationNew = initialTextRotationRef.current + angleDiff;
+          
+          nextTexts[draggingTextIndex] = {
+            ...parentText,
+            size: sizeNew,
+            rotation: rotationNew,
+          };
+        } else {
+          // Standard move/dragging
+          const newX = pt.x - dragOffsetRef.current.x;
+          const newY = pt.y - dragOffsetRef.current.y;
+          nextTexts[draggingTextIndex] = {
+            ...nextTexts[draggingTextIndex],
+            x: newX,
+            y: newY,
+            positionMode: "Default",
+          };
+        }
       }
       setTexts(nextTexts);
       redraw(undefined, undefined, nextTexts);
@@ -1174,6 +1647,7 @@ export default function EditorCanvas({
 
     if (draggingTextIndex !== null) {
       setDraggingTextIndex(null);
+      textDragModeRef.current = null;
       redraw();
       return;
     }
@@ -1207,28 +1681,69 @@ export default function EditorCanvas({
       }
       
       if (newRect && cropRect) {
-        const dx = cropRect.x - newRect.x;
-        const dy = cropRect.y - newRect.y;
+        const oldSetup = getScreenshotCenterAndScale(cropRect);
+        const newSetup = getScreenshotCenterAndScale(newRect);
+        const drawScale = newSetup.scale / oldSetup.scale;
 
-        if (dx !== 0 || dy !== 0) {
-          // Shift texts
-          const nextTexts = texts.map((t) => ({ ...t, x: t.x + dx, y: t.y + dy }));
-          setTexts(nextTexts);
+        // Always update text positions, text size, drawing path points, and drawing path stroke widths
+        const nextTexts = texts.map((t) => {
+          const rx_rel = (t.x - oldSetup.centerX) / oldSetup.scale;
+          const ry_rel = (t.y - oldSetup.centerY) / oldSetup.scale;
 
-          // Shift paths
-          const nextPaths = paths.map((p) => {
-            const nextPoints = p.points.map((pt) => ({ x: pt.x + dx, y: pt.y + dy }));
-            const path2d = new Path2D();
-            if (nextPoints.length > 0) {
-              path2d.moveTo(nextPoints[0].x, nextPoints[0].y);
-              for (let i = 1; i < nextPoints.length; i++) {
-                path2d.lineTo(nextPoints[i].x, nextPoints[i].y);
-              }
-            }
-            return { ...p, points: nextPoints, path2d };
+          const rx_abs = cropRect.x + cropRect.w / 2 + rx_rel;
+          const ry_abs = cropRect.y + cropRect.h / 2 + ry_rel;
+
+          const rx_new_rel = rx_abs - (newRect.x + newRect.w / 2);
+          const ry_new_rel = ry_abs - (newRect.y + newRect.h / 2);
+
+          const new_x = newSetup.centerX + rx_new_rel * newSetup.scale;
+          const new_y = newSetup.centerY + ry_new_rel * newSetup.scale;
+
+          return {
+            ...t,
+            x: new_x,
+            y: new_y,
+            size: Math.max(8, Math.round(t.size * drawScale)),
+          };
+        });
+        setTexts(nextTexts);
+
+        const nextPaths = paths.map((p) => {
+          const nextPoints = p.points.map((pt) => {
+            const rx_rel = (pt.x - oldSetup.centerX) / oldSetup.scale;
+            const ry_rel = (pt.y - oldSetup.centerY) / oldSetup.scale;
+
+            const rx_abs = cropRect.x + cropRect.w / 2 + rx_rel;
+            const ry_abs = cropRect.y + cropRect.h / 2 + ry_rel;
+
+            const rx_new_rel = rx_abs - (newRect.x + newRect.w / 2);
+            const ry_new_rel = ry_abs - (newRect.y + newRect.h / 2);
+
+            const new_x = newSetup.centerX + rx_new_rel * newSetup.scale;
+            const new_y = newSetup.centerY + ry_new_rel * newSetup.scale;
+
+            return { x: new_x, y: new_y };
           });
-          setPaths(nextPaths);
-        }
+
+          const path2d = new Path2D();
+          if (nextPoints.length > 0) {
+            path2d.moveTo(nextPoints[0].x, nextPoints[0].y);
+            for (let i = 1; i < nextPoints.length; i++) {
+              path2d.lineTo(nextPoints[i].x, nextPoints[i].y);
+            }
+          }
+          return {
+            ...p,
+            points: nextPoints,
+            path2d,
+            width: Math.max(1, Math.round(p.width * drawScale)),
+          };
+        });
+        setPaths(nextPaths);
+
+        // Scale current helper states so that subsequent drawings/texts match the new crop size
+        setBrushSize((prev) => Math.max(1, Math.round(prev * drawScale)));
+        setCurrentTextSize((prev) => Math.max(8, Math.round(prev * drawScale)));
 
         setCropRect(newRect);
       }
@@ -1298,20 +1813,25 @@ export default function EditorCanvas({
       positionMode: textPositionMode,
       fontName: currentTextFont,
       rotation: currentTextRotation,
+      hasShadow: currentTextShadow,
     };
 
     let finalTexts;
+    let selectedIdx = -1;
     if (editingTextIndex >= 0) {
       const newTexts = [...texts];
       newTexts[editingTextIndex] = newText;
       setTexts(newTexts);
       finalTexts = newTexts;
+      selectedIdx = editingTextIndex;
     } else {
       finalTexts = [...texts, newText];
       setTexts(finalTexts);
+      selectedIdx = finalTexts.length - 1;
     }
 
     setEditingTextIndex(-1);
+    setSelectedTextIndex(selectedIdx);
     setShowTextModal(false);
     setActiveTool("none");
     setCurrentText("");
@@ -1328,9 +1848,184 @@ export default function EditorCanvas({
     }
     setEditingTextIndex(-1);
     setShowTextModal(false);
+    setShowStickerPanel(false);
     setActiveTool("none");
     setCurrentText("");
     redraw(undefined, undefined, finalTexts);
+  };
+
+  const handleAddSticker = (stickerText: string, type: "emoji" | "badge") => {
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+
+    const size = selectedStickerSize;
+    let x = canvas.width / 2;
+    let y = canvas.height / 2;
+
+    if (editingTextIndex >= 0) {
+      x = texts[editingTextIndex].x;
+      y = texts[editingTextIndex].y;
+    } else {
+      // Small random dispersion so they don't map exactly on top of each other
+      x += (Math.random() - 0.5) * 60;
+      y += (Math.random() - 0.5) * 60;
+    }
+
+    const newSticker: TextItem = {
+      text: stickerText,
+      x,
+      y,
+      color: type === "badge" ? "#FFFFFF" : selectedStickerColor,
+      size,
+      positionMode: "Default",
+      fontName: "Default",
+      rotation: selectedStickerRotation,
+      hasShadow: true,
+      isSticker: true,
+      stickerType: type,
+      badgeBg: type === "badge" ? selectedStickerColor : undefined,
+    };
+
+    let finalTexts;
+    let selectedIdx = -1;
+    if (editingTextIndex >= 0) {
+      const newTexts = [...texts];
+      newTexts[editingTextIndex] = newSticker;
+      setTexts(newTexts);
+      finalTexts = newTexts;
+      selectedIdx = editingTextIndex;
+    } else {
+      finalTexts = [...texts, newSticker];
+      setTexts(finalTexts);
+      selectedIdx = finalTexts.length - 1;
+    }
+
+    setEditingTextIndex(-1);
+    setSelectedTextIndex(selectedIdx);
+    setShowStickerPanel(false);
+    setActiveTool("none");
+    redraw(undefined, undefined, finalTexts);
+  };
+
+  const handleUpdateActiveStickerSize = (newSize: number) => {
+    setSelectedStickerSize(newSize);
+    if (editingTextIndex >= 0) {
+      const nextTexts = [...texts];
+      nextTexts[editingTextIndex] = {
+        ...nextTexts[editingTextIndex],
+        size: newSize
+      };
+      setTexts(nextTexts);
+      redraw(undefined, undefined, nextTexts);
+    }
+  };
+
+  const handleUpdateActiveStickerRotation = (newRotRad: number) => {
+    setSelectedStickerRotation(newRotRad);
+    if (editingTextIndex >= 0) {
+      const nextTexts = [...texts];
+      nextTexts[editingTextIndex] = {
+        ...nextTexts[editingTextIndex],
+        rotation: newRotRad
+      };
+      setTexts(nextTexts);
+      redraw(undefined, undefined, nextTexts);
+    }
+  };
+
+  const handleUpdateActiveStickerColor = (newColor: string) => {
+    setSelectedStickerColor(newColor);
+    if (editingTextIndex >= 0) {
+      const nextTexts = [...texts];
+      const t = nextTexts[editingTextIndex];
+      nextTexts[editingTextIndex] = {
+        ...t,
+        badgeBg: t.stickerType === "badge" ? newColor : undefined,
+        color: t.stickerType === "badge" ? "#FFFFFF" : newColor
+      };
+      setTexts(nextTexts);
+      redraw(undefined, undefined, nextTexts);
+    }
+  };
+
+  const handleUpdateActiveStickerText = (newText: string) => {
+    setSelectedStickerText(newText);
+    if (editingTextIndex >= 0) {
+      const nextTexts = [...texts];
+      nextTexts[editingTextIndex] = {
+        ...nextTexts[editingTextIndex],
+        text: newText
+      };
+      setTexts(nextTexts);
+      redraw(undefined, undefined, nextTexts);
+    }
+  };
+
+  const handleApplySaveCrop = async () => {
+    const screenshotSrc = originalScreenshotSrc || imageSrc;
+    if (!screenshotSrc || !cropRect) return;
+
+    const img = rawScreenshotRef.current || originalImageRef.current;
+    if (!img) return;
+
+    setIsApplyingCrop(true);
+
+    try {
+      // 1. Generate the clean cropped image from raw unstyled screenshot
+      const cleanCanvas = document.createElement("canvas");
+      cleanCanvas.width = cropRect.w;
+      cleanCanvas.height = cropRect.h;
+      const cCtx = cleanCanvas.getContext("2d");
+      if (!cCtx) {
+        setIsApplyingCrop(false);
+        return;
+      }
+
+      cCtx.drawImage(
+        img,
+        cropRect.x,
+        cropRect.y,
+        cropRect.w,
+        cropRect.h,
+        0,
+        0,
+        cropRect.w,
+        cropRect.h,
+      );
+      const cleanDataUrl = cleanCanvas.toDataURL("image/png");
+
+      // 2. Run applyStyle to dynamically generate the new base styled mockup!
+      const newStyledDataUrl = await applyStyle(
+        screenshotSrc,
+        styleName || "Minimal",
+        layoutName || "None",
+        [],
+        15,
+        customBg || null,
+        cropRect
+      );
+
+      // 3. Load these images into refs so the editor instantly switches to the new styled mockup base
+      const updatedStyledImg = new Image();
+      updatedStyledImg.crossOrigin = "anonymous";
+      updatedStyledImg.onload = () => {
+        styledImageRef.current = updatedStyledImg;
+        originalImageRef.current = updatedStyledImg;
+
+        // Switch tool to none, to exit the crop mode and let them preview/continue drawing!
+        setActiveTool("none");
+        setIsApplyingCrop(false);
+
+        // Force a redraw with the new image loaded. Since we now set the styled image,
+        // the canvas fits the newly generated styled mockup, which is perfect and scaled!
+        fitImageToContainer(updatedStyledImg, { x: 0, y: 0, w: updatedStyledImg.width, h: updatedStyledImg.height });
+      };
+      updatedStyledImg.src = newStyledDataUrl;
+
+    } catch (err) {
+      console.error("Error applying and saving crop:", err);
+      setIsApplyingCrop(false);
+    }
   };
 
   const handleSave = () => {
@@ -1342,6 +2037,10 @@ export default function EditorCanvas({
       cleanCanvas.height = cropRect.h;
       const cCtx = cleanCanvas.getContext("2d");
       if (cCtx) {
+        cCtx.save();
+        if (brightness !== 100) {
+          cCtx.filter = `brightness(${brightness}%)`;
+        }
         cCtx.drawImage(
           rawImg,
           cropRect.x,
@@ -1353,6 +2052,7 @@ export default function EditorCanvas({
           cropRect.w,
           cropRect.h,
         );
+        cCtx.restore();
         const cleanDataUrl = cleanCanvas.toDataURL("image/png");
         
         let previewDataUrl = canvasRef.current.toDataURL("image/png", 0.9);
@@ -1432,6 +2132,75 @@ export default function EditorCanvas({
             onTouchMove={handlePointerMove}
             onTouchEnd={handlePointerUp}
           />
+
+          {activeTool === "crop" && (() => {
+            const canvas = canvasRef.current;
+            if (!canvas) return null;
+            
+            let sx: number | undefined, sy: number | undefined, w: number | undefined, h: number | undefined;
+            if (cropDragModeRef.current === "new" && cropStartRef.current && cropEndRef.current) {
+              sx = Math.min(cropStartRef.current.x, cropEndRef.current.x);
+              sy = Math.min(cropStartRef.current.y, cropEndRef.current.y);
+              w = Math.abs(cropStartRef.current.x - cropEndRef.current.x);
+              h = Math.abs(cropStartRef.current.y - cropEndRef.current.y);
+            } else if (tempCropRectRef.current) {
+              sx = tempCropRectRef.current.x;
+              sy = tempCropRectRef.current.y;
+              w = tempCropRectRef.current.w;
+              h = tempCropRectRef.current.h;
+            } else if (cropRect) {
+              sx = cropRect.x;
+              sy = cropRect.y;
+              w = cropRect.w;
+              h = cropRect.h;
+            }
+
+            if (sx === undefined || sy === undefined || w === undefined || h === undefined || w < 25 || h < 25) return null;
+
+            // Convert to CSS pixels
+            const cssX = (sx / canvas.width) * canvasSize.width;
+            const cssY = (sy / canvas.height) * canvasSize.height;
+            const cssW = (w / canvas.width) * canvasSize.width;
+            const cssH = (h / canvas.height) * canvasSize.height;
+
+            return (
+              <div
+                style={{
+                  position: "absolute",
+                  left: cssX,
+                  top: cssY,
+                  width: cssW,
+                  height: cssH,
+                  pointerEvents: "none",
+                  zIndex: 25,
+                }}
+                className="flex items-center justify-center font-sans"
+              >
+                <button
+                  disabled={isApplyingCrop}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    handleApplySaveCrop();
+                  }}
+                  style={{ pointerEvents: "auto" }}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 text-white font-bold text-xs uppercase tracking-wide rounded-lg shadow-2xl flex items-center gap-1.5 border border-emerald-400/40 hover:scale-105 active:scale-95 transition-all whitespace-nowrap cursor-pointer pointer-events-auto"
+                >
+                  {isApplyingCrop ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      Save Crop
+                    </>
+                  )}
+                </button>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Path Deletion Prompt */}
@@ -1539,18 +2308,51 @@ export default function EditorCanvas({
               setActiveTool("text");
               setCurrentText("");
               setCurrentTextRotation(0);
+              setCurrentTextShadow(false);
               setTextPositionMode("Default");
               setShowTextModal(true);
+              setShowStickerPanel(false);
             }
           }}
           icon={<Type />}
           label="Text"
+        />
+        <ToolButton
+          active={activeTool === "sticker"}
+          onClick={() => {
+            if (activeTool === "sticker") {
+              setActiveTool("none");
+              setShowStickerPanel(false);
+            } else {
+              setActiveTool("sticker");
+              setEditingTextIndex(-1);
+              setShowStickerPanel(true);
+              setShowTextModal(false);
+            }
+          }}
+          icon={<Smile />}
+          label="Stickers"
+        />
+        <ToolButton
+          active={activeTool === "adjust"}
+          onClick={() => {
+            if (activeTool === "adjust") {
+              setActiveTool("none");
+            } else {
+              setActiveTool("adjust");
+              setShowStickerPanel(false);
+              setShowTextModal(false);
+            }
+          }}
+          icon={<Sun />}
+          label="Adjust"
         />
         <div className="w-[1px] h-8 bg-white/10 mx-2" />
         <button
           onClick={() => {
             setPaths([]);
             setTexts([]);
+            setBrightness(100);
             if (rawScreenshotRef.current) {
               const rect = {
                 x: 0,
@@ -1693,6 +2495,53 @@ export default function EditorCanvas({
       </AnimatePresence>
 
       <AnimatePresence>
+        {activeTool === "adjust" && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="px-4 py-4 bg-[#111111] border-t border-white/5 flex flex-col gap-3 shrink-0 z-20 overflow-hidden"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">
+                IMAGE ADJUSTMENT
+              </span>
+              <button
+                onClick={() => {
+                  setBrightness(100);
+                }}
+                className="text-[10px] text-blue-400 font-extrabold tracking-wider uppercase hover:underline cursor-pointer"
+              >
+                Reset Brightness
+              </button>
+            </div>
+
+            {/* Brightness Slider */}
+            <div className="flex flex-col gap-2 bg-white/5 px-4 py-3.5 rounded-2xl border border-white/5">
+              <div className="flex justify-between items-center text-xs font-bold text-gray-300 uppercase tracking-wider">
+                <span>Brightness</span>
+                <span className="text-white font-mono font-medium">{brightness}%</span>
+              </div>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">Darker</span>
+                <input
+                  type="range"
+                  min="30"
+                  max="200"
+                  value={brightness}
+                  onChange={(e) => {
+                    setBrightness(Number(e.target.value));
+                  }}
+                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                />
+                <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">Brighter</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {showTextModal && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1722,86 +2571,66 @@ export default function EditorCanvas({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
-                    Size: {currentTextSize}
-                  </label>
-                  <input
-                    type="range"
-                    min="12"
-                    max="300"
-                    value={currentTextSize}
-                    onChange={(e) => setCurrentTextSize(Number(e.target.value))}
-                    className="w-full mt-2"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
-                    Rotation
-                  </label>
-                  <input
-                    type="range"
-                    min="-180"
-                    max="180"
-                    value={Math.round((currentTextRotation * 180) / Math.PI)}
-                    onChange={(e) =>
-                      setCurrentTextRotation((Number(e.target.value) * Math.PI) / 180)
-                    }
-                    className="w-full mt-2"
-                  />
+                <div className="flex items-center justify-between p-1 bg-gray-50/50 rounded-2xl border border-gray-100 px-3 py-2">
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest select-none">
+                    Drop Shadow
+                  </span>
+                  <button
+                    onClick={() => setCurrentTextShadow(!currentTextShadow)}
+                    role="switch"
+                    aria-checked={currentTextShadow}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      currentTextShadow ? "bg-blue-600" : "bg-gray-200"
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                        currentTextShadow ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
                 </div>
 
                 <div className="space-y-2">
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
-                    Position
+                    Font Style
                   </label>
-                  <div className="flex gap-2">
-                    {(["Top", "Default", "Bottom"] as const).map((mode) => (
+                  <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar select-none">
+                    {fontNames.map((font) => (
                       <button
-                        key={mode}
-                        onClick={() => setTextPositionMode(mode)}
-                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
-                          textPositionMode === mode
-                            ? "bg-blue-600 text-white shadow-lg"
-                            : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                        key={font}
+                        onClick={() => setCurrentTextFont(font)}
+                        className={`whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 border cursor-pointer ${
+                          currentTextFont === font
+                            ? "bg-blue-600 text-white border-blue-600 shadow-md scale-[1.02] font-semibold"
+                            : "bg-white text-gray-750 border-gray-200 hover:bg-gray-50 hover:border-gray-300"
                         }`}
+                        style={{ fontFamily: fontCSSMap[font] || "sans-serif" }}
                       >
-                        {mode}
+                        {font}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                  {fontNames.map((font) => (
-                    <button
-                      key={font}
-                      onClick={() => setCurrentTextFont(font)}
-                      className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
-                        currentTextFont === font
-                          ? "bg-blue-600 text-white shadow-lg"
-                          : "bg-gray-200 text-gray-600 hover:bg-gray-300"
-                      }`}
-                    >
-                      {font}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                  {textColors.map((color) => (
-                    <button
-                      key={color}
-                      onClick={() => setCurrentTextColor(color)}
-                      className={`w-7 h-7 shrink-0 rounded-full border-2 transition-transform ${
-                        currentTextColor === color
-                          ? "border-blue-500 scale-110"
-                          : "border-gray-200 opacity-80"
-                      }`}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
+                    Text Color
+                  </label>
+                  <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                    {textColors.map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => setCurrentTextColor(color)}
+                        className={`w-7 h-7 shrink-0 rounded-full border border-gray-200 cursor-pointer transition-transform ${
+                          currentTextColor === color
+                            ? "border-blue-500 ring-2 ring-blue-500/30 scale-110"
+                            : "opacity-80 hover:opacity-100"
+                        }`}
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
                 </div>
 
                 <div className="flex gap-3 pt-2">
@@ -1835,6 +2664,232 @@ export default function EditorCanvas({
             </div>
           </motion.div>
         )}
+
+        {showStickerPanel && (() => {
+          const POPULAR_EMOJIS = [
+            // Birthday, Wedding & Celebration
+            "🎂", "🎁", "🎈", "🥳", "🎉", "🧁", "💍", "💒", "👰", "🤵", "🥂", "💖",
+            // Tech & Interaction Controls
+            "🔥", "🚀", "💡", "✨", "⭐", "💯", "✔️", "❌", "❤️", "👍", "👏",
+            "😂", "😍", "🤔", "😱", "📱", "💻", "🎯", "📢", "⬇️", "➡️", "💥", "🌈",
+            "🏆", "🌟", "🔔", "📎", "🔒", "🎨", "🧪", "🍕", "☕", "🎮", "⚡", "💎",
+            // Hand Gestures & Directional Pointers
+            "👇", "👉", "👈", "👆", "✊", "✌️", "🤟", "✋", "🖖", "✍️", "🙌", "🙏",
+            "🏹", "📍", "📌", "🚩", "🔍", "🔎", "👀", "🗣️", "💬", "💭", "🗯️", "✉️",
+            // App state / Indicators
+            "🟢", "🟡", "🔴", "🔵", "🟣", "⚫", "⚪", "🟩", "🟨", "🟥", "🟧", "🟪",
+            "📈", "📉", "📊", "📁", "📂", "📅", "📆", "⏰", "⏱️", "⏳", "🔋", "🔌",
+            // Symbols & Alerts
+            "⚠️", "🛑", "🚫", "❔", "❓", "‼️", "ℹ️", "🆗", "🆒", "🆕", "🆙", "🆓",
+            "👑", "🎩", "🎒", "🎓", "🔑", "🛡️", "🔗", "🧩", "⚙️", "🛠️",
+            // Fun Expression Emojis
+            "😎", "🤓", "🤩", "🤯", "🤖", "👾", "👽", "🦄", "🐱", "🐶", "🦊",
+            "🐼", "🐨", "🦁", "🦖", "🐉", "🍁", "🍀", "🌸", "🌻", "☀️", "🌙", "☁️"
+          ];
+
+          const PRESET_BADGES = [
+            "HBD 🎂", "BIRTHDAY", "WEDDING 💍", "MARRIED", "PARTY 🥳", "CELEBRATE",
+            "HOT", "NEW", "BUG", "IDEA", "SOLVED", "A+", "TIP", "MVP", "NOTE", "DONE",
+            "TOP", "FREE", "PRO", "LIVE", "BETA", "COOL", "INFO", "WARN", "FIX", "OMG",
+            "BEST", "CHEF", "EPIC", "WOW", "YES", "NO", "TODO", "VIP", "OFFER", "SALE"
+          ];
+
+          const BADGE_COLORS = [
+            "#FF3366", // Rose
+            "#2563EB", // Blue
+            "#FF5722", // Orange
+            "#10B981", // Emerald
+            "#8B5CF6", // Purple
+            "#F59E0B", // Yellow
+            "#000000", // Black
+            "#888888", // Gray
+            "#FFFFFF", // White
+          ];
+
+          const isEditing = editingTextIndex >= 0;
+          const currentEditingItem = isEditing ? texts[editingTextIndex] : null;
+
+          return (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              className="absolute inset-x-0 bottom-0 z-[60] flex items-end justify-center pb-24"
+            >
+              <div className="bg-white/95 backdrop-blur-md w-full max-w-[420px] mx-4 rounded-3xl p-5 shadow-2xl text-black border border-gray-200">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-lg font-bold">
+                    {isEditing ? "Edit Sticker / Emoji" : "Add Sticker & Emoji"}
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowStickerPanel(false);
+                      setEditingTextIndex(-1);
+                      setActiveTool("none");
+                    }}
+                    className="p-1 rounded-full hover:bg-gray-100 text-gray-500"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Tabs selection (Only if we are NOT editing, or we show current type) */}
+                {!isEditing ? (
+                  <div className="flex bg-gray-100 p-1 rounded-xl mb-4">
+                    <button
+                      onClick={() => setSelectedStickerTab("emoji")}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        selectedStickerTab === "emoji"
+                          ? "bg-white text-black shadow-sm"
+                          : "text-gray-500 hover:text-gray-800"
+                      }`}
+                    >
+                      😃 Emojis
+                    </button>
+                    <button
+                      onClick={() => setSelectedStickerTab("badge")}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        selectedStickerTab === "badge"
+                          ? "bg-white text-black shadow-sm"
+                          : "text-gray-500 hover:text-gray-800"
+                      }`}
+                    >
+                      🏷️ Badges / Tags
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-xs font-bold text-gray-400 bg-gray-50 rounded-xl px-3 py-1.5 mb-4 text-center font-sans">
+                    Editing <strong>{currentEditingItem?.stickerType === "badge" ? "Badge Tag" : "Emoji Sticker"}</strong>
+                  </div>
+                )}
+
+                <div className="space-y-4 max-h-[48vh] overflow-y-auto pr-1 no-scrollbar">
+                  
+                  {/* Emoji selection tab */}
+                  {((!isEditing && selectedStickerTab === "emoji") || (isEditing && currentEditingItem?.stickerType === "emoji")) && (
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                        Select Emoji
+                      </label>
+                      <div className="grid grid-cols-6 gap-2 bg-gray-50 p-2.5 rounded-2xl border border-gray-100 max-h-[140px] overflow-y-auto">
+                        {POPULAR_EMOJIS.map((emoji) => (
+                          <button
+                            key={emoji}
+                            onClick={() => {
+                              if (isEditing) {
+                                handleUpdateActiveStickerText(emoji);
+                              } else {
+                                handleAddSticker(emoji, "emoji");
+                              }
+                            }}
+                            className={`text-2xl p-1.5 hover:scale-125 hover:bg-white rounded-lg transition-all active:scale-95 ${
+                              selectedStickerText === emoji ? "bg-blue-100 border border-blue-400" : ""
+                            }`}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Badge selection tab */}
+                  {((!isEditing && selectedStickerTab === "badge") || (isEditing && currentEditingItem?.stickerType === "badge")) && (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+                          Badge Label
+                        </label>
+                        <input
+                          className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 outline-none focus:ring-2 ring-blue-500 font-bold text-sm text-black uppercase"
+                          placeholder="Type sticker text..."
+                          maxLength={15}
+                          value={selectedStickerText}
+                          onChange={(e) => handleUpdateActiveStickerText(e.target.value.toUpperCase())}
+                        />
+                      </div>
+
+                      {/* Presets */}
+                      <div>
+                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Preset Words</span>
+                        <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                          {PRESET_BADGES.map((badge) => (
+                            <button
+                              key={badge}
+                              onClick={() => handleUpdateActiveStickerText(badge)}
+                              className={`whitespace-nowrap px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-all border ${
+                                selectedStickerText === badge
+                                  ? "bg-black text-white border-black"
+                                  : "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200"
+                              }`}
+                            >
+                              {badge}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Color Palette */}
+                      <div>
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                          Badge Color
+                        </label>
+                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans">
+                          {BADGE_COLORS.map((color) => (
+                            <button
+                              key={color}
+                              onClick={() => handleUpdateActiveStickerColor(color)}
+                              className={`w-7 h-7 shrink-0 rounded-full border-2 transition-transform ${
+                                selectedStickerColor === color
+                                  ? "border-blue-500 scale-110"
+                                  : "border-gray-200 opacity-80"
+                              }`}
+                              style={{ backgroundColor: color }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-2.5 pt-2">
+                    {isEditing && (
+                      <button
+                        onClick={handleDeleteText}
+                        className="py-2.5 px-4 bg-red-100 text-red-600 hover:bg-red-200 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors"
+                      >
+                        Delete
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setShowStickerPanel(false);
+                        setEditingTextIndex(-1);
+                        setActiveTool("none");
+                      }}
+                      className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-xs uppercase tracking-wide"
+                    >
+                      {isEditing ? "Close" : "Cancel"}
+                    </button>
+                    {!isEditing && selectedStickerTab === "badge" && (
+                      <button
+                        disabled={!selectedStickerText.trim()}
+                        onClick={() => handleAddSticker(selectedStickerText, "badge")}
+                        className="flex-[1.5] py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl font-bold text-xs uppercase tracking-wide shadow-md transition-all active:scale-95"
+                      >
+                        Place Badge
+                      </button>
+                    )}
+                  </div>
+
+                </div>
+              </div>
+            </motion.div>
+          );
+        })()}
       </AnimatePresence>
     </div>
   );

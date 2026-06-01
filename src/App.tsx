@@ -1448,6 +1448,9 @@ export default function App() {
               initialPaths={editorPaths}
               initialTexts={editorTexts}
               onCancel={() => setShowEditor(false)}
+              styleName={selectedStyle}
+              layoutName={selectedLayout}
+              customBg={customBgColor}
               onSave={(
                 newImgDataUrl,
                 finalCleanSrc,

@@ -1304,10 +1304,70 @@ export async function burnEditsToImage(
             ctx.rotate(t.rotation);
           }
 
-          ctx.strokeStyle = "#000000";
-          ctx.lineWidth = Math.max(2, t.size * 0.08);
-          ctx.strokeText(t.text, 0, 0);
-          ctx.fillText(t.text, 0, 0);
+          if (t.isSticker) {
+            if (t.stickerType === "badge") {
+              const padX = t.size * 0.5;
+              const padY = t.size * 0.3;
+              const textWidth = ctx.measureText(t.text).width;
+              const bgW = textWidth + padX * 2;
+              const bgH = t.size + padY * 2;
+              const r = bgH / 2;
+
+              ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+              ctx.shadowBlur = Math.max(6, t.size * 0.15);
+              ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
+              ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+
+              ctx.fillStyle = t.badgeBg || "#2563EB";
+              ctx.beginPath();
+              if (ctx.roundRect) {
+                ctx.roundRect(-bgW / 2, -bgH / 2, bgW, bgH, r);
+              } else {
+                const x = -bgW / 2;
+                const y = -bgH / 2;
+                ctx.moveTo(x + r, y);
+                ctx.lineTo(x + bgW - r, y);
+                ctx.quadraticCurveTo(x + bgW, y, x + bgW, y + r);
+                ctx.lineTo(x + bgW, y + bgH - r);
+                ctx.quadraticCurveTo(x + bgW, y + bgH, x + bgW - r, y + bgH);
+                ctx.lineTo(x + r, y + bgH);
+                ctx.quadraticCurveTo(x, y + bgH, x, y + bgH - r);
+                ctx.lineTo(x, y + r);
+                ctx.quadraticCurveTo(x, y, x + r, y);
+              }
+              ctx.fill();
+
+              ctx.shadowColor = "transparent";
+              ctx.fillStyle = t.color || "#FFFFFF";
+              ctx.textBaseline = "middle";
+              ctx.fillText(t.text, 0, 0);
+            } else {
+              // Emoji
+              ctx.font = `${t.size}px sans-serif`;
+              ctx.textBaseline = "middle";
+              ctx.textAlign = "center";
+              if (t.hasShadow) {
+                ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+                ctx.shadowBlur = Math.max(6, t.size * 0.15);
+                ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
+                ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+              }
+              ctx.fillText(t.text, 0, 0);
+            }
+          } else {
+            // Standard text
+            if (t.hasShadow) {
+              ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+              ctx.shadowBlur = Math.max(4, t.size * 0.15);
+              ctx.shadowOffsetX = Math.max(2, t.size * 0.08);
+              ctx.shadowOffsetY = Math.max(2, t.size * 0.08);
+            }
+
+            ctx.strokeStyle = "#000000";
+            ctx.lineWidth = Math.max(2, t.size * 0.08);
+            ctx.strokeText(t.text, 0, 0);
+            ctx.fillText(t.text, 0, 0);
+          }
           ctx.restore();
         });
 
