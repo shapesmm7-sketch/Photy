@@ -34,6 +34,7 @@ import {
 } from "./lib/imageProcessor";
 import EditorCanvas from "./EditorCanvas";
 import { translations, LanguageKey } from "./i18n";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Share } from "@capacitor/share";
 import {
   initializeAdMob,
@@ -394,8 +395,19 @@ export default function App() {
 
   const currentDisplayImage = showEditor ? null : processedImage;
 
-  const executeDownload = () => {
+  const executeDownload = async () => {
     if (!processedImage) return;
+
+    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
+      try {
+        const NativeMedia = registerPlugin<any>("NativeMedia");
+        await NativeMedia.saveImage({ base64: processedImage });
+        alert("Image saved directly to your phone gallery under 'Pictures/MyApp'!");
+        return;
+      } catch (nativeErr: any) {
+        console.error("Native save failed, trying Web download fallback:", nativeErr);
+      }
+    }
 
     try {
       // Direct binary Blob conversion to make saving highly compatible with Android WebView and iOS Mobile browsers
@@ -444,6 +456,17 @@ export default function App() {
 
   const executeShare = async () => {
     if (!processedImage) return;
+
+    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
+      try {
+        const NativeMedia = registerPlugin<any>("NativeMedia");
+        await NativeMedia.shareImage({ base64: processedImage });
+        return;
+      } catch (nativeErr: any) {
+        console.error("Native share failed, trying Web share fallback:", nativeErr);
+      }
+    }
+
     try {
       const response = await fetch(processedImage);
       const blob = await response.blob();
