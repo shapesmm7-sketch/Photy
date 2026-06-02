@@ -27,12 +27,12 @@ import java.io.OutputStream
 
 @CapacitorPlugin(
     name = "NativeMedia",
-    permissions = arrayOf(
-        com.getcapacitor.annotation.Permission(
+    permissions = [
+        Permission(
             alias = "storage",
-            strings = arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            strings = [Manifest.permission.WRITE_EXTERNAL_STORAGE]
         )
-    )
+    ]
 )
 class NativeMediaPlugin : Plugin() {
 
@@ -52,7 +52,7 @@ class NativeMediaPlugin : Plugin() {
 
         // Request WRITE_EXTERNAL_STORAGE at runtime ONLY for Android < 10 (API < 29)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            if (getPermissionState("storage") != com.getcapacitor.PermissionState.GRANTED) {
+            if (getPermissionState("storage") != PermissionState.GRANTED) {
                 requestPermissionForAlias("storage", call, "savePermissionCallback")
                 return
             }
@@ -63,7 +63,7 @@ class NativeMediaPlugin : Plugin() {
 
     @PermissionCallback
     fun savePermissionCallback(call: PluginCall) {
-        if (getPermissionState("storage") == com.getcapacitor.PermissionState.GRANTED) {
+        if (getPermissionState("storage") == PermissionState.GRANTED) {
             val base64Data = call.getString("base64") ?: ""
             val bitmap = base64ToBitmap(base64Data)
             if (bitmap != null) {
