@@ -14,6 +14,7 @@ import android.provider.MediaStore
 import android.util.Base64
 import androidx.core.content.FileProvider
 import com.getcapacitor.JSObject
+import com.getcapacitor.PermissionState
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
@@ -51,8 +52,7 @@ class NativeMediaPlugin : Plugin() {
 
         // Request WRITE_EXTERNAL_STORAGE at runtime ONLY for Android < 10 (API < 29)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            if (getPermissionState("storage") != com.getcapacitor.PermissionState.GRANTED) {
-                bridge.saveCall(call)
+            if (getPermissionState("storage") != PermissionState.GRANTED) {
                 requestPermissionForAlias("storage", call, "savePermissionCallback")
                 return
             }
@@ -63,7 +63,7 @@ class NativeMediaPlugin : Plugin() {
 
     @PermissionCallback
     fun savePermissionCallback(call: PluginCall) {
-        if (getPermissionState("storage") == com.getcapacitor.PermissionState.GRANTED) {
+        if (getPermissionState("storage") == PermissionState.GRANTED) {
             val base64Data = call.getString("base64") ?: ""
             val bitmap = base64ToBitmap(base64Data)
             if (bitmap != null) {
@@ -82,7 +82,7 @@ class NativeMediaPlugin : Plugin() {
             call.reject("Android Context is unavailable")
             return
         }
-        val uri = saveImage(ctx, bitmap)
+        val uri = saveImageToGallery(ctx, bitmap)
         if (uri != null) {
             val response = JSObject()
             response.put("uri", uri.toString())
@@ -127,7 +127,7 @@ class NativeMediaPlugin : Plugin() {
             val imageUri = FileProvider.getUriForFile(ctx, authority, file)
 
             if (imageUri != null) {
-                shareImage(ctx, imageUri)
+                shareImageIntent(ctx, imageUri)
                 val response = JSObject()
                 response.put("success", true)
                 call.resolve(response)
@@ -139,8 +139,8 @@ class NativeMediaPlugin : Plugin() {
         }
     }
 
-    // Required function: saveImage(context, bitmap): returns Uri or File
-    fun saveImage(context: Context, bitmap: Bitmap): Uri? {
+    // Required function: saveImageToGallery(context, bitmap): returns Uri or File
+    fun saveImageToGallery(context: Context, bitmap: Bitmap): Uri? {
         val filename = "shot_clean_${System.currentTimeMillis()}.png"
         var fos: OutputStream? = null
         var imageUri: Uri? = null
@@ -195,8 +195,8 @@ class NativeMediaPlugin : Plugin() {
         return imageUri
     }
 
-    // Required function: shareImage(context, file or uri)
-    fun shareImage(context: Context, imageUri: Uri) {
+    // Required function: shareImageIntent(context, file or uri)
+    fun shareImageIntent(context: Context, imageUri: Uri) {
         try {
             val shareIntent = Intent().apply {
                 action = Intent.ACTION_SEND
