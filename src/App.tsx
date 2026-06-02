@@ -42,6 +42,9 @@ import {
   hideBannerAd,
   playRewardedAds,
   isNative,
+  AdMobBanner,
+  admobManager,
+  AdMobInterstitialContainer,
 } from "./lib/admob";
 
 type AppState = "upload" | "processing" | "preview";
@@ -110,6 +113,10 @@ export default function App() {
     y: number;
     w: number;
     h: number;
+  } | null>(null);
+  const [customCanvasSize, setCustomCanvasSize] = useState<{
+    width: number;
+    height: number;
   } | null>(null);
   const [showEditor, setShowEditor] = useState(false);
 
@@ -297,6 +304,12 @@ export default function App() {
     }
   }, [isPremium]);
 
+  // Track user customizing choices as active interactions for AdMob Interstitials
+  React.useEffect(() => {
+    if (!originalImage || isPremium) return;
+    admobManager.incrementInteractions();
+  }, [selectedStyle, selectedLayout, customBgColor]);
+
   // Sync processed image when any parameter changes
   React.useEffect(() => {
     if (originalImage) {
@@ -310,6 +323,7 @@ export default function App() {
         blurStrength,
         customBgColor,
         customCropRect,
+        customCanvasSize,
       )
         .then((res) => {
           setBaseStyledImage(res);
@@ -360,6 +374,7 @@ export default function App() {
     memeBottomText,
     customBgColor,
     customCropRect,
+    customCanvasSize,
     editorPaths,
     editorTexts,
   ]);
@@ -412,6 +427,9 @@ export default function App() {
           w: width,
           h: height - topH - bottomH,
         });
+        setCustomCanvasSize(null);
+        setEditorPaths([]);
+        setEditorTexts([]);
 
         setAppState("processing");
 
@@ -618,6 +636,14 @@ export default function App() {
     <div
       className={`min-h-screen font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col ${isNative ? "" : "pt-safe"} ${isDarkMode ? "bg-slate-900 text-white" : "bg-blue-600 text-gray-900"}`}
     >
+      {/* Banner Ads on top of landing page or main page */}
+      {!isPremium && (appState === "upload" || (appState === "preview" && !showEditor)) && (
+        <AdMobBanner className="shrink-0 z-[60]" />
+      )}
+
+      {/* Full-screen simulated AdMob Interstitial Overlay */}
+      <AdMobInterstitialContainer />
+
       <AnimatePresence mode="wait">
         {/* ... upload and processing screens same ... */}
         {appState === "upload" && (
@@ -1036,15 +1062,6 @@ export default function App() {
                     {t("saveBtn")}
                   </span>
                 </button>
-                <button
-                  onClick={() => setAppState("upload")}
-                  className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 rounded-lg font-bold flex flex-col items-center justify-center gap-[1px] transition-all cursor-pointer"
-                >
-                  <X className="w-3 h-3 shrink-0" />
-                  <span className="text-[8.5px] tracking-tight truncate">
-                    {t("startOverBtn")}
-                  </span>
-                </button>
               </div>
             </div>
           </motion.div>
@@ -1443,25 +1460,34 @@ export default function App() {
           >
             <EditorCanvas
               imageSrc={baseStyledImage || cleanImage!}
+              cleanImageSrc={cleanImage!}
               originalScreenshotSrc={originalImage || undefined}
               initialCropRect={customCropRect}
+              initialCustomSize={customCanvasSize}
               initialPaths={editorPaths}
               initialTexts={editorTexts}
               onCancel={() => setShowEditor(false)}
               styleName={selectedStyle}
               layoutName={selectedLayout}
               customBg={customBgColor}
+              isPremium={isPremium}
               onSave={(
                 newImgDataUrl,
                 finalCleanSrc,
                 finalPaths,
                 finalTexts,
                 customCrop,
+                customSize,
               ) => {
                 setProcessedImage(newImgDataUrl);
                 setCleanImage(finalCleanSrc);
                 setEditorPaths(finalPaths);
                 setEditorTexts(finalTexts);
+                if (customSize) {
+                  setCustomCanvasSize(customSize);
+                } else if (customSize === null) {
+                  setCustomCanvasSize(null);
+                }
                 if (customCrop) {
                   setCustomCropRect((prev) => {
                     if (

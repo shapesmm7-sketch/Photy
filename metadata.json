@@ -1,6 +1,6 @@
 {
   "name": "Shot Clean",
-  "description": "Android-style screenshot auto-editor with smart crop, beautify features, and manual drawing tools.",
+  "description": "Auto screenshots/photo editor, phone layouts, blur, crop, Play Store screenshots, Birthday & Party Stickers, emojis, and background colors.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

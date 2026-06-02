@@ -12,13 +12,18 @@ import {
   Type,
   Smile,
   Sun,
+  Maximize,
+  Eraser,
+  Loader2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { removeBackground } from "@imgly/background-removal";
 import { Styles, PhoneLayouts, applyStyle } from "./lib/imageProcessor";
 import { PHONE_FRAMES } from "./lib/phoneFrames";
 import { translations, LanguageKey } from "./i18n";
+import { AdMobBanner, admobManager } from "./lib/admob";
 
-type Tool = "none" | "crop" | "draw" | "blur" | "text" | "sticker" | "adjust";
+type Tool = "none" | "crop" | "draw" | "blur" | "text" | "sticker" | "adjust" | "size" | "removebg";
 
 interface TextItem {
   text: string;
@@ -113,8 +118,10 @@ interface DrawingPath {
 
 interface EditorCanvasProps {
   imageSrc: string;
+  cleanImageSrc?: string;
   originalScreenshotSrc?: string;
   initialCropRect?: { x: number; y: number; w: number; h: number } | null;
+  initialCustomSize?: { width: number; height: number } | null;
   initialPaths?: DrawingPath[];
   initialTexts?: TextItem[];
   onSave: (
@@ -123,17 +130,21 @@ interface EditorCanvasProps {
     paths: DrawingPath[],
     texts: TextItem[],
     customCropRect?: { x: number; y: number; w: number; h: number } | null,
+    customSize?: { width: number; height: number } | null,
   ) => void;
   onCancel: () => void;
   styleName?: string;
   layoutName?: string;
   customBg?: string | null;
+  isPremium?: boolean;
 }
 
 export default function EditorCanvas({
   imageSrc,
+  cleanImageSrc,
   originalScreenshotSrc,
   initialCropRect = null,
+  initialCustomSize = null,
   initialPaths = [],
   initialTexts = [],
   onSave,
@@ -141,6 +152,7 @@ export default function EditorCanvas({
   styleName,
   layoutName,
   customBg,
+  isPremium = false,
 }: EditorCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -437,6 +449,7 @@ export default function EditorCanvas({
   const [selectedStickerText, setSelectedStickerText] = useState("HOT");
   const [selectedStickerSize, setSelectedStickerSize] = useState(72);
   const [selectedStickerRotation, setSelectedStickerRotation] = useState(0);
+  const [selectedStickerFont, setSelectedStickerFont] = useState("Inter");
 
   // Text drag & double-tap states
   const [draggingTextIndex, setDraggingTextIndex] = useState<number | null>(
@@ -456,6 +469,18 @@ export default function EditorCanvas({
   const [selectedBlurColor, setSelectedBlurColor] =
     useState<string>("transparent");
   const [brushSize, setBrushSize] = useState<number>(45);
+  const [isRemovingBackground, setIsRemovingBackground] = useState(false);
+  const [removalProgress, setRemovalProgress] = useState(0);
+  const [removalStatus, setRemovalStatus] = useState("");
+  const [preBgRemovalImageSrc, setPreBgRemovalImageSrc] = useState<string | null>(null);
+
+  // Size tool states
+  const [canvasWidthInput, setCanvasWidthInput] = useState<string>("");
+  const [canvasHeightInput, setCanvasHeightInput] = useState<string>("");
+  const [manualCanvasSize, setManualCanvasSize] = useState<{ width: number; height: number } | null>(initialCustomSize);
+  
+  // Keep track of the clean image (no layout) for re-styling when canvas size changes.
+  const [currentCleanSrc, setCurrentCleanSrc] = useState<string | null>(cleanImageSrc || originalScreenshotSrc || imageSrc);
 
   // Initialize and load images
   useEffect(() => {
@@ -477,6 +502,8 @@ export default function EditorCanvas({
         }
         if (!cropRect) {
           setCropRect({ x: 0, y: 0, w: img.width, h: img.height });
+          setCanvasWidthInput(img.width.toString());
+          setCanvasHeightInput(img.height.toString());
         }
       }
 
@@ -550,6 +577,51 @@ export default function EditorCanvas({
       ? (rawScreenshotRef.current || styledImageRef.current)
       : styledImageRef.current;
   }, [activeTool, styledImageRef.current, rawScreenshotRef.current]);
+
+  useEffect(() => {
+    // Only re-style when the active block isn't initializing (to avoid looping on mount)
+    if (!currentCleanSrc) return;
+    
+    // We update the dynamic layout styling purely for the preview representation of the current layout with the new size!
+    const timer = setTimeout(async () => {
+      try {
+        const sourceSrc = originalScreenshotSrc || currentCleanSrc;
+        const finalCrop = originalScreenshotSrc ? cropRect : null;
+
+        const newPreviewSrc = await applyStyle(
+          sourceSrc,
+          styleName,
+          layoutName,
+          [],
+          15,
+          customBg,
+          finalCrop,
+          manualCanvasSize
+        );
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          styledImageRef.current = img;
+          if (activeTool !== "crop") {
+            originalImageRef.current = img;
+            fitImageToContainer(img, { x: 0, y: 0, w: img.width, h: img.height });
+          }
+        };
+        img.src = newPreviewSrc;
+      } catch (err) {
+        console.error("Failed to update layout preview on resize", err);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [manualCanvasSize, currentCleanSrc, originalScreenshotSrc, cropRect, styleName, layoutName, customBg]);
+
+  // Increment AdMob interactions when tool changes, if not premium
+  useEffect(() => {
+    if (activeTool !== "none" && !isPremium) {
+      admobManager.incrementInteractions();
+    }
+  }, [activeTool, isPremium]);
 
   // Handle resizing of container (with ResizeObserver for dynamic transitions) and tool change fitting
   useEffect(() => {
@@ -637,8 +709,11 @@ export default function EditorCanvas({
 
     const virtualH = rect.h + topPad + bottomPad;
 
-    // Calculate aspect ratios based on current crop rect + pads
-    const imageAspect = rect.w / virtualH;
+    const finalW = manualCanvasSize ? manualCanvasSize.width : rect.w;
+    const finalH = manualCanvasSize ? manualCanvasSize.height : virtualH;
+
+    // Calculate aspect ratios based on final dimensions
+    const imageAspect = finalW / finalH;
     const containerAspect = cw / ch;
 
     let destW, destH;
@@ -650,14 +725,14 @@ export default function EditorCanvas({
       destW = ch * imageAspect;
     }
 
-    // Set canvas resolution strictly to crop size + padding for quality
+    // Set canvas resolution strictly to target size
     const canvasObj = canvasRef.current;
     const blurCanvasObj = blurCanvasRef.current;
 
-    canvasObj.width = rect.w;
-    canvasObj.height = virtualH;
-    blurCanvasObj.width = rect.w;
-    blurCanvasObj.height = virtualH;
+    canvasObj.width = finalW;
+    canvasObj.height = finalH;
+    blurCanvasObj.width = finalW;
+    blurCanvasObj.height = finalH;
 
     setCanvasSize({ width: destW, height: destH });
 
@@ -771,6 +846,15 @@ export default function EditorCanvas({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Draw background color if provided
+    if (customBg) {
+      ctx.fillStyle = customBg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    const drawX = manualCanvasSize ? (canvas.width - activeRect.w) / 2 : 0;
+    const drawY = manualCanvasSize ? (canvas.height - activeRect.h) / 2 : topPad;
+
     // Base image (cropped region or full original depending on activeRect)
     ctx.save();
     if (brightness !== 100) {
@@ -782,15 +866,15 @@ export default function EditorCanvas({
       activeRect.y,
       activeRect.w,
       activeRect.h,
-      0,
-      topPad,
+      drawX,
+      drawY,
       activeRect.w,
       activeRect.h,
     );
     ctx.restore();
 
     ctx.save();
-    ctx.translate(0, topPad);
+    // Path drawing uses absolute coordinates from canvas
 
     if (activeTool !== "crop") {
       // Draw paths
@@ -1310,6 +1394,7 @@ export default function EditorCanvas({
           setSelectedStickerColor(t.badgeBg || t.color);
           setSelectedStickerSize(t.size);
           setSelectedStickerRotation(t.rotation || 0);
+          setSelectedStickerFont(t.fontName || "Inter");
           setActiveTool("sticker");
           setShowStickerPanel(true);
         } else {
@@ -1878,7 +1963,7 @@ export default function EditorCanvas({
       color: type === "badge" ? "#FFFFFF" : selectedStickerColor,
       size,
       positionMode: "Default",
-      fontName: "Default",
+      fontName: selectedStickerFont,
       rotation: selectedStickerRotation,
       hasShadow: true,
       isSticker: true,
@@ -1961,6 +2046,115 @@ export default function EditorCanvas({
     }
   };
 
+  const handleUpdateActiveStickerFont = (newFont: string) => {
+    setSelectedStickerFont(newFont);
+    if (editingTextIndex >= 0) {
+      const nextTexts = [...texts];
+      nextTexts[editingTextIndex] = {
+        ...nextTexts[editingTextIndex],
+        fontName: newFont
+      };
+      setTexts(nextTexts);
+      redraw(undefined, undefined, nextTexts);
+    }
+  };
+
+  const handleRemoveBackground = async () => {
+    if (isRemovingBackground) return;
+    
+    setIsRemovingBackground(true);
+    setRemovalProgress(0);
+    setRemovalStatus("Initializing model...");
+    
+    try {
+      // Scale down image before background removal to prevent memory crashes
+      const img = new Image();
+      img.src = imageSrc;
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      const MAX_DIMENSION = 1000;
+      let width = img.width;
+      let height = img.height;
+      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+      }
+      const blob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.9);
+      });
+
+      const resultBlob = await removeBackground(blob, {
+        publicPath: "https://static.imgly.com/@imgly/background-removal-data/1.7.0/dist/",
+        debug: true,
+        progress: (key, current, total) => {
+          console.log(`BGremo progress: ${key} ${current}/${total}`);
+          setRemovalStatus(key.replace("fetch:", "Downloading ").replace("compute:", "Processing "));
+          if (total > 0) {
+            setRemovalProgress(Math.round((current / total) * 100));
+          }
+        }
+      });
+      
+      setRemovalStatus("Finalizing...");
+      setRemovalProgress(100);
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        const img = new Image();
+        img.onload = () => {
+          setPreBgRemovalImageSrc(imageSrc);
+          styledImageRef.current = img;
+          originalImageRef.current = img;
+          onSave(base64, base64, paths, texts, cropRect, manualCanvasSize);
+          setIsRemovingBackground(false);
+          setRemovalStatus("");
+          setRemovalProgress(0);
+          setActiveTool("none");
+        };
+        img.onerror = () => {
+          console.error("Failed to load processing result");
+          setIsRemovingBackground(false);
+          setRemovalStatus("Error loading result");
+        };
+        img.src = base64;
+      };
+      reader.readAsDataURL(resultBlob);
+    } catch (error) {
+      console.error("Failed to remove background:", error);
+      setIsRemovingBackground(false);
+      setRemovalStatus("");
+      setRemovalProgress(0);
+      alert("Background removal failed. This can happen on low-memory devices or slow connections.");
+    }
+  };
+
+  const handleUndoRemoveBackground = () => {
+    if (preBgRemovalImageSrc) {
+      const img = new Image();
+      img.onload = () => {
+        styledImageRef.current = img;
+        originalImageRef.current = img;
+        onSave(preBgRemovalImageSrc, preBgRemovalImageSrc, paths, texts, cropRect, manualCanvasSize);
+        setPreBgRemovalImageSrc(null);
+        setActiveTool("none");
+      };
+      img.src = preBgRemovalImageSrc;
+    }
+  };
+
   const handleApplySaveCrop = async () => {
     const screenshotSrc = originalScreenshotSrc || imageSrc;
     if (!screenshotSrc || !cropRect) return;
@@ -2012,9 +2206,22 @@ export default function EditorCanvas({
         styledImageRef.current = updatedStyledImg;
         originalImageRef.current = updatedStyledImg;
 
+        // Keep local clean src in sync so layout previews updated for size changes correctly
+        setCurrentCleanSrc(cleanDataUrl);
+
         // Switch tool to none, to exit the crop mode and let them preview/continue drawing!
         setActiveTool("none");
         setIsApplyingCrop(false);
+
+        // Notify parent immediately so that outer preview / phone layout gets the cropped image
+        onSave(
+          newStyledDataUrl,
+          cleanDataUrl,
+          paths,
+          texts,
+          cropRect,
+          manualCanvasSize
+        );
 
         // Force a redraw with the new image loaded. Since we now set the styled image,
         // the canvas fits the newly generated styled mockup, which is perfect and scaled!
@@ -2061,6 +2268,8 @@ export default function EditorCanvas({
           // Don't save the UI into the preview.
           previewDataUrl = cleanDataUrl;
         }
+        
+        setCurrentCleanSrc(cleanDataUrl);
 
         onSave(
           previewDataUrl,
@@ -2068,6 +2277,7 @@ export default function EditorCanvas({
           paths,
           texts,
           cropRect,
+          manualCanvasSize,
         );
       }
     }
@@ -2076,6 +2286,8 @@ export default function EditorCanvas({
   return (
     <div className="flex flex-col h-full bg-black text-white absolute inset-0 z-50">
       <canvas ref={blurCanvasRef} className="hidden" />
+
+      {!isPremium && <AdMobBanner />}
 
       <div className="flex items-center justify-between p-4 bg-[#111] z-10 pt-safe border-b border-white/10">
         <button
@@ -2279,7 +2491,7 @@ export default function EditorCanvas({
         )}
       </div>
 
-      <div className="flex justify-around items-center p-4 bg-[#111] pb-safe z-10 border-t border-white/10">
+      <div className="flex items-center justify-start gap-1 p-3 bg-[#111] pb-safe z-10 border-t border-white/10 overflow-x-auto no-scrollbar">
         <ToolButton
           active={activeTool === "crop"}
           onClick={() => setActiveTool(activeTool === "crop" ? "none" : "crop")}
@@ -2326,6 +2538,7 @@ export default function EditorCanvas({
             } else {
               setActiveTool("sticker");
               setEditingTextIndex(-1);
+              setSelectedStickerFont("Inter");
               setShowStickerPanel(true);
               setShowTextModal(false);
             }
@@ -2347,12 +2560,46 @@ export default function EditorCanvas({
           icon={<Sun />}
           label="Adjust"
         />
+        <ToolButton
+          active={activeTool === "size"}
+          onClick={() => {
+            if (activeTool === "size") {
+              setActiveTool("none");
+            } else {
+              setActiveTool("size");
+              setShowStickerPanel(false);
+              setShowTextModal(false);
+            }
+          }}
+          icon={<Maximize />}
+          label="Size"
+        />
+        <ToolButton
+          active={activeTool === "removebg"}
+          disabled={isRemovingBackground}
+          onClick={() => {
+            if (activeTool === "removebg") {
+              setActiveTool("none");
+            } else {
+              setActiveTool("removebg");
+              setShowStickerPanel(false);
+              setShowTextModal(false);
+            }
+          }}
+          icon={isRemovingBackground ? <Loader2 className="animate-spin" /> : <Eraser />}
+          label="Cleanup"
+        />
         <div className="w-[1px] h-8 bg-white/10 mx-2" />
         <button
           onClick={() => {
             setPaths([]);
             setTexts([]);
             setBrightness(100);
+            setManualCanvasSize(null);
+            if (originalImageRef.current) {
+              setCanvasWidthInput(originalImageRef.current.width.toString());
+              setCanvasHeightInput(originalImageRef.current.height.toString());
+            }
             if (rawScreenshotRef.current) {
               const rect = {
                 x: 0,
@@ -2520,10 +2767,14 @@ export default function EditorCanvas({
             <div className="flex flex-col gap-2 bg-white/5 px-4 py-3.5 rounded-2xl border border-white/5">
               <div className="flex justify-between items-center text-xs font-bold text-gray-300 uppercase tracking-wider">
                 <span>Brightness</span>
-                <span className="text-white font-mono font-medium">{brightness}%</span>
+                <span className="text-white font-mono font-medium">
+                  {brightness}%
+                </span>
               </div>
               <div className="flex items-center gap-3 mt-1">
-                <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">Darker</span>
+                <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">
+                  Darker
+                </span>
                 <input
                   type="range"
                   min="30"
@@ -2534,9 +2785,193 @@ export default function EditorCanvas({
                   }}
                   className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                 />
-                <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">Brighter</span>
+                <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">
+                  Brighter
+                </span>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {activeTool === "removebg" && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="px-4 py-4 bg-[#111111] border-t border-white/5 flex flex-col gap-3 shrink-0 z-20 overflow-hidden"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">
+                Background Remover
+              </span>
+            </div>
+
+            <div className="bg-blue-600/10 border border-blue-500/20 rounded-2xl p-4 flex flex-col gap-3">
+              <div className="flex gap-3">
+                <div className="bg-blue-600/20 p-2 rounded-xl h-fit">
+                  <Eraser className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h4 className="text-white text-sm font-bold">Remove Background</h4>
+                  <p className="text-gray-400 text-[11px] leading-relaxed mt-0.5">
+                    This will automatically detect and remove the background from your photo, leaving only the subject.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex gap-2 w-full">
+                <button
+                  disabled={isRemovingBackground}
+                  onClick={handleRemoveBackground}
+                  className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
+                    isRemovingBackground 
+                      ? "bg-gray-800 text-gray-500 cursor-not-allowed" 
+                      : "bg-blue-600 hover:bg-blue-700 text-white active:scale-95 shadow-lg shadow-blue-500/20"
+                  }`}
+                >
+                  {isRemovingBackground ? (
+                    <div className="flex flex-col items-center gap-1.5 w-full">
+                      <div className="flex items-center gap-2">
+                         <Loader2 className="w-4 h-4 animate-spin" />
+                         <span className="text-blue-400 font-bold">{removalProgress}%</span>
+                      </div>
+                      <span className="text-[10px] text-blue-300/70 font-medium">
+                        {removalStatus}
+                      </span>
+                      <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-1">
+                        <motion.div 
+                           initial={{ width: 0 }}
+                           animate={{ width: `${removalProgress}%` }}
+                           className="h-full bg-blue-500"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    "Remove Photo Background"
+                  )}
+                </button>
+                {preBgRemovalImageSrc && !isRemovingBackground && (
+                  <button
+                    onClick={handleUndoRemoveBackground}
+                    className="flex-1 py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white border border-white/10 active:scale-95"
+                  >
+                    Undo Removal
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            <p className="text-[9px] text-gray-500 font-medium italic px-1">
+              Note: This ONLY removes background from the photo/screenshot itself. Your custom background colors remain.
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {activeTool === "size" && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="px-4 py-4 bg-[#111111] border-t border-white/5 flex flex-col gap-3 shrink-0 z-20 overflow-hidden"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">
+                Canvas Size
+              </span>
+              <button
+                onClick={() => {
+                  setManualCanvasSize(null);
+                  if (originalImageRef.current) {
+                    setCanvasWidthInput(
+                      originalImageRef.current.width.toString(),
+                    );
+                    setCanvasHeightInput(
+                      originalImageRef.current.height.toString(),
+                    );
+                  }
+                  setTimeout(() => {
+                    if (originalImageRef.current && cropRect) {
+                      fitImageToContainer(originalImageRef.current, cropRect);
+                    }
+                  }, 0);
+                }}
+                className="text-[10px] text-blue-400 font-extrabold tracking-wider uppercase hover:underline cursor-pointer"
+              >
+                Reset Size
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider pl-1">
+                  Width (px)
+                </label>
+                <input
+                  type="number"
+                  value={canvasWidthInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCanvasWidthInput(val);
+                    const w = parseInt(val);
+                    const h = parseInt(canvasHeightInput);
+                    if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+                      setManualCanvasSize({ width: w, height: h });
+                      setTimeout(() => {
+                        if (originalImageRef.current && cropRect) {
+                          fitImageToContainer(
+                            originalImageRef.current,
+                            cropRect,
+                          );
+                        }
+                      }, 0);
+                    }
+                  }}
+                  className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none focus:ring-1 ring-blue-500/50"
+                  placeholder="Width"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider pl-1">
+                  Height (px)
+                </label>
+                <input
+                  type="number"
+                  value={canvasHeightInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCanvasHeightInput(val);
+                    const h = parseInt(val);
+                    const w = parseInt(canvasWidthInput);
+                    if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
+                      setManualCanvasSize({ width: w, height: h });
+                      setTimeout(() => {
+                        if (originalImageRef.current && cropRect) {
+                          fitImageToContainer(
+                            originalImageRef.current,
+                            cropRect,
+                          );
+                        }
+                      }, 0);
+                    }
+                  }}
+                  className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none focus:ring-1 ring-blue-500/50"
+                  placeholder="Height"
+                />
+              </div>
+            </div>
+            <p className="text-[9px] text-gray-500 font-medium italic mt-1 px-1">
+              Typing a custom size will resize the whole canvas and background.
+            </p>
+            <button
+              onClick={() => setActiveTool("none")}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs transition-all active:scale-95 mt-1 shadow-lg shadow-blue-900/20"
+            >
+              Save Size
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -2849,6 +3284,29 @@ export default function EditorCanvas({
                           ))}
                         </div>
                       </div>
+
+                      {/* Font List */}
+                      <div>
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                          Font Style
+                        </label>
+                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                          {fontNames.map((f) => (
+                            <button
+                              key={f}
+                              onClick={() => handleUpdateActiveStickerFont(f)}
+                              className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                                selectedStickerFont === f
+                                  ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                                  : "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200"
+                              }`}
+                              style={{ fontFamily: fontCSSMap[f] }}
+                            >
+                              {f}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -2900,16 +3358,21 @@ function ToolButton({
   label,
   active,
   onClick,
+  disabled,
 }: {
   icon: React.ReactNode;
   label: string;
   active: boolean;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
-      onClick={onClick}
-      className={`flex flex-col items-center gap-1 p-2 min-w-[64px] rounded-xl transition-all ${
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`flex flex-col items-center gap-1 p-2 min-w-[64px] rounded-xl transition-all shrink-0 ${
+        disabled ? "opacity-30 cursor-not-allowed" : ""
+      } ${
         active
           ? "text-white bg-white/10 shadow-inner"
           : "text-gray-500 hover:text-white/80"

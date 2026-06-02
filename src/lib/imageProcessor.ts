@@ -617,8 +617,8 @@ function drawDevice(
       else ctx.rect(screenX, screenY, screenW, screenH);
       ctx.clip();
 
-      // Fill black background for screen (prevents transparency issues)
-      ctx.fillStyle = "#000";
+      // Fill background for screen
+      ctx.fillStyle = "#111";
       ctx.fillRect(screenX, screenY, screenW, screenH);
 
       // Draw image adjusted to screen
@@ -648,6 +648,10 @@ function drawDevice(
           drawH = screenW / imgRatio;
         }
       }
+
+      // Slightly zoom in to hide any baked-in rounded corners or borders from the original screenshot
+      drawW *= 1.03;
+      drawH *= 1.03;
 
       ctx.save();
       ctx.translate(screenX + screenW / 2, screenY + screenH / 2);
@@ -721,7 +725,7 @@ function drawDevice(
   ctx.clip();
 
   // Fill screen background before image
-  ctx.fillStyle = "#000";
+  ctx.fillStyle = "#111";
   ctx.fillRect(-devW / 2, -devH / 2, devW, devH);
 
   // Draw Image - fitted to screen
@@ -741,7 +745,6 @@ function drawDevice(
   if (imgRatio > screenRatio) {
     drawW = screenW;
     drawH = screenW / imgRatio;
-    // ensure fits vertically
     if (drawH < screenH) {
       drawH = screenH;
       drawW = screenH * imgRatio;
@@ -749,12 +752,15 @@ function drawDevice(
   } else {
     drawH = screenH;
     drawW = screenH * imgRatio;
-    // ensure fits horizontally
     if (drawW < screenW) {
       drawW = screenW;
       drawH = screenW / imgRatio;
     }
   }
+
+  // Slightly zoom in to hide any baked-in rounded corners or borders from the original screenshot
+  drawW *= 1.03;
+  drawH *= 1.03;
 
   ctx.save();
   if (shouldRotate) {
@@ -814,6 +820,7 @@ export async function applyStyle(
   blurStrength: number = 15,
   customBg: string | null = null,
   customCropRect: { x: number; y: number; w: number; h: number } | null = null,
+  customCanvasSize: { width: number; height: number } | null = null,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -948,8 +955,11 @@ export async function applyStyle(
         const padding =
           Math.max(croppedWidth, croppedHeight) * basePaddingFactor;
 
-        canvas.width = croppedWidth + padding * 2;
-        canvas.height = croppedHeight + padding * 2;
+        let contentW = croppedWidth + padding * 2;
+        let contentH = croppedHeight + padding * 2;
+
+        canvas.width = customCanvasSize ? customCanvasSize.width : contentW;
+        canvas.height = customCanvasSize ? customCanvasSize.height : contentH;
 
         ctx.filter = `brightness(${config.brightnessFactor}) contrast(${config.contrastFactor})`;
 
@@ -989,6 +999,12 @@ export async function applyStyle(
         } else {
           ctx.fillStyle = config.bgColor;
           ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Center content mapping
+        ctx.save();
+        if (customCanvasSize && layout.name === "None") {
+           ctx.translate((canvas.width - contentW) / 2, (canvas.height - contentH) / 2);
         }
 
         // Decorative lines for layouts removed per user request
@@ -1100,6 +1116,9 @@ export async function applyStyle(
           });
         }
 
+        // Restore layout transform before watermark
+        ctx.restore();
+
         // Watermark
         if (styleName !== "Original" || layout.name !== "None") {
           const isDarkBg =
@@ -1108,10 +1127,12 @@ export async function applyStyle(
           ctx.fillStyle = isDarkBg
             ? "rgba(255, 255, 255, 0.45)"
             : "rgba(0, 0, 0, 0.35)";
-          ctx.font = `${canvas.width * 0.024}px sans-serif`;
+          // Set font size based on the content or final canvas width, taking minimum
+          const referenceWidth = customCanvasSize ? contentW : canvas.width;
+          ctx.font = `${referenceWidth * 0.024}px sans-serif`;
           ctx.textAlign = "right";
 
-          if (layout.name === "None") {
+          if (layout.name === "None" && !customCanvasSize) {
             ctx.fillText(
               "Edited with Shot Clean",
               padding + croppedWidth - canvas.width * 0.015,

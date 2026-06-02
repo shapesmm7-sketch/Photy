@@ -1,8 +1,8 @@
 export const translations = {
   en: {
     appName: "Shot Clean",
-    subtitle: "Auto screenshots/photo editor, phone layouts,Blur,crop",
-    uploadBtn: "Upload Screenshot/Photo",
+    subtitle: "Auto screenshots/photo editor, phone layouts, blur, crop, Play Store screenshots, Birthday & Party Stickers, emojis, background colors",
+    uploadBtn: "Upload Photo/Screenshot",
     viralStylesTitle: "Viral Styles",
     viralStylesDesc: "Realistic Phone Layouts",
     enhancing: "Enhancing screenshot...",
