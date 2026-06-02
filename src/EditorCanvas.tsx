@@ -2574,21 +2574,7 @@ export default function EditorCanvas({
           icon={<Maximize />}
           label="Size"
         />
-        <ToolButton
-          active={activeTool === "removebg"}
-          disabled={isRemovingBackground}
-          onClick={() => {
-            if (activeTool === "removebg") {
-              setActiveTool("none");
-            } else {
-              setActiveTool("removebg");
-              setShowStickerPanel(false);
-              setShowTextModal(false);
-            }
-          }}
-          icon={isRemovingBackground ? <Loader2 className="animate-spin" /> : <Eraser />}
-          label="Cleanup"
-        />
+
         <div className="w-[1px] h-8 bg-white/10 mx-2" />
         <button
           onClick={() => {
@@ -2790,82 +2776,6 @@ export default function EditorCanvas({
                 </span>
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {activeTool === "removebg" && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="px-4 py-4 bg-[#111111] border-t border-white/5 flex flex-col gap-3 shrink-0 z-20 overflow-hidden"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">
-                Background Remover
-              </span>
-            </div>
-
-            <div className="bg-blue-600/10 border border-blue-500/20 rounded-2xl p-4 flex flex-col gap-3">
-              <div className="flex gap-3">
-                <div className="bg-blue-600/20 p-2 rounded-xl h-fit">
-                  <Eraser className="w-5 h-5 text-blue-400" />
-                </div>
-                <div>
-                  <h4 className="text-white text-sm font-bold">Remove Background</h4>
-                  <p className="text-gray-400 text-[11px] leading-relaxed mt-0.5">
-                    This will automatically detect and remove the background from your photo, leaving only the subject.
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex gap-2 w-full">
-                <button
-                  disabled={isRemovingBackground}
-                  onClick={handleRemoveBackground}
-                  className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 ${
-                    isRemovingBackground 
-                      ? "bg-gray-800 text-gray-500 cursor-not-allowed" 
-                      : "bg-blue-600 hover:bg-blue-700 text-white active:scale-95 shadow-lg shadow-blue-500/20"
-                  }`}
-                >
-                  {isRemovingBackground ? (
-                    <div className="flex flex-col items-center gap-1.5 w-full">
-                      <div className="flex items-center gap-2">
-                         <Loader2 className="w-4 h-4 animate-spin" />
-                         <span className="text-blue-400 font-bold">{removalProgress}%</span>
-                      </div>
-                      <span className="text-[10px] text-blue-300/70 font-medium">
-                        {removalStatus}
-                      </span>
-                      <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-1">
-                        <motion.div 
-                           initial={{ width: 0 }}
-                           animate={{ width: `${removalProgress}%` }}
-                           className="h-full bg-blue-500"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    "Remove Photo Background"
-                  )}
-                </button>
-                {preBgRemovalImageSrc && !isRemovingBackground && (
-                  <button
-                    onClick={handleUndoRemoveBackground}
-                    className="flex-1 py-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white border border-white/10 active:scale-95"
-                  >
-                    Undo Removal
-                  </button>
-                )}
-              </div>
-            </div>
-            
-            <p className="text-[9px] text-gray-500 font-medium italic px-1">
-              Note: This ONLY removes background from the photo/screenshot itself. Your custom background colors remain.
-            </p>
           </motion.div>
         )}
       </AnimatePresence>

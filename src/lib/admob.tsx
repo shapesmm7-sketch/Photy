@@ -80,7 +80,7 @@ class AdMobManager {
 export const admobManager = new AdMobManager();
 
 // -------------------------------------------------------------
-// BEAUTIFUL GOOGLE ADMOB TEST BANNER COMPONENT
+// BEAUTIFUL GOOGLE ADMOB BANNER COMPONENT
 // -------------------------------------------------------------
 interface AdMobBannerProps {
   unitId?: string;
@@ -115,7 +115,7 @@ const SHOWN_MOCK_ADS = [
 ];
 
 export function AdMobBanner({
-  unitId = "ca-app-pub-394025609942544/9214589741",
+  unitId = "ca-app-pub-8582659585800553/2899259565",
   className = "",
 }: AdMobBannerProps) {
   const [adIndex, setAdIndex] = useState(0);
@@ -132,22 +132,12 @@ export function AdMobBanner({
 
   return (
     <div
-      className={`w-full bg-neutral-900 border-b border-white/10 select-none pb-0 px-2 lg:px-4 py-1.5 overflow-hidden flex flex-col items-center justify-center relative font-sans ${className}`}
+      className={`w-full bg-[#111111] border-b border-white/5 select-none px-2 lg:px-4 py-2 overflow-hidden flex flex-col items-center justify-center relative font-sans ${className}`}
     >
-      {/* Test Ad Indicator Strip */}
-      <div className="w-full flex items-center justify-between text-[9px] text-gray-400 font-mono tracking-tight pb-1 mb-1 border-b border-neutral-800">
-        <span className="flex items-center gap-1 text-amber-500">
-          <Info className="w-2.5 h-2.5" /> Google Test Banner Ad
-        </span>
-        <span className="opacity-70 truncate max-w-[200px] md:max-w-none">
-          Ad ID: {unitId}
-        </span>
-      </div>
-
       {/* Main Banner Body */}
-      <div className="w-full max-w-[468px] mx-auto h-[48px] bg-black/45 rounded-lg flex items-center justify-between px-2 py-1 gap-2.5 relative border border-white/5 shadow-inner">
+      <div className="w-full max-w-[468px] mx-auto h-[50px] bg-black/60 rounded-xl flex items-center justify-between px-2.5 py-1 gap-2.5 relative border border-white/10 shadow-lg">
         {/* Ad Badge */}
-        <div className="absolute top-1 left-1 px-1 bg-amber-500 text-black font-extrabold text-[7px] leading-none rounded uppercase tracking-wider scale-90">
+        <div className="absolute top-1 left-1.5 px-1 bg-[#ffb300] text-black font-black text-[8px] leading-none rounded uppercase tracking-wider scale-90">
           Ad
         </div>
 
@@ -173,7 +163,7 @@ export function AdMobBanner({
 
         {/* CTA Button */}
         <button
-          onClick={() => alert(`Redirecting to Google Play for "${activeAd.title}" test ad click.`)}
+          onClick={() => console.log(`Redirecting to sponsored content: ${activeAd.title}`)}
           className={`px-3 py-1 bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all text-white font-extrabold text-[10px] tracking-wide rounded-md shrink-0 shadow-lg shadow-blue-900/30 font-sans cursor-pointer`}
         >
           {activeAd.cta}
@@ -270,8 +260,8 @@ export function AdMobInterstitialContainer() {
               <span className="bg-amber-500 text-black text-[9px] font-black px-1.5 py-0.5 rounded leading-none uppercase tracking-wider">
                 Ad
               </span>
-              <span className="text-[11px] text-gray-300 font-mono">
-                Google Interstitial Test Ad | ID: ca-app-pub-394025609942544/1033173712
+              <span className="text-[11px] text-gray-300 font-medium tracking-tight">
+                Sponsored App Spotlight
               </span>
             </div>
 
@@ -286,7 +276,7 @@ export function AdMobInterstitialContainer() {
                 </button>
               ) : (
                 <div className="px-3.5 py-1.5 bg-neutral-900 text-gray-300 text-xs font-medium rounded-full border border-white/5">
-                  Reward in <span className="font-bold text-amber-400 font-mono">{countdown}</span>s
+                  Dismiss in <span className="font-bold text-amber-400 font-mono">{countdown}</span>s
                 </div>
               )}
             </div>
@@ -360,13 +350,13 @@ export function AdMobInterstitialContainer() {
             {/* Install Call to Action Area */}
             <div className="w-full max-w-[340px] flex flex-col gap-2 pb-6 z-10">
               <button
-                onClick={() => alert(`Redirecting mock install flow for: "${currentCampaign.title}"`)}
+                onClick={handleCloseAd}
                 className={`w-full py-3.5 rounded-2xl font-black text-sm uppercase tracking-wider text-center cursor-pointer transform hover:scale-[1.02] active:scale-[0.98] transition-all bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2`}
               >
                 {currentCampaign.cta} <ExternalLink className="w-4 h-4 ml-1" />
               </button>
-              <span className="text-[10px] text-gray-500 font-mono tracking-tight text-center">
-                Interactive Google Test Ad experience. Closes to trigger callback.
+              <span className="text-[10px] text-gray-400 font-sans tracking-normal opacity-60 text-center">
+                Enjoy premium features supported by our partners.
               </span>
             </div>
           </div>
