@@ -27,12 +27,12 @@ import java.io.OutputStream
 
 @CapacitorPlugin(
     name = "NativeMedia",
-    permissions = [
-        Permission(
+    permissions = arrayOf(
+        com.getcapacitor.annotation.Permission(
             alias = "storage",
-            strings = [Manifest.permission.WRITE_EXTERNAL_STORAGE]
+            strings = arrayOf(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
         )
-    ]
+    )
 )
 class NativeMediaPlugin : Plugin() {
 
@@ -52,7 +52,7 @@ class NativeMediaPlugin : Plugin() {
 
         // Request WRITE_EXTERNAL_STORAGE at runtime ONLY for Android < 10 (API < 29)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            if (getPermissionState("storage") != PermissionState.GRANTED) {
+            if (getPermissionState("storage") != com.getcapacitor.PermissionState.GRANTED) {
                 requestPermissionForAlias("storage", call, "savePermissionCallback")
                 return
             }
@@ -63,7 +63,7 @@ class NativeMediaPlugin : Plugin() {
 
     @PermissionCallback
     fun savePermissionCallback(call: PluginCall) {
-        if (getPermissionState("storage") == PermissionState.GRANTED) {
+        if (getPermissionState("storage") == com.getcapacitor.PermissionState.GRANTED) {
             val base64Data = call.getString("base64") ?: ""
             val bitmap = base64ToBitmap(base64Data)
             if (bitmap != null) {
@@ -139,8 +139,8 @@ class NativeMediaPlugin : Plugin() {
         }
     }
 
-    // Required function: saveImageToGallery(context, bitmap): returns Uri or File
-    fun saveImageToGallery(context: Context, bitmap: Bitmap): Uri? {
+    // Required function: saveImageToGallery(androidContext, bitmap): returns Uri or File
+    fun saveImageToGallery(androidContext: Context, bitmap: Bitmap): Uri? {
         val filename = "shot_clean_${System.currentTimeMillis()}.png"
         var fos: OutputStream? = null
         var imageUri: Uri? = null
@@ -148,7 +148,7 @@ class NativeMediaPlugin : Plugin() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 // Android 10+ (API 29+): Use MediaStore API with RELATIVE_PATH = "Pictures/MyApp"
-                val resolver = context.contentResolver
+                val resolver = androidContext.contentResolver
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
                     put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
@@ -176,7 +176,7 @@ class NativeMediaPlugin : Plugin() {
 
                 // Run MediaScannerConnection so the image immediately shows up in the gallery
                 MediaScannerConnection.scanFile(
-                    context,
+                    androidContext,
                     arrayOf(imageFile.absolutePath),
                     arrayOf("image/png"),
                     null
