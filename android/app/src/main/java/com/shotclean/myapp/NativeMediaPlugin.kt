@@ -77,7 +77,12 @@ class NativeMediaPlugin : Plugin() {
     }
 
     private fun executeSaveAndResolve(call: PluginCall, bitmap: Bitmap) {
-        val uri = saveImage(context, bitmap)
+        val ctx = context
+        if (ctx == null) {
+            call.reject("Android Context is unavailable")
+            return
+        }
+        val uri = saveImage(ctx, bitmap)
         if (uri != null) {
             val response = JSObject()
             response.put("uri", uri.toString())
@@ -101,9 +106,15 @@ class NativeMediaPlugin : Plugin() {
             return
         }
 
+        val ctx = context
+        if (ctx == null) {
+            call.reject("Android Context is unavailable")
+            return
+        }
+
         try {
             // Save to temporary cache folder to avoid polluting gallery for shares
-            val cachePath = File(context.cacheDir, "images")
+            val cachePath = File(ctx.cacheDir, "images")
             cachePath.mkdirs()
             val file = File(cachePath, "shared_image_${System.currentTimeMillis()}.png")
             val fos = FileOutputStream(file)
@@ -112,11 +123,11 @@ class NativeMediaPlugin : Plugin() {
             fos.close()
 
             // Get FileProvider URI to safely share on Android 7+ (API 24+)
-            val authority = "${context.packageName}.fileprovider"
-            val imageUri = FileProvider.getUriForFile(context, authority, file)
+            val authority = "${ctx.packageName}.fileprovider"
+            val imageUri = FileProvider.getUriForFile(ctx, authority, file)
 
             if (imageUri != null) {
-                shareImage(context, imageUri)
+                shareImage(ctx, imageUri)
                 val response = JSObject()
                 response.put("success", true)
                 call.resolve(response)
