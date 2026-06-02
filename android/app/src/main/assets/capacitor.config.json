@@ -1,5 +1,5 @@
 {
-	"appId": "com.shotclean.app",
+	"appId": "com.shotclean.myapp",
 	"appName": "Shot Clean",
 	"webDir": "dist",
 	"server": {
