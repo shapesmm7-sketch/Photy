@@ -26,12 +26,12 @@ import java.io.OutputStream
 
 @CapacitorPlugin(
     name = "NativeMedia",
-    permissions = arrayOf(
+    permissions = [
         Permission(
             alias = "storage",
-            strings = arrayOf("android.permission.WRITE_EXTERNAL_STORAGE")
+            strings = ["android.permission.WRITE_EXTERNAL_STORAGE"]
         )
-    )
+    ]
 )
 class NativeMediaPlugin : Plugin() {
 
