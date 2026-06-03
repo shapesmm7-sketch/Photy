@@ -15,6 +15,10 @@ import {
   Maximize,
   Eraser,
   Loader2,
+  Undo,
+  Redo,
+  RotateCw,
+  Wand2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { removeBackground } from "@imgly/background-removal";
@@ -131,6 +135,7 @@ interface EditorCanvasProps {
     texts: TextItem[],
     customCropRect?: { x: number; y: number; w: number; h: number } | null,
     customSize?: { width: number; height: number } | null,
+    newOriginalSrc?: string,
   ) => void;
   onCancel: () => void;
   styleName?: string;
@@ -160,6 +165,7 @@ export default function EditorCanvas({
   const scratchCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [activeTool, setActiveTool] = useState<Tool>("none");
   const [isApplyingCrop, setIsApplyingCrop] = useState(false);
+  const [isRotating, setIsRotating] = useState(false);
 
   const getPadding = (w: number, h: number) => {
     const sName = styleName || "Minimal";
@@ -399,6 +405,67 @@ export default function EditorCanvas({
   const [texts, setTexts] = useState<TextItem[]>(initialTexts);
   const [selectedTextIndex, setSelectedTextIndex] = useState<number | null>(null);
 
+  // History state for undo/redo
+  const [history, setHistory] = useState<{
+    paths: DrawingPath[];
+    texts: TextItem[];
+    cropRect: { x: number; y: number; w: number; h: number } | null;
+  }[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [shouldCommit, setShouldCommit] = useState(false);
+  const [isUndoing, setIsUndoing] = useState(false);
+
+  useEffect(() => {
+    if (history.length === 0 && cropRect !== null) {
+      setHistory([{ paths, texts, cropRect }]);
+      setHistoryIndex(0);
+    }
+  }, [cropRect]);
+
+  useEffect(() => {
+    if (shouldCommit && !isUndoing) {
+      setHistory(prev => {
+        const nextHistory = prev.slice(0, historyIndex + 1);
+        nextHistory.push({ paths, texts, cropRect });
+        if (nextHistory.length > 50) nextHistory.shift();
+        return nextHistory;
+      });
+      setHistoryIndex(prev => {
+        const next = prev + 1;
+        return next >= 50 ? 49 : next;
+      });
+      setShouldCommit(false);
+    }
+  }, [shouldCommit, paths, texts, cropRect, historyIndex, isUndoing]);
+
+  const undo = () => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      const state = history[newIndex];
+      setHistoryIndex(newIndex);
+      setPaths(state.paths);
+      setTexts(state.texts);
+      setCropRect(state.cropRect);
+      setIsUndoing(true);
+      setTimeout(() => setIsUndoing(false), 50);
+      redraw(undefined, state.paths, state.texts);
+    }
+  };
+
+  const redo = () => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      const state = history[newIndex];
+      setHistoryIndex(newIndex);
+      setPaths(state.paths);
+      setTexts(state.texts);
+      setCropRect(state.cropRect);
+      setIsUndoing(true);
+      setTimeout(() => setIsUndoing(false), 50);
+      redraw(undefined, state.paths, state.texts);
+    }
+  };
+
   // Advanced on-screen text/sticker drag/resize/rotate actions
   const textDragModeRef = useRef<"drag" | "resize_rotate" | null>(null);
   const initialTextSizeRef = useRef<number>(80);
@@ -470,6 +537,7 @@ export default function EditorCanvas({
     useState<string>("transparent");
   const [brushSize, setBrushSize] = useState<number>(45);
   const [isRemovingBackground, setIsRemovingBackground] = useState(false);
+  const [isDetectingSensitive, setIsDetectingSensitive] = useState(false);
   const [removalProgress, setRemovalProgress] = useState(0);
   const [removalStatus, setRemovalStatus] = useState("");
   const [preBgRemovalImageSrc, setPreBgRemovalImageSrc] = useState<string | null>(null);
@@ -479,6 +547,9 @@ export default function EditorCanvas({
   const [canvasHeightInput, setCanvasHeightInput] = useState<string>("");
   const [manualCanvasSize, setManualCanvasSize] = useState<{ width: number; height: number } | null>(initialCustomSize);
   
+  // Create local states to handle rotated internal images safely apart from props
+  const [workingOriginalSrc, setWorkingOriginalSrc] = useState<string | undefined>(originalScreenshotSrc);
+
   // Keep track of the clean image (no layout) for re-styling when canvas size changes.
   const [currentCleanSrc, setCurrentCleanSrc] = useState<string | null>(cleanImageSrc || originalScreenshotSrc || imageSrc);
 
@@ -495,7 +566,7 @@ export default function EditorCanvas({
         originalImageRef.current = img;
       }
 
-      if (!originalScreenshotSrc) {
+      if (!workingOriginalSrc) {
         rawScreenshotRef.current = img;
         if (activeTool === "crop") {
           originalImageRef.current = img;
@@ -523,11 +594,11 @@ export default function EditorCanvas({
     return () => {
       isCurrent = false;
     };
-  }, [imageSrc, activeTool, originalScreenshotSrc]);
+  }, [imageSrc, activeTool, workingOriginalSrc]);
 
   // Load raw original screenshot
   useEffect(() => {
-    if (!originalScreenshotSrc) return;
+    if (!workingOriginalSrc) return;
     const img = new Image();
     let isCurrent = true;
     img.crossOrigin = "anonymous";
@@ -565,11 +636,11 @@ export default function EditorCanvas({
       };
       tryFit();
     };
-    img.src = originalScreenshotSrc;
+    img.src = workingOriginalSrc;
     return () => {
       isCurrent = false;
     };
-  }, [originalScreenshotSrc, initialCropRect, activeTool]);
+  }, [workingOriginalSrc, initialCropRect, activeTool]);
 
   // Sync originalImageRef whenever activeTool switches/images load
   useEffect(() => {
@@ -578,6 +649,108 @@ export default function EditorCanvas({
       : styledImageRef.current;
   }, [activeTool, styledImageRef.current, rawScreenshotRef.current]);
 
+  const handleRotate90 = () => {
+    if (isRotating) return;
+    setIsRotating(true);
+    const rawImg = rawScreenshotRef.current || originalImageRef.current;
+    if (!rawImg) {
+        setIsRotating(false);
+        return;
+    }
+
+    const createRotatedImg = (imgRef: React.MutableRefObject<HTMLImageElement | null>, cb?: (rotatedSrc?: string) => void) => {
+        if (!imgRef.current) {
+            if (cb) cb();
+            return;
+        }
+        const rc = document.createElement("canvas");
+        rc.width = imgRef.current.height;
+        rc.height = imgRef.current.width;
+        const rcCtx = rc.getContext("2d");
+        if (!rcCtx) {
+            if (cb) cb();
+            return;
+        }
+        rcCtx.translate(rc.width / 2, rc.height / 2);
+        rcCtx.rotate(Math.PI / 2);
+        rcCtx.drawImage(imgRef.current, -imgRef.current.width / 2, -imgRef.current.height / 2);
+        const dataUrl = rc.toDataURL("image/png");
+        const nextImg = new Image();
+        nextImg.crossOrigin = "anonymous";
+        nextImg.onload = () => {
+            imgRef.current = nextImg;
+            if (cb) cb(dataUrl);
+        };
+        nextImg.src = dataUrl;
+    };
+
+    let completed = 0;
+    const total = 3;
+    let newOriginalSrc: string | undefined;
+    let newCleanSrc: string | undefined;
+    const checkComplete = () => {
+        completed++;
+        if (completed === total) {
+           const W = rawImg.width;
+           const H = rawImg.height;
+           
+           if (newOriginalSrc) {
+               setWorkingOriginalSrc(newOriginalSrc);
+           }
+           if (newCleanSrc) {
+               setCurrentCleanSrc(newCleanSrc);
+           }
+
+           if (cropRect) {
+               setCropRect({
+                   x: H - (cropRect.y + cropRect.h),
+                   y: cropRect.x,
+                   w: cropRect.h,
+                   h: cropRect.w
+               });
+           }
+           
+           const manualW = parseInt(canvasWidthInput) || 0;
+           const manualH = parseInt(canvasHeightInput) || 0;
+           setCanvasWidthInput(manualH ? manualH.toString() : "");
+           setCanvasHeightInput(manualW ? manualW.toString() : "");
+
+           setPaths(prev => prev.map(p => {
+               const newPoints = p.points.map(pt => ({ x: H - pt.y, y: pt.x }));
+               const newPath2d = new Path2D();
+               if (newPoints.length > 0) {
+                 newPath2d.moveTo(newPoints[0].x, newPoints[0].y);
+                 for (let i = 1; i < newPoints.length; i++) {
+                   newPath2d.lineTo(newPoints[i].x, newPoints[i].y);
+                 }
+               }
+               return { ...p, points: newPoints, path2d: newPath2d };
+           }));
+
+           setTexts(prev => prev.map(t => ({
+               ...t,
+               x: H - t.y,
+               y: t.x,
+               rotation: (t.rotation || 0) + Math.PI / 2
+           })));
+           
+           setShouldCommit(true);
+           if (originalImageRef.current && cropRect) {
+              fitImageToContainer(
+                 originalImageRef.current,
+                 { x: H - (cropRect.y + cropRect.h), y: cropRect.x, w: cropRect.h, h: cropRect.w }
+              );
+           }
+           redraw();
+           setIsRotating(false);
+        }
+    };
+
+    createRotatedImg(rawScreenshotRef, (url) => { if (url) newOriginalSrc = url; checkComplete(); });
+    createRotatedImg(styledImageRef, (url) => { if (url) newCleanSrc = url; checkComplete(); });
+    createRotatedImg(originalImageRef, () => { checkComplete(); });
+  };
+
   useEffect(() => {
     // Only re-style when the active block isn't initializing (to avoid looping on mount)
     if (!currentCleanSrc) return;
@@ -585,8 +758,8 @@ export default function EditorCanvas({
     // We update the dynamic layout styling purely for the preview representation of the current layout with the new size!
     const timer = setTimeout(async () => {
       try {
-        const sourceSrc = originalScreenshotSrc || currentCleanSrc;
-        const finalCrop = originalScreenshotSrc ? cropRect : null;
+        const sourceSrc = workingOriginalSrc || currentCleanSrc;
+        const finalCrop = workingOriginalSrc ? cropRect : null;
 
         const newPreviewSrc = await applyStyle(
           sourceSrc,
@@ -614,7 +787,80 @@ export default function EditorCanvas({
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [manualCanvasSize, currentCleanSrc, originalScreenshotSrc, cropRect, styleName, layoutName, customBg]);
+  }, [manualCanvasSize, currentCleanSrc, workingOriginalSrc, cropRect, styleName, layoutName, customBg]);
+
+  const handleAutoDetectSensitive = async () => {
+    const rawImg = rawScreenshotRef.current || originalImageRef.current;
+    if (!rawImg || isDetectingSensitive) return;
+    
+    setIsDetectingSensitive(true);
+    try {
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = rawImg.width;
+      tempCanvas.height = rawImg.height;
+      const tCtx = tempCanvas.getContext("2d");
+      if (!tCtx) throw new Error("Could not get 2d context for temp canvas");
+      
+      tCtx.drawImage(rawImg, 0, 0);
+      const dataUrl = tempCanvas.toDataURL("image/jpeg", 0.7);
+      const base64 = dataUrl.split(",")[1];
+      const mimeType = dataUrl.substring(dataUrl.indexOf(":")+1, dataUrl.indexOf(";"));
+
+      const res = await fetch("/api/detect-sensitive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64, mimeType })
+      });
+      
+      if (!res.ok) {
+        let errStr = await res.text();
+        try {
+           const parsed = JSON.parse(errStr);
+           if (parsed.error) errStr = parsed.error;
+        } catch (e) {}
+        throw new Error(errStr);
+      }
+      const boxes = await res.json();
+      
+      if (boxes && boxes.length > 0) {
+        const newPaths: DrawingPath[] = boxes.map((box: any) => {
+            const x = (box.x / 1000) * rawImg.width;
+            const y = (box.y / 1000) * rawImg.height;
+            const w = (box.w / 1000) * rawImg.width;
+            const h = (box.h / 1000) * rawImg.height;
+            
+            const blurStrokeWidth = h; // use the height of the box as the width of our stroke
+            const p2d = new Path2D();
+            const middleY = y + h / 2;
+            
+            // Draw a line horizontally through the box
+            p2d.moveTo(x, middleY);
+            p2d.lineTo(x + w, middleY);
+            
+            return {
+                points: [{x, y: middleY}, {x: x+w, y: middleY}],
+                path2d: p2d,
+                color: "transparent",
+                width: blurStrokeWidth * 1.5, 
+                isBlur: true
+            };
+        });
+        
+        setPaths(prev => {
+            const combined = [...prev, ...newPaths];
+            setShouldCommit(true);
+            return combined;
+        });
+      } else {
+        alert("No sensitive information detected.");
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(e.message || "Failed to auto-detect sensitive information.");
+    } finally {
+      setIsDetectingSensitive(false);
+    }
+  };
 
   // Increment AdMob interactions when tool changes, if not premium
   useEffect(() => {
@@ -1331,6 +1577,7 @@ export default function EditorCanvas({
         setSelectedTextIndex(null);
         setDraggingTextIndex(null);
         textDragModeRef.current = null;
+        setShouldCommit(true);
         redraw(undefined, undefined, newTexts);
         return;
       }
@@ -1733,6 +1980,7 @@ export default function EditorCanvas({
     if (draggingTextIndex !== null) {
       setDraggingTextIndex(null);
       textDragModeRef.current = null;
+      setShouldCommit(true);
       redraw();
       return;
     }
@@ -1831,6 +2079,7 @@ export default function EditorCanvas({
         setCurrentTextSize((prev) => Math.max(8, Math.round(prev * drawScale)));
 
         setCropRect(newRect);
+        setShouldCommit(true);
       }
       
       cropStartRef.current = null;
@@ -1853,6 +2102,7 @@ export default function EditorCanvas({
         },
       ];
       setPaths(newPaths);
+      setShouldCommit(true);
 
       if (activeTool === "draw") {
         const shape = detectShapeWeb(drawingPointsRef.current);
@@ -1914,6 +2164,7 @@ export default function EditorCanvas({
       setTexts(finalTexts);
       selectedIdx = finalTexts.length - 1;
     }
+    setShouldCommit(true);
 
     setEditingTextIndex(-1);
     setSelectedTextIndex(selectedIdx);
@@ -1930,6 +2181,7 @@ export default function EditorCanvas({
       newTexts.splice(editingTextIndex, 1);
       setTexts(newTexts);
       finalTexts = newTexts;
+      setShouldCommit(true);
     }
     setEditingTextIndex(-1);
     setShowTextModal(false);
@@ -1984,6 +2236,7 @@ export default function EditorCanvas({
       setTexts(finalTexts);
       selectedIdx = finalTexts.length - 1;
     }
+    setShouldCommit(true);
 
     setEditingTextIndex(-1);
     setSelectedTextIndex(selectedIdx);
@@ -2118,7 +2371,7 @@ export default function EditorCanvas({
           setPreBgRemovalImageSrc(imageSrc);
           styledImageRef.current = img;
           originalImageRef.current = img;
-          onSave(base64, base64, paths, texts, cropRect, manualCanvasSize);
+          onSave(base64, base64, paths, texts, cropRect, manualCanvasSize, workingOriginalSrc);
           setIsRemovingBackground(false);
           setRemovalStatus("");
           setRemovalProgress(0);
@@ -2147,7 +2400,7 @@ export default function EditorCanvas({
       img.onload = () => {
         styledImageRef.current = img;
         originalImageRef.current = img;
-        onSave(preBgRemovalImageSrc, preBgRemovalImageSrc, paths, texts, cropRect, manualCanvasSize);
+        onSave(preBgRemovalImageSrc, preBgRemovalImageSrc, paths, texts, cropRect, manualCanvasSize, workingOriginalSrc);
         setPreBgRemovalImageSrc(null);
         setActiveTool("none");
       };
@@ -2156,7 +2409,7 @@ export default function EditorCanvas({
   };
 
   const handleApplySaveCrop = async () => {
-    const screenshotSrc = originalScreenshotSrc || imageSrc;
+    const screenshotSrc = workingOriginalSrc || imageSrc;
     if (!screenshotSrc || !cropRect) return;
 
     const img = rawScreenshotRef.current || originalImageRef.current;
@@ -2220,7 +2473,8 @@ export default function EditorCanvas({
           paths,
           texts,
           cropRect,
-          manualCanvasSize
+          manualCanvasSize,
+          workingOriginalSrc
         );
 
         // Force a redraw with the new image loaded. Since we now set the styled image,
@@ -2278,6 +2532,7 @@ export default function EditorCanvas({
           texts,
           cropRect,
           manualCanvasSize,
+          workingOriginalSrc
         );
       }
     }
@@ -2296,7 +2551,29 @@ export default function EditorCanvas({
         >
           <X className="w-5 h-5" />
         </button>
-        <span className="font-medium text-sm tracking-wide">EDITOR</span>
+
+        <div className="flex items-center gap-2 sm:gap-4">
+          <button
+            onClick={undo}
+            disabled={historyIndex <= 0}
+            className="p-2 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-white/10 rounded-full transition-colors active:scale-95 text-white"
+            aria-label="Undo"
+          >
+            <Undo className="w-5 h-5" />
+          </button>
+          
+          <span className="font-medium text-sm tracking-wide text-white px-2">EDITOR</span>
+
+          <button
+            onClick={redo}
+            disabled={historyIndex >= history.length - 1}
+            className="p-2 disabled:opacity-20 disabled:cursor-not-allowed hover:bg-white/10 rounded-full transition-colors active:scale-95 text-white"
+            aria-label="Redo"
+          >
+            <Redo className="w-5 h-5" />
+          </button>
+        </div>
+
         <button
           onClick={handleSave}
           className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-sm font-medium rounded-full transition-colors"
@@ -2424,6 +2701,7 @@ export default function EditorCanvas({
                 newPaths.splice(editingPathIndex, 1);
                 setPaths(newPaths);
                 setEditingPathIndex(-1);
+                setShouldCommit(true);
                 redraw(undefined, newPaths);
               }}
               className="bg-red-600 text-white px-6 py-2 rounded-full font-bold shadow-xl border border-white/20 flex items-center gap-2"
@@ -2481,6 +2759,7 @@ export default function EditorCanvas({
                   redraw(undefined, next);
                   return next;
                 });
+                setShouldCommit(true);
                 setSuggestedShape(null);
               }}
               className="bg-blue-600 shadow-xl shadow-blue-900/40 text-white px-6 py-3 rounded-full font-bold animate-pulse flex items-center gap-2 border border-white/20 whitespace-nowrap"
@@ -2492,6 +2771,13 @@ export default function EditorCanvas({
       </div>
 
       <div className="flex items-center justify-start gap-1 p-3 bg-[#111] pb-safe z-10 border-t border-white/10 overflow-x-auto no-scrollbar">
+        <ToolButton
+          active={false}
+          disabled={isRotating}
+          onClick={handleRotate90}
+          icon={isRotating ? <Loader2 className="animate-spin" /> : <RotateCw />}
+          label="Rotate"
+        />
         <ToolButton
           active={activeTool === "crop"}
           onClick={() => setActiveTool(activeTool === "crop" ? "none" : "crop")}
@@ -2594,6 +2880,7 @@ export default function EditorCanvas({
                 h: rawScreenshotRef.current.height,
               };
               setCropRect(rect);
+              setShouldCommit(true);
             }
             if (originalImageRef.current) {
               const rect = {
@@ -2722,6 +3009,78 @@ export default function EditorCanvas({
                 />
                 <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">Max</span>
               </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {activeTool === "crop" && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="px-4 py-3 bg-[#111111] border-t border-white/5 flex flex-col gap-2 shrink-0 z-20 overflow-hidden"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">
+                ASPECT RATIO
+              </span>
+            </div>
+            <div className="flex gap-2 overflow-x-auto py-1 no-scrollbar shrink-0">
+              {[
+                { label: "Original", value: "original" },
+                { label: "1:1", value: "1:1" },
+                { label: "9:16", value: "9:16", desc: "Story" },
+                { label: "4:5", value: "4:5", desc: "Post" },
+                { label: "16:9", value: "16:9" },
+                { label: "4:3", value: "4:3" },
+                { label: "3:4", value: "3:4" },
+              ].map((preset) => (
+                <button
+                  key={preset.value}
+                  onClick={() => {
+                    const img = originalImageRef.current;
+                    if (!img) return;
+
+                    if (preset.value === "original") {
+                      setCropRect({ x: 0, y: 0, w: img.width, h: img.height });
+                      setShouldCommit(true);
+                      return;
+                    }
+
+                    let ratio = 1;
+                    if (preset.value === "1:1") ratio = 1;
+                    else if (preset.value === "9:16") ratio = 9 / 16;
+                    else if (preset.value === "4:5") ratio = 4 / 5;
+                    else if (preset.value === "16:9") ratio = 16 / 9;
+                    else if (preset.value === "4:3") ratio = 4 / 3;
+                    else if (preset.value === "3:4") ratio = 3 / 4;
+
+                    let newW = img.width;
+                    let newH = newW / ratio;
+
+                    if (newH > img.height) {
+                      newH = img.height;
+                      newW = newH * ratio;
+                    }
+
+                    const newX = (img.width - newW) / 2;
+                    const newY = (img.height - newH) / 2;
+
+                    setCropRect({ x: newX, y: newY, w: newW, h: newH });
+                    setShouldCommit(true);
+                  }}
+                  className="flex flex-col items-center justify-center min-w-[60px] px-3 py-1.5 bg-[#1c1c1e] hover:bg-[#2c2c2e] active:bg-[#3c3c3e] border border-white/10 rounded-xl transition-colors shrink-0"
+                >
+                  <span className="text-xs font-bold text-white">{preset.label}</span>
+                  {preset.desc && (
+                    <span className="text-[9px] text-gray-500 font-medium">
+                      {preset.desc}
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
           </motion.div>
         )}

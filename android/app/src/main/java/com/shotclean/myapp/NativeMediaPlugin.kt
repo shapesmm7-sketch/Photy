@@ -1,6 +1,5 @@
 package com.shotclean.myapp
 
-import android.Manifest
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -27,12 +26,12 @@ import java.io.OutputStream
 
 @CapacitorPlugin(
     name = "NativeMedia",
-    permissions = [
+    permissions = arrayOf(
         Permission(
             alias = "storage",
-            strings = [Manifest.permission.WRITE_EXTERNAL_STORAGE]
+            strings = arrayOf("android.permission.WRITE_EXTERNAL_STORAGE")
         )
-    ]
+    )
 )
 class NativeMediaPlugin : Plugin() {
 

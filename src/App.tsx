@@ -1478,7 +1478,11 @@ export default function App() {
                 finalTexts,
                 customCrop,
                 customSize,
+                newOriginalSrc
               ) => {
+                if (newOriginalSrc) {
+                   setOriginalImage(newOriginalSrc);
+                }
                 setProcessedImage(newImgDataUrl);
                 setCleanImage(finalCleanSrc);
                 setEditorPaths(finalPaths);
