@@ -155,11 +155,9 @@ class NativeMediaPlugin : Plugin() {
                 
                 imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
                 if (imageUri != null) {
-                    resolver.openOutputStream(imageUri).use { fos ->
-                        if (fos != null) {
-                            bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
-                            fos.flush()
-                        }
+                    resolver.openOutputStream(imageUri)?.use { fos ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                        fos.flush()
                     }
                 }
             } else {
