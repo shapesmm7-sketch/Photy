@@ -19,6 +19,8 @@ import {
   Redo,
   RotateCw,
   Wand2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { removeBackground } from "@imgly/background-removal";
@@ -39,6 +41,8 @@ interface TextItem {
   fontName: string;
   rotation?: number;
   hasShadow?: boolean;
+  shadowColor?: string;
+  bgColor?: string;
   isSticker?: boolean;
   stickerType?: "emoji" | "badge";
   badgeBg?: string;
@@ -176,9 +180,7 @@ export default function EditorCanvas({
     const layout = PhoneLayouts[lName] || PhoneLayouts["None"];
 
     let basePaddingFactor = config.paddingFactor;
-    if (layout.name !== "None") {
-      basePaddingFactor = Math.max(config.paddingFactor, 0.25);
-    } else if (bgVal && sName === "Original") {
+    if (layout.name === "None" && bgVal && sName === "Original") {
       basePaddingFactor = 0.15;
     }
 
@@ -194,9 +196,7 @@ export default function EditorCanvas({
     const layout = PhoneLayouts[lName] || PhoneLayouts["None"];
 
     let basePaddingFactor = config.paddingFactor;
-    if (layout.name !== "None") {
-      basePaddingFactor = Math.max(config.paddingFactor, 0.25);
-    } else if (bgVal && sName === "Original") {
+    if (layout.name === "None" && bgVal && sName === "Original") {
       basePaddingFactor = 0.15;
     }
 
@@ -508,15 +508,23 @@ export default function EditorCanvas({
   const [currentTextFont, setCurrentTextFont] = useState("Default");
   const [currentTextRotation, setCurrentTextRotation] = useState(0);
   const [currentTextShadow, setCurrentTextShadow] = useState(false);
+  const [currentTextShadowColor, setCurrentTextShadowColor] = useState("rgba(0,0,0,0.6)");
+  const [currentTextBgColor, setCurrentTextBgColor] = useState("transparent");
+  const [activeTextTab, setActiveTextTab] = useState<"font" | "color" | "bg" | "shadow">("font");
 
   // Sticker & Emoji state
   const [showStickerPanel, setShowStickerPanel] = useState(false);
   const [selectedStickerTab, setSelectedStickerTab] = useState<"emoji" | "badge">("emoji");
   const [selectedStickerColor, setSelectedStickerColor] = useState("#FF3366");
+  const [selectedStickerTextColor, setSelectedStickerTextColor] = useState("#FFFFFF");
+  const [selectedStickerShadow, setSelectedStickerShadow] = useState(true);
+  const [selectedStickerShadowColor, setSelectedStickerShadowColor] = useState("rgba(0,0,0,0.4)");
+  const [selectedStickerBgColor, setSelectedStickerBgColor] = useState("transparent");
   const [selectedStickerText, setSelectedStickerText] = useState("HOT");
   const [selectedStickerSize, setSelectedStickerSize] = useState(72);
   const [selectedStickerRotation, setSelectedStickerRotation] = useState(0);
   const [selectedStickerFont, setSelectedStickerFont] = useState("Inter");
+  const [expandedBadgeSection, setExpandedBadgeSection] = useState<string>("Presets");
 
   // Text drag & double-tap states
   const [draggingTextIndex, setDraggingTextIndex] = useState<number | null>(
@@ -596,6 +604,8 @@ export default function EditorCanvas({
     };
   }, [imageSrc, activeTool, workingOriginalSrc]);
 
+  const hasInitializedCropRef = useRef(false);
+
   // Load raw original screenshot
   useEffect(() => {
     if (!workingOriginalSrc) return;
@@ -606,28 +616,28 @@ export default function EditorCanvas({
       if (!isCurrent) return;
       rawScreenshotRef.current = img;
 
-      if (activeTool === "crop") {
-        originalImageRef.current = img;
-      }
-
-      if (initialCropRect) {
-        setCropRect(initialCropRect);
-      } else {
-        const topH = Math.round(img.height * 0.04);
-        const bottomH = Math.round(img.height * 0.05);
-        const defaultCrop = {
-          x: 0,
-          y: topH,
-          w: img.width,
-          h: img.height - topH - bottomH,
-        };
-        setCropRect(defaultCrop);
+      if (!hasInitializedCropRef.current) {
+        hasInitializedCropRef.current = true;
+        if (initialCropRect) {
+          setCropRect(initialCropRect);
+        } else {
+          const topH = Math.round(img.height * 0.04);
+          const bottomH = Math.round(img.height * 0.05);
+          const defaultCrop = {
+            x: 0,
+            y: topH,
+            w: img.width,
+            h: img.height - topH - bottomH,
+          };
+          setCropRect(defaultCrop);
+        }
       }
 
       const tryFit = () => {
         if (!isCurrent) return;
         if (containerRef.current && canvasRef.current && blurCanvasRef.current) {
-          const activeImg = activeTool === "crop" ? img : (styledImageRef.current || img);
+          // Force activeImage to styled if available, crop handles originalImageRef
+          const activeImg = styledImageRef.current || img;
           const rect = { x: 0, y: 0, w: activeImg.width, h: activeImg.height };
           fitImageToContainer(activeImg, rect);
         } else {
@@ -640,7 +650,7 @@ export default function EditorCanvas({
     return () => {
       isCurrent = false;
     };
-  }, [workingOriginalSrc, initialCropRect, activeTool]);
+  }, [workingOriginalSrc, initialCropRect]);
 
   // Sync originalImageRef whenever activeTool switches/images load
   useEffect(() => {
@@ -714,6 +724,9 @@ export default function EditorCanvas({
            const manualH = parseInt(canvasHeightInput) || 0;
            setCanvasWidthInput(manualH ? manualH.toString() : "");
            setCanvasHeightInput(manualW ? manualW.toString() : "");
+           if (manualCanvasSize) {
+               setManualCanvasSize({ width: manualCanvasSize.height, height: manualCanvasSize.width });
+           }
 
            setPaths(prev => prev.map(p => {
                const newPoints = p.points.map(pt => ({ x: H - pt.y, y: pt.x }));
@@ -736,12 +749,18 @@ export default function EditorCanvas({
            
            setShouldCommit(true);
            if (originalImageRef.current && cropRect) {
-              fitImageToContainer(
-                 originalImageRef.current,
-                 { x: H - (cropRect.y + cropRect.h), y: cropRect.x, w: cropRect.h, h: cropRect.w }
-              );
+              const isCropMode = activeTool === "crop";
+              const rotatedOriginalImage = originalImageRef.current;
+              const rectToUse = isCropMode
+                ? { x: H - (cropRect.y + cropRect.h), y: cropRect.x, w: cropRect.h, h: cropRect.w }
+                : { x: 0, y: 0, w: rotatedOriginalImage.width, h: rotatedOriginalImage.height };
+              
+              fitImageToContainer(rotatedOriginalImage, rectToUse);
            }
-           redraw();
+           // Use the updated rect immediately in redraw to prevent stale activeRect mapping
+           const isCropView = activeTool === "crop";
+           const currentCropMapped = { x: H - (cropRect.y + cropRect.h), y: cropRect.x, w: cropRect.h, h: cropRect.w };
+           redraw(isCropView ? currentCropMapped : null);
            setIsRotating(false);
         }
     };
@@ -1206,17 +1225,47 @@ export default function EditorCanvas({
           }
         } else {
           // Standard text
+          ctx.textBaseline = "middle";
+          if (t.bgColor && t.bgColor !== "transparent") {
+            const metrics = ctx.measureText(t.text);
+            const textWidth = metrics.width;
+            let spanLeft = textWidth / 2;
+            let spanRight = textWidth / 2;
+            if ('actualBoundingBoxLeft' in metrics) {
+              spanLeft = Math.max(spanLeft, Math.abs(metrics.actualBoundingBoxLeft));
+              spanRight = Math.max(spanRight, Math.abs(metrics.actualBoundingBoxRight));
+            }
+            const padX = t.size * 0.4;
+            const padY = t.size * 0.3; // middle baseline padding
+            const leftEdge = -spanLeft - padX;
+            const rightEdge = spanRight + padX;
+            const rectW = rightEdge - leftEdge;
+            const rectH = t.size + padY * 2;
+            
+            ctx.fillStyle = t.bgColor;
+            if (ctx.roundRect) {
+              ctx.beginPath();
+              ctx.roundRect(leftEdge, -rectH/2, rectW, rectH, t.size * 0.15);
+              ctx.fill();
+            } else {
+              ctx.fillRect(leftEdge, -rectH/2, rectW, rectH);
+            }
+          }
+
+          ctx.fillStyle = t.color;
           if (t.hasShadow) {
-            ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+            ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.6)";
             ctx.shadowBlur = Math.max(4, t.size * 0.15);
             ctx.shadowOffsetX = Math.max(2, t.size * 0.08);
             ctx.shadowOffsetY = Math.max(2, t.size * 0.08);
           }
 
-          // Draw dark readable outline behind text
-          ctx.strokeStyle = "#000000";
-          ctx.lineWidth = Math.max(2, t.size * 0.08);
-          ctx.strokeText(t.text, 0, 0);
+          if (t.bgColor === "transparent" || !t.bgColor) {
+            // Draw dark readable outline behind text
+            ctx.strokeStyle = "#000000";
+            ctx.lineWidth = Math.max(2, t.size * 0.08);
+            ctx.strokeText(t.text, 0, 0);
+          }
           ctx.fillText(t.text, 0, 0);
         }
         
@@ -1314,6 +1363,7 @@ export default function EditorCanvas({
         let fontStr = fontCSSMap[currentTextFont] || "sans-serif";
         ctx.font = `bold ${size}px ${fontStr}`;
         ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
 
         ctx.save();
         ctx.translate(x, y);
@@ -1321,17 +1371,47 @@ export default function EditorCanvas({
           ctx.rotate(currentTextRotation);
         }
 
+        if (currentTextBgColor && currentTextBgColor !== "transparent") {
+          const metrics = ctx.measureText(currentText);
+          const textWidth = metrics.width;
+          let spanLeft = textWidth / 2;
+          let spanRight = textWidth / 2;
+          if ('actualBoundingBoxLeft' in metrics) {
+            spanLeft = Math.max(spanLeft, Math.abs(metrics.actualBoundingBoxLeft));
+            spanRight = Math.max(spanRight, Math.abs(metrics.actualBoundingBoxRight));
+          }
+          const padX = size * 0.4;
+          const padY = size * 0.3; // middle baseline padding
+          const leftEdge = -spanLeft - padX;
+          const rightEdge = spanRight + padX;
+          const rectW = rightEdge - leftEdge;
+          const rectH = size + padY * 2;
+          
+          ctx.fillStyle = currentTextBgColor;
+          if (ctx.roundRect) {
+            ctx.beginPath();
+            ctx.roundRect(leftEdge, -rectH/2, rectW, rectH, size * 0.15);
+            ctx.fill();
+          } else {
+            ctx.fillRect(leftEdge, -rectH/2, rectW, rectH);
+          }
+        }
+        
+        ctx.fillStyle = currentTextColor;
+
         if (currentTextShadow) {
-          ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+          ctx.shadowColor = currentTextShadowColor || "rgba(0, 0, 0, 0.6)";
           ctx.shadowBlur = Math.max(4, size * 0.15);
           ctx.shadowOffsetX = Math.max(2, size * 0.08);
           ctx.shadowOffsetY = Math.max(2, size * 0.08);
         }
 
-        // Draw dark readable outline behind temporary preview text
-        ctx.strokeStyle = "#000000";
-        ctx.lineWidth = Math.max(2, size * 0.08);
-        ctx.strokeText(currentText, 0, 0);
+        if (currentTextBgColor === "transparent" || !currentTextBgColor) {
+          // Draw dark readable outline behind temporary preview text
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = Math.max(2, size * 0.08);
+          ctx.strokeText(currentText, 0, 0);
+        }
 
         ctx.fillText(currentText, 0, 0);
         ctx.restore();
@@ -1438,7 +1518,7 @@ export default function EditorCanvas({
     } else {
       redraw();
     }
-  }, [currentText, textPositionMode, texts, showTextModal, activeTool, selectedTextIndex]);
+  }, [currentText, currentTextFont, currentTextColor, currentTextBgColor, currentTextShadow, currentTextShadowColor, currentTextRotation, textPositionMode, texts, showTextModal, activeTool, selectedTextIndex]);
 
   useEffect(() => {
     redraw();
@@ -1639,6 +1719,10 @@ export default function EditorCanvas({
         if (t.isSticker) {
           setSelectedStickerText(t.text);
           setSelectedStickerColor(t.badgeBg || t.color);
+          setSelectedStickerTextColor(t.color || "#FFFFFF");
+          setSelectedStickerShadow(t.hasShadow !== false);
+          setSelectedStickerShadowColor(t.shadowColor || "rgba(0,0,0,0.6)");
+          setSelectedStickerBgColor(t.bgColor || "transparent");
           setSelectedStickerSize(t.size);
           setSelectedStickerRotation(t.rotation || 0);
           setSelectedStickerFont(t.fontName || "Inter");
@@ -1651,6 +1735,8 @@ export default function EditorCanvas({
           setCurrentTextFont(t.fontName);
           setCurrentTextRotation(t.rotation || 0);
           setCurrentTextShadow(t.hasShadow || false);
+          setCurrentTextShadowColor(t.shadowColor || "rgba(0,0,0,0.6)");
+          setCurrentTextBgColor(t.bgColor || "transparent");
           setTextPositionMode(t.positionMode);
           setActiveTool("text");
           setShowTextModal(true);
@@ -2149,6 +2235,8 @@ export default function EditorCanvas({
       fontName: currentTextFont,
       rotation: currentTextRotation,
       hasShadow: currentTextShadow,
+      shadowColor: currentTextShadowColor,
+      bgColor: currentTextBgColor,
     };
 
     let finalTexts;
@@ -2212,12 +2300,14 @@ export default function EditorCanvas({
       text: stickerText,
       x,
       y,
-      color: type === "badge" ? "#FFFFFF" : selectedStickerColor,
+      color: type === "badge" ? selectedStickerTextColor : selectedStickerColor,
       size,
       positionMode: "Default",
       fontName: selectedStickerFont,
       rotation: selectedStickerRotation,
-      hasShadow: true,
+      hasShadow: type === "badge" ? selectedStickerShadow : true,
+      shadowColor: type === "badge" ? selectedStickerShadowColor : undefined,
+      bgColor: type === "badge" ? selectedStickerBgColor : undefined,
       isSticker: true,
       stickerType: type,
       badgeBg: type === "badge" ? selectedStickerColor : undefined,
@@ -2279,8 +2369,48 @@ export default function EditorCanvas({
       nextTexts[editingTextIndex] = {
         ...t,
         badgeBg: t.stickerType === "badge" ? newColor : undefined,
-        color: t.stickerType === "badge" ? "#FFFFFF" : newColor
+        color: t.stickerType === "badge" ? t.color : newColor
       };
+      setTexts(nextTexts);
+      redraw(undefined, undefined, nextTexts);
+    }
+  };
+
+  const handleUpdateActiveStickerTextColor = (newColor: string) => {
+    setSelectedStickerTextColor(newColor);
+    if (editingTextIndex >= 0) {
+      const nextTexts = [...texts];
+      nextTexts[editingTextIndex] = { ...nextTexts[editingTextIndex], color: newColor };
+      setTexts(nextTexts);
+      redraw(undefined, undefined, nextTexts);
+    }
+  };
+
+  const handleUpdateActiveStickerShadow = (val: boolean) => {
+    setSelectedStickerShadow(val);
+    if (editingTextIndex >= 0) {
+      const nextTexts = [...texts];
+      nextTexts[editingTextIndex] = { ...nextTexts[editingTextIndex], hasShadow: val };
+      setTexts(nextTexts);
+      redraw(undefined, undefined, nextTexts);
+    }
+  };
+
+  const handleUpdateActiveStickerShadowColor = (color: string) => {
+    setSelectedStickerShadowColor(color);
+    if (editingTextIndex >= 0) {
+      const nextTexts = [...texts];
+      nextTexts[editingTextIndex] = { ...nextTexts[editingTextIndex], shadowColor: color };
+      setTexts(nextTexts);
+      redraw(undefined, undefined, nextTexts);
+    }
+  };
+
+  const handleUpdateActiveStickerBgColor = (color: string) => {
+    setSelectedStickerBgColor(color);
+    if (editingTextIndex >= 0) {
+      const nextTexts = [...texts];
+      nextTexts[editingTextIndex] = { ...nextTexts[editingTextIndex], bgColor: color };
       setTexts(nextTexts);
       redraw(undefined, undefined, nextTexts);
     }
@@ -3275,67 +3405,163 @@ export default function EditorCanvas({
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-1 bg-gray-50/50 rounded-2xl border border-gray-100 px-3 py-2">
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest select-none">
-                    Drop Shadow
-                  </span>
-                  <button
-                    onClick={() => setCurrentTextShadow(!currentTextShadow)}
-                    role="switch"
-                    aria-checked={currentTextShadow}
-                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      currentTextShadow ? "bg-blue-600" : "bg-gray-200"
-                    }`}
-                  >
-                    <span
-                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                        currentTextShadow ? "translate-x-5" : "translate-x-0"
+                <div className="flex bg-gray-100 rounded-lg p-1 gap-1 mb-2 select-none overflow-x-auto no-scrollbar">
+                  {[
+                    { id: "font", label: "Font" },
+                    { id: "color", label: "Color" },
+                    { id: "bg", label: "Background" },
+                    { id: "shadow", label: "Shadow" }
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTextTab(tab.id as any)}
+                      className={`flex-1 min-w-[70px] whitespace-nowrap text-xs font-bold px-2 py-1.5 rounded-md transition-all ${
+                        activeTextTab === tab.id ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
                       }`}
-                    />
-                  </button>
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
-                    Font Style
-                  </label>
-                  <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar select-none">
-                    {fontNames.map((font) => (
+                {activeTextTab === "font" && (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
+                      Font Style
+                    </label>
+                    <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar select-none">
+                      {fontNames.map((font) => (
+                        <button
+                          key={font}
+                          onClick={() => setCurrentTextFont(font)}
+                          className={`whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 border cursor-pointer ${
+                            currentTextFont === font
+                              ? "bg-blue-600 text-white border-blue-600 shadow-md scale-[1.02] font-semibold"
+                              : "bg-white text-gray-750 border-gray-200 hover:bg-gray-50 hover:border-gray-300"
+                          }`}
+                          style={{ fontFamily: fontCSSMap[font] || "sans-serif" }}
+                        >
+                          {font}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {activeTextTab === "color" && (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
+                      Text Color
+                    </label>
+                    <div className="flex gap-2 justify-start flex-wrap">
+                      {textColors.map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => setCurrentTextColor(color)}
+                          className={`w-7 h-7 shrink-0 rounded-full border border-gray-200 cursor-pointer transition-transform ${
+                            currentTextColor === color
+                              ? "border-blue-500 ring-2 ring-blue-500/30 scale-110"
+                              : "opacity-80 hover:opacity-100"
+                          }`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {activeTextTab === "bg" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-1 bg-gray-50/50 rounded-2xl border border-gray-100 px-3 py-2">
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-widest select-none">
+                        Background
+                      </span>
                       <button
-                        key={font}
-                        onClick={() => setCurrentTextFont(font)}
-                        className={`whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 border cursor-pointer ${
-                          currentTextFont === font
-                            ? "bg-blue-600 text-white border-blue-600 shadow-md scale-[1.02] font-semibold"
-                            : "bg-white text-gray-750 border-gray-200 hover:bg-gray-50 hover:border-gray-300"
+                        onClick={() => setCurrentTextBgColor(currentTextBgColor === "transparent" ? "#000000" : "transparent")}
+                        role="switch"
+                        aria-checked={currentTextBgColor !== "transparent"}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          currentTextBgColor !== "transparent" ? "bg-blue-600" : "bg-gray-200"
                         }`}
-                        style={{ fontFamily: fontCSSMap[font] || "sans-serif" }}
                       >
-                        {font}
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            currentTextBgColor !== "transparent" ? "translate-x-5" : "translate-x-0"
+                          }`}
+                        />
                       </button>
-                    ))}
-                  </div>
-                </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
-                    Text Color
-                  </label>
-                  <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                    {textColors.map((color) => (
-                      <button
-                        key={color}
-                        onClick={() => setCurrentTextColor(color)}
-                        className={`w-7 h-7 shrink-0 rounded-full border border-gray-200 cursor-pointer transition-transform ${
-                          currentTextColor === color
-                            ? "border-blue-500 ring-2 ring-blue-500/30 scale-110"
-                            : "opacity-80 hover:opacity-100"
-                        }`}
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
+                    {currentTextBgColor !== "transparent" && (
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1 mb-2">
+                          Background Color
+                        </label>
+                        <div className="flex gap-2 justify-start flex-wrap">
+                          {textColors.map((color) => (
+                            <button
+                              key={color}
+                              onClick={() => setCurrentTextBgColor(color)}
+                              className={`w-7 h-7 shrink-0 rounded-full border border-gray-200 cursor-pointer transition-transform flex items-center justify-center ${
+                                currentTextBgColor === color
+                                  ? "border-blue-500 ring-2 ring-blue-500/30 scale-110"
+                                  : "opacity-80 hover:opacity-100"
+                              }`}
+                              style={{ backgroundColor: color }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
+
+                {activeTextTab === "shadow" && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-1 bg-gray-50/50 rounded-2xl border border-gray-100 px-3 py-2">
+                      <span className="text-xs font-bold text-gray-500 uppercase tracking-widest select-none">
+                        Drop Shadow
+                      </span>
+                      <button
+                        onClick={() => setCurrentTextShadow(!currentTextShadow)}
+                        role="switch"
+                        aria-checked={currentTextShadow}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          currentTextShadow ? "bg-blue-600" : "bg-gray-200"
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                            currentTextShadow ? "translate-x-5" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
+                        Shadow Color
+                      </label>
+                      <div className="flex gap-2 justify-start flex-wrap">
+                        {["rgba(0,0,0,0.6)", "rgba(255,255,255,0.8)", ...textColors].map((color) => (
+                          <button
+                            key={color}
+                            onClick={() => {
+                              setCurrentTextShadowColor(color);
+                              setCurrentTextShadow(true);
+                            }}
+                            className={`w-7 h-7 shrink-0 rounded-full border border-gray-200 cursor-pointer transition-transform ${
+                              currentTextShadowColor === color
+                                ? "border-blue-500 ring-2 ring-blue-500/30 scale-110"
+                                : "opacity-80 hover:opacity-100"
+                            }`}
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex gap-3 pt-2">
                   {editingTextIndex >= 0 && (
@@ -3501,7 +3727,7 @@ export default function EditorCanvas({
                   {((!isEditing && selectedStickerTab === "badge") || (isEditing && currentEditingItem?.stickerType === "badge")) && (
                     <div className="space-y-3">
                       <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
                           Badge Label
                         </label>
                         <input
@@ -3513,69 +3739,169 @@ export default function EditorCanvas({
                         />
                       </div>
 
-                      {/* Presets */}
-                      <div>
-                        <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Preset Words</span>
-                        <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                          {PRESET_BADGES.map((badge) => (
-                            <button
-                              key={badge}
-                              onClick={() => handleUpdateActiveStickerText(badge)}
-                              className={`whitespace-nowrap px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-all border ${
-                                selectedStickerText === badge
-                                  ? "bg-black text-white border-black"
-                                  : "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200"
-                              }`}
-                            >
-                              {badge}
-                            </button>
-                          ))}
-                        </div>
+                      {/* Segmented Tabs for Categories */}
+                      <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar border-b border-gray-100 mb-4">
+                        {["Presets", "Font", "Color", "Background", "Shadow"].map((tab) => (
+                          <button
+                            key={tab}
+                            onClick={() => setExpandedBadgeSection(tab)}
+                            className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all whitespace-nowrap ${
+                              expandedBadgeSection === tab
+                                ? "bg-white text-blue-600 shadow-sm border border-gray-100"
+                                : "text-gray-400 hover:text-gray-600"
+                            }`}
+                          >
+                            {tab}
+                          </button>
+                        ))}
                       </div>
 
-                      {/* Color Palette */}
-                      <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                          Badge Color
-                        </label>
-                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans">
-                          {BADGE_COLORS.map((color) => (
-                            <button
-                              key={color}
-                              onClick={() => handleUpdateActiveStickerColor(color)}
-                              className={`w-7 h-7 shrink-0 rounded-full border-2 transition-transform ${
-                                selectedStickerColor === color
-                                  ? "border-blue-500 scale-110"
-                                  : "border-gray-200 opacity-80"
-                              }`}
-                              style={{ backgroundColor: color }}
-                            />
-                          ))}
-                        </div>
+                      {/* Tab Contents */}
+                      <div className="min-h-[140px]">
+                        {expandedBadgeSection === "Presets" && (
+                          <div className="space-y-3">
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Quick Presets</label>
+                            <div className="grid grid-cols-3 gap-2">
+                              {PRESET_BADGES.map((badge) => (
+                                <button
+                                  key={badge}
+                                  onClick={() => handleUpdateActiveStickerText(badge)}
+                                  className={`px-2 py-2 rounded-xl text-[10px] font-extrabold transition-all border ${
+                                    selectedStickerText === badge
+                                      ? "bg-black text-white border-black shadow-md scale-105"
+                                      : "bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-100"
+                                  }`}
+                                >
+                                  {badge}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {expandedBadgeSection === "Font" && (
+                          <div className="space-y-3">
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Text Font Style</label>
+                            <div className="grid grid-cols-2 gap-2">
+                              {fontNames.slice(0, 8).map((f) => (
+                                <button
+                                  key={f}
+                                  onClick={() => handleUpdateActiveStickerFont(f)}
+                                  className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all border text-left flex justify-between items-center ${
+                                    selectedStickerFont === f
+                                      ? "bg-blue-50 text-blue-600 border-blue-200 shadow-sm"
+                                      : "bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-100"
+                                  }`}
+                                  style={{ fontFamily: fontCSSMap[f] }}
+                                >
+                                  <span className="truncate">{f}</span>
+                                  {selectedStickerFont === f && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {expandedBadgeSection === "Color" && (
+                          <div className="space-y-4">
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Text Color</label>
+                              <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans">
+                                {textColors.map((color) => (
+                                  <button
+                                    key={color}
+                                    onClick={() => handleUpdateActiveStickerTextColor(color)}
+                                    className={`w-8 h-8 shrink-0 rounded-full border-2 transition-transform ${
+                                      selectedStickerTextColor === color
+                                        ? "border-blue-500 scale-110 shadow-md"
+                                        : "border-gray-100 opacity-80"
+                                    }`}
+                                    style={{ backgroundColor: color }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {expandedBadgeSection === "Background" && (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Enable Background</label>
+                              <button
+                                onClick={() => {
+                                  if (selectedStickerColor !== "transparent") {
+                                    handleUpdateActiveStickerColor("transparent");
+                                  } else {
+                                    handleUpdateActiveStickerColor("#FF3366"); // Default or last color
+                                  }
+                                }}
+                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  selectedStickerColor !== "transparent" ? "bg-blue-600" : "bg-gray-200"
+                                }`}
+                              >
+                                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${selectedStickerColor !== "transparent" ? "translate-x-4" : "translate-x-0"}`} />
+                              </button>
+                            </div>
+                            
+                            {selectedStickerColor !== "transparent" && (
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Background Color</label>
+                                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans border-t border-gray-50 pt-2">
+                                  {BADGE_COLORS.map((color) => (
+                                    <button
+                                      key={color}
+                                      onClick={() => handleUpdateActiveStickerColor(color)}
+                                      className={`w-8 h-8 shrink-0 rounded-full border-2 transition-transform ${
+                                        selectedStickerColor === color
+                                          ? "border-blue-500 scale-110 shadow-md"
+                                          : "border-gray-100 opacity-80"
+                                      }`}
+                                      style={{ backgroundColor: color }}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {expandedBadgeSection === "Shadow" && (
+                          <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Enable Shadow</label>
+                              <button
+                                onClick={() => handleUpdateActiveStickerShadow(!selectedStickerShadow)}
+                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                  selectedStickerShadow ? "bg-blue-600" : "bg-gray-200"
+                                }`}
+                              >
+                                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${selectedStickerShadow ? "translate-x-4" : "translate-x-0"}`} />
+                              </button>
+                            </div>
+                            {selectedStickerShadow && (
+                              <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Shadow Color</label>
+                                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans border-t border-gray-50 pt-2">
+                                  {["rgba(0,0,0,0.6)", "rgba(255,255,255,0.8)", ...textColors].map((color) => (
+                                    <button
+                                      key={color}
+                                      onClick={() => handleUpdateActiveStickerShadowColor(color)}
+                                      className={`w-7 h-7 shrink-0 rounded-full border transition-transform flex items-center justify-center ${
+                                        selectedStickerShadowColor === color
+                                          ? "border-blue-500 ring-2 ring-blue-500/30 scale-110 shadow-sm"
+                                          : "border-gray-100 opacity-80"
+                                      }`}
+                                      style={{ backgroundColor: color }}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
-                      {/* Font List */}
-                      <div>
-                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                          Font Style
-                        </label>
-                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                          {fontNames.map((f) => (
-                            <button
-                              key={f}
-                              onClick={() => handleUpdateActiveStickerFont(f)}
-                              className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                                selectedStickerFont === f
-                                  ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                                  : "bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200"
-                              }`}
-                              style={{ fontFamily: fontCSSMap[f] }}
-                            >
-                              {f}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
                     </div>
                   )}
 

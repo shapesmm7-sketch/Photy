@@ -773,40 +773,35 @@ function drawDevice(
   ctx.restore();
 
   // Draw Dynamic Island / Camera
-  if (!layout.isLandscape) {
-    ctx.fillStyle = "#000";
-    if (layout.deviceType === "samsung") {
-      // Punch hole
-      const holeSize = devW * 0.03;
-      ctx.beginPath();
-      ctx.arc(
-        0,
-        -devH / 2 + screenMargin + devH * 0.02,
-        holeSize,
-        0,
-        Math.PI * 2,
-      );
-      ctx.fill();
-    } else if (layout.deviceType === "ipad") {
-      // Minimal bezel camera
-      const holeSize = devW * 0.015;
-      ctx.beginPath();
-      ctx.arc(0, -devH / 2 + screenMargin / 2, holeSize, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      // iPhone Dynamic Island
-      const islandW = devW * 0.25;
-      const islandH = devH * 0.025;
-      ctx.beginPath();
-      ctx.roundRect(
-        -islandW / 2,
-        -devH / 2 + screenMargin + devH * 0.015,
-        islandW,
-        islandH,
-        islandH / 2,
-      );
-      ctx.fill();
-    }
+  ctx.fillStyle = "#000";
+  if (layout.deviceType === "samsung") {
+    // Punch hole
+    const holeSize = layout.isLandscape ? (devH * 0.03) : (devW * 0.03);
+    ctx.beginPath();
+    ctx.arc(
+      layout.isLandscape ? (-devW / 2 + screenMargin + devW * 0.02) : 0,
+      layout.isLandscape ? 0 : (-devH / 2 + screenMargin + devH * 0.02),
+      holeSize, 0, Math.PI * 2
+    );
+    ctx.fill();
+  } else if (layout.deviceType === "ipad") {
+    const holeSize = layout.isLandscape ? (devH * 0.015) : (devW * 0.015);
+    ctx.beginPath();
+    ctx.arc(layout.isLandscape ? (-devW / 2 + screenMargin / 2) : 0, layout.isLandscape ? 0 : (-devH / 2 + screenMargin / 2), holeSize, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // iPhone Dynamic Island
+    const islandW = layout.isLandscape ? (devW * 0.025) : (devW * 0.25);
+    const islandH = layout.isLandscape ? (devH * 0.25) : (devH * 0.025);
+    ctx.beginPath();
+    ctx.roundRect(
+      layout.isLandscape ? (-devW / 2 + screenMargin + devW * 0.015) : (-islandW / 2),
+      layout.isLandscape ? (-islandH / 2) : (-devH / 2 + screenMargin + devH * 0.015),
+      islandW,
+      islandH,
+      Math.min(islandW, islandH) / 2
+    );
+    ctx.fill();
   }
 
   ctx.restore();
@@ -943,9 +938,7 @@ export async function applyStyle(
         let basePaddingFactor = config.paddingFactor;
         let baseRadiusFactor = config.cornerRadiusFactor;
         let baseShadowAlpha = config.shadowAlpha;
-        if (layout.name !== "None") {
-          basePaddingFactor = Math.max(config.paddingFactor, 0.25);
-        } else if (customBg && styleName === "Original") {
+        if (layout.name === "None" && customBg && styleName === "Original") {
           // Add default padding if custom background color is selected on Original style without layout
           basePaddingFactor = 0.15;
           baseRadiusFactor = 0.04;
@@ -1085,13 +1078,14 @@ export async function applyStyle(
           ctx.drawImage(sourceCanvas, padding, padding);
           ctx.restore();
         } else {
+          const isContentLandscape = sourceCanvas.width > sourceCanvas.height;
           const placements = layout.placements || [
             {
               x: layout.deviceX,
               y: layout.deviceY,
               scale: layout.deviceScale,
               rotation: layout.rotation,
-              isLandscape: layout.isLandscape,
+              isLandscape: layout.isLandscape !== undefined ? layout.isLandscape : isContentLandscape,
             },
           ];
 
@@ -1377,16 +1371,47 @@ export async function burnEditsToImage(
             }
           } else {
             // Standard text
+            ctx.textBaseline = "middle";
+            
+            if (t.bgColor && t.bgColor !== "transparent") {
+              const metrics = ctx.measureText(t.text);
+              const textWidth = metrics.width;
+              let spanLeft = textWidth / 2;
+              let spanRight = textWidth / 2;
+              if ('actualBoundingBoxLeft' in metrics) {
+                spanLeft = Math.max(spanLeft, Math.abs(metrics.actualBoundingBoxLeft));
+                spanRight = Math.max(spanRight, Math.abs(metrics.actualBoundingBoxRight));
+              }
+              const padX = t.size * 0.4;
+              const padY = t.size * 0.3; // middle baseline padding
+              const leftEdge = -spanLeft - padX;
+              const rightEdge = spanRight + padX;
+              const rectW = rightEdge - leftEdge;
+              const rectH = t.size + padY * 2;
+              
+              ctx.fillStyle = t.bgColor;
+              if (ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(leftEdge, -rectH/2, rectW, rectH, t.size * 0.15);
+                ctx.fill();
+              } else {
+                ctx.fillRect(leftEdge, -rectH/2, rectW, rectH);
+              }
+            }
+            
+            ctx.fillStyle = t.color; // ensure text color is set
             if (t.hasShadow) {
-              ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+              ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.6)";
               ctx.shadowBlur = Math.max(4, t.size * 0.15);
               ctx.shadowOffsetX = Math.max(2, t.size * 0.08);
               ctx.shadowOffsetY = Math.max(2, t.size * 0.08);
             }
 
-            ctx.strokeStyle = "#000000";
-            ctx.lineWidth = Math.max(2, t.size * 0.08);
-            ctx.strokeText(t.text, 0, 0);
+            if (t.bgColor === "transparent" || !t.bgColor) {
+               ctx.strokeStyle = "#000000";
+               ctx.lineWidth = Math.max(2, t.size * 0.08);
+               ctx.strokeText(t.text, 0, 0);
+            }
             ctx.fillText(t.text, 0, 0);
           }
           ctx.restore();
