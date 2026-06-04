@@ -141,21 +141,26 @@ class NativeMediaPlugin : Plugin() {
     // Required function: saveImageToGallery(androidContext, bitmap): returns Uri or File
     fun saveImageToGallery(androidContext: Context, bitmap: Bitmap): Uri? {
         val filename = "shot_clean_${System.currentTimeMillis()}.png"
-        var fos: OutputStream? = null
         var imageUri: Uri? = null
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 // Android 10+ (API 29+): Use MediaStore API with RELATIVE_PATH = "Pictures/MyApp"
                 val resolver = androidContext.contentResolver
-                val contentValues = ContentValues()
-                contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-                contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
-                contentValues.put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/MyApp")
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/MyApp")
+                }
                 
                 imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
                 if (imageUri != null) {
-                    fos = resolver.openOutputStream(imageUri)
+                    resolver.openOutputStream(imageUri).use { fos ->
+                        if (fos != null) {
+                            bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                            fos.flush()
+                        }
+                    }
                 }
             } else {
                 // Android 7–9 (API 24–28): Use Environment.getExternalStoragePublicDirectory and FileOutputStream
@@ -166,12 +171,10 @@ class NativeMediaPlugin : Plugin() {
                 }
                 val imageFile = File(myAppDir, filename)
                 imageUri = Uri.fromFile(imageFile)
-                fos = FileOutputStream(imageFile)
-
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
-                fos.flush()
-                fos.close()
-                fos = null
+                FileOutputStream(imageFile).use { fos ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                    fos.flush()
+                }
 
                 // Run MediaScannerConnection so the image immediately shows up in the gallery
                 MediaScannerConnection.scanFile(
@@ -180,12 +183,6 @@ class NativeMediaPlugin : Plugin() {
                     arrayOf("image/png"),
                     null
                 )
-            }
-
-            if (fos != null) {
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
-                fos.flush()
-                fos.close()
             }
         } catch (e: Exception) {
             e.printStackTrace()
