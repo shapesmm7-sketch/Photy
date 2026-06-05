@@ -393,8 +393,9 @@ export default function App() {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const MAX_WIDTH = 1600;
-        const MAX_HEIGHT = 1600;
+        const isMobile = Capacitor.isNativePlatform() || (typeof window !== "undefined" && window.innerWidth < 768);
+        const MAX_WIDTH = isMobile ? 1000 : 1400;
+        const MAX_HEIGHT = isMobile ? 1000 : 1400;
         let width = img.width;
         let height = img.height;
 
@@ -636,8 +637,8 @@ export default function App() {
     <div
       className={`min-h-screen font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col ${isNative ? "" : "pt-safe"} ${isDarkMode ? "bg-slate-900 text-white" : "bg-blue-600 text-gray-900"}`}
     >
-      {/* Banner Ads on top of landing page or main page */}
-      {!isPremium && (appState === "upload" || (appState === "preview" && !showEditor)) && (
+      {/* Banner Ads on top of landing page */}
+      {!isPremium && appState === "upload" && (
         <AdMobBanner className="shrink-0 z-[60]" />
       )}
 
@@ -745,8 +746,13 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             className="w-full h-[100dvh] md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5 select-none"
           >
-            {/* Main Preview Area - Structured at exactly 70% of parent */}
-            <div className="h-[70%] max-h-[70%] bg-[#F1F5F9] p-3 flex items-center justify-center overflow-hidden relative select-none shrink-0 border-b border-gray-100">
+            {/* Banner Ad on top of main page */}
+            {!isPremium && (
+              <AdMobBanner className="shrink-0 border-b border-gray-100 z-[60]" />
+            )}
+
+            {/* Main Preview Area - Structured at exactly 77% of parent */}
+            <div className="h-[77%] max-h-[77%] bg-[#F1F5F9] p-3 flex items-center justify-center overflow-hidden relative select-none shrink-0 border-b border-gray-100">
               {/* Absolute Close/Reset Button inside the Preview Area */}
               <button
                 onClick={() => setAppState("upload")}
@@ -770,7 +776,7 @@ export default function App() {
               >
                 <img
                   src={processedImage}
-                  className={`max-h-full max-w-full object-contain rounded-xl shadow-xl ${
+                  className={`max-h-[90%] max-w-full object-contain rounded-xl shadow-xl ${
                     zoomScale > 1.1
                       ? "cursor-grab active:cursor-grabbing"
                       : "cursor-zoom-in"
@@ -802,8 +808,8 @@ export default function App() {
               )}
             </div>
 
-            {/* Bottom Controls Panel - Structured at exactly 30% of parent */}
-            <div className="h-[30%] max-h-[30%] shrink-0 bg-white flex flex-col justify-between overflow-hidden p-2.5">
+            {/* Bottom Controls Panel - Structured at exactly 23% of parent */}
+            <div className="h-[23%] max-h-[23%] shrink-0 bg-white flex flex-col justify-between overflow-hidden p-2.5 pb-2">
               {/* Selectors Wrapper: Scrollable to avoid overflow on tiny screens */}
               <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 mt-0.5">
                 {/* Tabs for Organization */}

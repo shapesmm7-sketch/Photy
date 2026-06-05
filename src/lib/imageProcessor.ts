@@ -294,6 +294,29 @@ export const PhoneLayouts: Record<string, LayoutConfig> = {
 // Cache for preloaded frame images
 const frameImageCache: Record<string, HTMLImageElement> = {};
 
+const imageCache = new Map<string, HTMLImageElement>();
+
+export function getCachedImage(src: string): Promise<HTMLImageElement> {
+  const cached = imageCache.get(src);
+  if (cached) return Promise.resolve(cached);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    if (!src.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
+    img.onload = () => {
+      if (imageCache.size > 50) {
+        const firstKey = imageCache.keys().next().value;
+        if (firstKey !== undefined) imageCache.delete(firstKey);
+      }
+      imageCache.set(src, img);
+      resolve(img);
+    };
+    img.onerror = (err) => reject(err);
+    img.src = src;
+  });
+}
+
 function getFrameImage(frameId: string): Promise<HTMLImageElement | null> {
   if (frameImageCache[frameId])
     return Promise.resolve(frameImageCache[frameId]);
@@ -687,8 +710,8 @@ function drawDevice(
 
   // Draw Shadow
   ctx.shadowColor = "rgba(0,0,0,0.3)";
-  ctx.shadowBlur = devW * 0.1;
-  ctx.shadowOffsetY = devW * 0.05;
+  ctx.shadowBlur = Math.min(30, devW * 0.1);
+  ctx.shadowOffsetY = Math.min(15, devW * 0.05);
 
   // Draw Frame
   let radius = devW * 0.12;
@@ -817,12 +840,9 @@ export async function applyStyle(
   customCropRect: { x: number; y: number; w: number; h: number } | null = null,
   customCanvasSize: { width: number; height: number } | null = null,
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    if (!originalSrc.startsWith("data:")) {
-      img.crossOrigin = "anonymous";
-    }
-    img.onload = () => {
+  try {
+    const img = await getCachedImage(originalSrc);
+    return new Promise((resolve, reject) => {
       const config = Styles[styleName] || Styles["Minimal"];
       const layout = PhoneLayouts[layoutName] || PhoneLayouts["None"];
 
@@ -964,7 +984,13 @@ export async function applyStyle(
         canvas.width = customCanvasSize ? customCanvasSize.width : contentW;
         canvas.height = customCanvasSize ? customCanvasSize.height : contentH;
 
-        ctx.filter = `brightness(${config.brightnessFactor}) contrast(${config.contrastFactor})`;
+        // Optimize: Do not set ctx.filter if brightness and contrast are at default (1.0)
+        // Setting filter forces the engine to compile and run a webgl/CPU shader over millions of pixels on every draw.
+        if (config.brightnessFactor !== 1 || config.contrastFactor !== 1) {
+          ctx.filter = `brightness(${config.brightnessFactor}) contrast(${config.contrastFactor})`;
+        } else {
+          ctx.filter = "none";
+        }
 
         // Background drawing logic
         if (customBg) {
@@ -1173,11 +1199,10 @@ export async function applyStyle(
       } else {
         finishProcessing(null);
       }
-    };
-
-    img.onerror = reject;
-    img.src = originalSrc;
-  });
+    });
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 // Keep backward compatibility for initial load
@@ -1194,12 +1219,9 @@ export async function burnEditsToImage(
     return styledImageDataUrl;
   }
 
-  return new Promise((resolve) => {
-    const img = new Image();
-    if (!styledImageDataUrl.startsWith("data:")) {
-      img.crossOrigin = "anonymous";
-    }
-    img.onload = () => {
+  try {
+    const img = await getCachedImage(styledImageDataUrl);
+    return new Promise((resolve) => {
       try {
         const canvas = document.createElement("canvas");
         canvas.width = img.width;
@@ -1434,11 +1456,9 @@ export async function burnEditsToImage(
         console.error("Failed burning edits:", err);
         resolve(styledImageDataUrl);
       }
-    };
-    img.onerror = (e) => {
-      console.error(e);
-      resolve(styledImageDataUrl);
-    };
-    img.src = styledImageDataUrl;
-  });
+    });
+  } catch (err) {
+    console.error("Failed loading image in burnEditsToImage:", err);
+    return styledImageDataUrl;
+  }
 }

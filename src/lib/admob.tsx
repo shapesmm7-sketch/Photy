@@ -186,14 +186,7 @@ export function AdMobBanner({
     };
   }, []);
 
-  return (
-    <div className={`w-full min-h-[50px] bg-black ${className}`}>
-      {/* 
-        This div acts as a placeholder space for the native banner 
-        which is rendered on top by the Capacitor plugin.
-      */}
-    </div>
-  );
+  return null;
 }
 
 // -------------------------------------------------------------
