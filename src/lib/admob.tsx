@@ -93,6 +93,24 @@ class AdMobManager {
   private listeners: InterstitialListener[] = [];
   private currentOnClose: (() => void) | null = null;
   private isInterstitialLoading = false;
+  private isListenerSetup = false;
+
+  async setupListeners() {
+    if (!isNative || this.isListenerSetup) return;
+    this.isListenerSetup = true;
+    try {
+      await AdMob.addListener(InterstitialAdPluginEvents.Dismissed, () => {
+        console.log("AdMob: Interstitial dismissed event");
+        this.handleClose();
+      });
+      await AdMob.addListener(InterstitialAdPluginEvents.FailedToLoad, () => {
+        console.log("AdMob: Interstitial failed to load event");
+        this.handleClose();
+      });
+    } catch (e) {
+      console.error("AdMob: Failed to register native listeners", e);
+    }
+  }
 
   subscribe(listener: InterstitialListener) {
     this.listeners.push(listener);
@@ -130,6 +148,8 @@ class AdMobManager {
     if (this.isInterstitialLoading) return;
     this.isInterstitialLoading = true;
 
+    await this.setupListeners();
+
     try {
       const options: AdOptions = {
         adId: INTERSTITIAL_ID,
@@ -137,10 +157,11 @@ class AdMobManager {
       };
       
       await AdMob.prepareInterstitial(options);
-      await AdMob.showInterstitial();
       
       this.currentOnClose = onClose;
-      this.listeners.forEach((l) => l(true, () => this.handleClose()));
+      await AdMob.showInterstitial();
+      
+      this.listeners.forEach((l) => l(false, () => this.handleClose()));
     } catch (e) {
       console.error("AdMob: Failed to show interstitial", e);
       onClose();
@@ -199,61 +220,7 @@ export function AdMobBanner({
 // ADMOB INTERSTITIAL CONTAINER
 // -------------------------------------------------------------
 export function AdMobInterstitialContainer() {
-  if (!isNative) {
-    return null;
-  }
-
-  const [visible, setVisible] = useState(false);
-  const onDismissRef = useRef<(() => void) | null>(null);
-
-  useEffect(() => {
-    const unsubscribe = admobManager.subscribe((isVisible, onClose) => {
-      setVisible(isVisible);
-      if (isVisible) {
-        onDismissRef.current = onClose || null;
-      }
-    });
-
-    let dismissListener: any;
-    let failedListener: any;
-
-    const setupListeners = async () => {
-      dismissListener = await AdMob.addListener(InterstitialAdPluginEvents.Dismissed, () => {
-        if (onDismissRef.current) {
-          onDismissRef.current();
-        }
-        setVisible(false);
-      });
-
-      failedListener = await AdMob.addListener(InterstitialAdPluginEvents.FailedToLoad, () => {
-        if (onDismissRef.current) {
-          onDismissRef.current();
-        }
-        setVisible(false);
-      });
-    };
-
-    setupListeners();
-
-    return () => {
-      unsubscribe();
-      if (dismissListener) dismissListener.remove();
-      if (failedListener) failedListener.remove();
-    };
-  }, []);
-
-  return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/60 z-[99999] pointer-events-none"
-        />
-      )}
-    </AnimatePresence>
-  );
+  return null;
 }
 
 
