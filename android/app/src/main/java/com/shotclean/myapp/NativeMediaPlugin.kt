@@ -155,9 +155,11 @@ class NativeMediaPlugin : Plugin() {
                 
                 imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
                 if (imageUri != null) {
-                    resolver.openOutputStream(imageUri)?.use { fos ->
+                    val fos = resolver.openOutputStream(imageUri)
+                    if (fos != null) {
                         bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
                         fos.flush()
+                        fos.close()
                     }
                 }
             } else {
@@ -169,10 +171,10 @@ class NativeMediaPlugin : Plugin() {
                 }
                 val imageFile = File(myAppDir, filename)
                 imageUri = Uri.fromFile(imageFile)
-                FileOutputStream(imageFile).use { fos ->
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
-                    fos.flush()
-                }
+                val fos = FileOutputStream(imageFile)
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+                fos.flush()
+                fos.close()
 
                 // Run MediaScannerConnection so the image immediately shows up in the gallery
                 MediaScannerConnection.scanFile(

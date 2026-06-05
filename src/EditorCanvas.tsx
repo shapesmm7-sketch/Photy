@@ -565,7 +565,9 @@ export default function EditorCanvas({
   useEffect(() => {
     const img = new Image();
     let isCurrent = true;
-    img.crossOrigin = "anonymous";
+    if (!imageSrc.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => {
       if (!isCurrent) return;
       styledImageRef.current = img;
@@ -611,7 +613,9 @@ export default function EditorCanvas({
     if (!workingOriginalSrc) return;
     const img = new Image();
     let isCurrent = true;
-    img.crossOrigin = "anonymous";
+    if (!workingOriginalSrc.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => {
       if (!isCurrent) return;
       rawScreenshotRef.current = img;
@@ -684,9 +688,11 @@ export default function EditorCanvas({
         rcCtx.translate(rc.width / 2, rc.height / 2);
         rcCtx.rotate(Math.PI / 2);
         rcCtx.drawImage(imgRef.current, -imgRef.current.width / 2, -imgRef.current.height / 2);
-        const dataUrl = rc.toDataURL("image/png");
+        const dataUrl = rc.toDataURL("image/jpeg", 0.95);
         const nextImg = new Image();
-        nextImg.crossOrigin = "anonymous";
+        if (!dataUrl.startsWith("data:")) {
+            nextImg.crossOrigin = "anonymous";
+        }
         nextImg.onload = () => {
             imgRef.current = nextImg;
             if (cb) cb(dataUrl);
@@ -791,7 +797,9 @@ export default function EditorCanvas({
           manualCanvasSize
         );
         const img = new Image();
-        img.crossOrigin = "anonymous";
+        if (!newPreviewSrc.startsWith("data:")) {
+          img.crossOrigin = "anonymous";
+        }
         img.onload = () => {
           styledImageRef.current = img;
           if (activeTool !== "crop") {
@@ -2569,7 +2577,7 @@ export default function EditorCanvas({
         cropRect.w,
         cropRect.h,
       );
-      const cleanDataUrl = cleanCanvas.toDataURL("image/png");
+      const cleanDataUrl = cleanCanvas.toDataURL("image/jpeg", 0.95);
 
       // 2. Run applyStyle to dynamically generate the new base styled mockup!
       const newStyledDataUrl = await applyStyle(
@@ -2584,7 +2592,9 @@ export default function EditorCanvas({
 
       // 3. Load these images into refs so the editor instantly switches to the new styled mockup base
       const updatedStyledImg = new Image();
-      updatedStyledImg.crossOrigin = "anonymous";
+      if (!newStyledDataUrl.startsWith("data:")) {
+        updatedStyledImg.crossOrigin = "anonymous";
+      }
       updatedStyledImg.onload = () => {
         styledImageRef.current = updatedStyledImg;
         originalImageRef.current = updatedStyledImg;
@@ -2644,9 +2654,9 @@ export default function EditorCanvas({
           cropRect.h,
         );
         cCtx.restore();
-        const cleanDataUrl = cleanCanvas.toDataURL("image/png");
+        const cleanDataUrl = cleanCanvas.toDataURL("image/jpeg", 0.95);
         
-        let previewDataUrl = canvasRef.current.toDataURL("image/png", 0.9);
+        let previewDataUrl = canvasRef.current.toDataURL("image/jpeg", 0.95);
         if (activeTool === "crop") {
           // If we are currently cropping, canvas has dark overlay UI.
           // Don't save the UI into the preview.

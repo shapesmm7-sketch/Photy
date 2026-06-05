@@ -819,7 +819,9 @@ export async function applyStyle(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    if (!originalSrc.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => {
       const config = Styles[styleName] || Styles["Minimal"];
       const layout = PhoneLayouts[layoutName] || PhoneLayouts["None"];
@@ -919,19 +921,27 @@ export async function applyStyle(
             sCtx.drawImage(offCanvas, cx, cy, cw, ch, cx, cy, cw, ch);
           }
         } else {
-          sensitiveAreas
-            .filter((a) => a.isBlurred)
-            .forEach((area) => {
-              const { x, y, width, height } = area.rect;
-              if (width <= 0 || height <= 0) return;
-              sCtx.save();
-              sCtx.beginPath();
-              sCtx.rect(x, y, width, height);
-              sCtx.clip();
-              sCtx.filter = `blur(${blurStrength}px)`;
-              sCtx.drawImage(sourceCanvas, 0, 0);
-              sCtx.restore();
-            });
+          const areas = sensitiveAreas.filter((a) => a.isBlurred);
+          if (areas.length > 0) {
+            const offCanvas = document.createElement("canvas");
+            offCanvas.width = croppedWidth;
+            offCanvas.height = croppedHeight;
+            const oCtx = offCanvas.getContext("2d");
+            if (oCtx) {
+              oCtx.drawImage(sourceCanvas, 0, 0);
+              areas.forEach((area) => {
+                const { x, y, width, height } = area.rect;
+                if (width <= 0 || height <= 0) return;
+                sCtx.save();
+                sCtx.beginPath();
+                sCtx.rect(x, y, width, height);
+                sCtx.clip();
+                sCtx.filter = `blur(${blurStrength}px)`;
+                sCtx.drawImage(offCanvas, 0, 0);
+                sCtx.restore();
+              });
+            }
+          }
         }
 
         // Final Canvas Setup
@@ -1142,7 +1152,7 @@ export async function applyStyle(
         }
 
         try {
-          resolve(canvas.toDataURL("image/png"));
+          resolve(canvas.toDataURL("image/jpeg", 0.95));
         } catch (securityErr) {
           console.warn(
             "Canvas export error, retrying without external assets...",
@@ -1186,7 +1196,9 @@ export async function burnEditsToImage(
 
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    if (!styledImageDataUrl.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
     img.onload = () => {
       try {
         const canvas = document.createElement("canvas");
@@ -1417,7 +1429,7 @@ export async function burnEditsToImage(
           ctx.restore();
         });
 
-        resolve(canvas.toDataURL("image/png"));
+        resolve(canvas.toDataURL("image/jpeg", 0.95));
       } catch (err) {
         console.error("Failed burning edits:", err);
         resolve(styledImageDataUrl);
