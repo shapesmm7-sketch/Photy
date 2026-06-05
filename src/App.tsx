@@ -635,10 +635,10 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col ${isNative ? "" : "pt-safe"} ${isDarkMode ? "bg-slate-900 text-white" : "bg-blue-600 text-gray-900"}`}
+      className={`min-h-screen font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col pt-safe ${isDarkMode ? "bg-slate-900 text-white" : "bg-blue-600 text-gray-900"}`}
     >
-      {/* Banner Ads on top of landing page */}
-      {!isPremium && appState === "upload" && (
+      {/* Banner Ads on top of landing page, main page, and edit page */}
+      {!isPremium && (appState === "upload" || appState === "preview") && (
         <AdMobBanner className="shrink-0 z-[60]" />
       )}
 
@@ -746,11 +746,6 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             className="w-full h-[100dvh] md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5 select-none"
           >
-            {/* Banner Ad on top of main page */}
-            {!isPremium && (
-              <AdMobBanner className="shrink-0 border-b border-gray-100 z-[60]" />
-            )}
-
             {/* Main Preview Area - Structured at exactly 77% of parent */}
             <div className="h-[77%] max-h-[77%] bg-[#F1F5F9] p-3 flex items-center justify-center overflow-hidden relative select-none shrink-0 border-b border-gray-100">
               {/* Absolute Close/Reset Button inside the Preview Area */}

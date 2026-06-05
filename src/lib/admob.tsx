@@ -169,6 +169,8 @@ interface AdMobBannerProps {
   className?: string;
 }
 
+let activeBannerCount = 0;
+
 export function AdMobBanner({
   unitId = BANNER_ID,
   className = "",
@@ -179,10 +181,14 @@ export function AdMobBanner({
   }
 
   useEffect(() => {
+    activeBannerCount++;
     // On native, we show the real AdMob banner which is rendered over the webview
     showBannerAd();
     return () => {
-      hideBannerAd();
+      activeBannerCount--;
+      if (activeBannerCount <= 0) {
+        hideBannerAd();
+      }
     };
   }, []);
 
