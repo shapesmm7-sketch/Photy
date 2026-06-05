@@ -26,30 +26,29 @@ import java.io.OutputStream
 
 @CapacitorPlugin(
     name = "NativeMedia",
-    permissions = [
+    permissions = arrayOf(
         Permission(
             alias = "storage",
-            strings = ["android.permission.WRITE_EXTERNAL_STORAGE"]
+            strings = arrayOf("android.permission.WRITE_EXTERNAL_STORAGE")
         )
-    ]
+    )
 )
 class NativeMediaPlugin : Plugin() {
 
     @PluginMethod
     fun saveImage(call: PluginCall) {
-        val base64Data = call.getString("base64")
+        val base64Data: String? = call.getString("base64")
         if (base64Data == null) {
             call.reject("Base64 string is missing")
             return
         }
 
-        val bitmap = base64ToBitmap(base64Data)
+        val bitmap: Bitmap? = base64ToBitmap(base64Data)
         if (bitmap == null) {
             call.reject("Failed to decode base64 to bitmap")
             return
         }
 
-        // Request WRITE_EXTERNAL_STORAGE at runtime ONLY for Android < 10 (API < 29)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             if (getPermissionState("storage") != PermissionState.GRANTED) {
                 requestPermissionForAlias("storage", call, "savePermissionCallback")
@@ -63,8 +62,8 @@ class NativeMediaPlugin : Plugin() {
     @PermissionCallback
     fun savePermissionCallback(call: PluginCall) {
         if (getPermissionState("storage") == PermissionState.GRANTED) {
-            val base64Data = call.getString("base64") ?: ""
-            val bitmap = base64ToBitmap(base64Data)
+            val base64Data: String = call.getString("base64") ?: ""
+            val bitmap: Bitmap? = base64ToBitmap(base64Data)
             if (bitmap != null) {
                 executeSaveAndResolve(call, bitmap)
             } else {
@@ -76,12 +75,12 @@ class NativeMediaPlugin : Plugin() {
     }
 
     private fun executeSaveAndResolve(call: PluginCall, bitmap: Bitmap) {
-        val ctx = context
+        val ctx: Context? = getContext()
         if (ctx == null) {
             call.reject("Android Context is unavailable")
             return
         }
-        val uri = saveImageToGallery(ctx, bitmap)
+        val uri: Uri? = saveImageToGallery(ctx, bitmap)
         if (uri != null) {
             val response = JSObject()
             response.put("uri", uri.toString())
@@ -93,37 +92,35 @@ class NativeMediaPlugin : Plugin() {
 
     @PluginMethod
     fun shareImage(call: PluginCall) {
-        val base64Data = call.getString("base64")
+        val base64Data: String? = call.getString("base64")
         if (base64Data == null) {
             call.reject("Base64 string is missing")
             return
         }
 
-        val bitmap = base64ToBitmap(base64Data)
+        val bitmap: Bitmap? = base64ToBitmap(base64Data)
         if (bitmap == null) {
             call.reject("Failed to decode base64 to bitmap")
             return
         }
 
-        val ctx = context
+        val ctx: Context? = getContext()
         if (ctx == null) {
             call.reject("Android Context is unavailable")
             return
         }
 
         try {
-            // Save to temporary cache folder to avoid polluting gallery for shares
             val cachePath = File(ctx.cacheDir, "images")
             cachePath.mkdirs()
-            val file = File(cachePath, "shared_image_${System.currentTimeMillis()}.png")
+            val file = File(cachePath, "shared_image_" + System.currentTimeMillis() + ".png")
             val fos = FileOutputStream(file)
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
             fos.flush()
             fos.close()
 
-            // Get FileProvider URI to safely share on Android 7+ (API 24+)
-            val authority = "${ctx.packageName}.fileprovider"
-            val imageUri = FileProvider.getUriForFile(ctx, authority, file)
+            val authority: String = ctx.packageName + ".fileprovider"
+            val imageUri: Uri? = FileProvider.getUriForFile(ctx, authority, file)
 
             if (imageUri != null) {
                 shareImageIntent(ctx, imageUri)
@@ -134,18 +131,16 @@ class NativeMediaPlugin : Plugin() {
                 call.reject("Could not create FileProvider content Uri")
             }
         } catch (e: Exception) {
-            call.reject("Exception in sharing operation: ${e.message}")
+            call.reject("Exception in sharing operation: " + e.message)
         }
     }
 
-    // Required function: saveImageToGallery(androidContext, bitmap): returns Uri or File
-    fun saveImageToGallery(androidContext: Context, bitmap: Bitmap): Uri? {
-        val filename = "shot_clean_${System.currentTimeMillis()}.png"
+    private fun saveImageToGallery(androidContext: Context, bitmap: Bitmap): Uri? {
+        val filename = "shot_clean_" + System.currentTimeMillis() + ".png"
         var imageUri: Uri? = null
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Android 10+ (API 29+): Use MediaStore API with RELATIVE_PATH = "Pictures/MyApp"
                 val resolver = androidContext.contentResolver
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
@@ -155,7 +150,7 @@ class NativeMediaPlugin : Plugin() {
                 
                 imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
                 if (imageUri != null) {
-                    val fos = resolver.openOutputStream(imageUri)
+                    val fos: OutputStream? = resolver.openOutputStream(imageUri!!)
                     if (fos != null) {
                         bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
                         fos.flush()
@@ -163,7 +158,6 @@ class NativeMediaPlugin : Plugin() {
                     }
                 }
             } else {
-                // Android 7–9 (API 24–28): Use Environment.getExternalStoragePublicDirectory and FileOutputStream
                 val imagesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
                 val myAppDir = File(imagesDir, "MyApp")
                 if (!myAppDir.exists()) {
@@ -176,7 +170,6 @@ class NativeMediaPlugin : Plugin() {
                 fos.flush()
                 fos.close()
 
-                // Run MediaScannerConnection so the image immediately shows up in the gallery
                 MediaScannerConnection.scanFile(
                     androidContext,
                     arrayOf(imageFile.absolutePath),
@@ -191,8 +184,7 @@ class NativeMediaPlugin : Plugin() {
         return imageUri
     }
 
-    // Required function: shareImageIntent(context, file or uri)
-    fun shareImageIntent(context: Context, imageUri: Uri) {
+    private fun shareImageIntent(appContext: Context, imageUri: Uri) {
         try {
             val shareIntent = Intent()
             shareIntent.action = Intent.ACTION_SEND
@@ -203,7 +195,7 @@ class NativeMediaPlugin : Plugin() {
             val chooser = Intent.createChooser(shareIntent, "Share Image")
             chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             
-            context.startActivity(chooser)
+            appContext.startActivity(chooser)
         } catch (e: Exception) {
             e.printStackTrace()
         }
