@@ -635,7 +635,7 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col pt-safe ${isDarkMode ? "bg-slate-900 text-white" : "bg-blue-600 text-gray-900"}`}
+      className={`h-[100dvh] w-full font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col pt-safe ${isDarkMode ? "bg-slate-900 text-white" : "bg-blue-600 text-gray-900"}`}
       style={{ paddingTop: (!isPremium && isNative) ? 'calc(env(safe-area-inset-top) + 60px)' : undefined }}
     >
       {/* Banner Ads on top of landing page, main page, and edit page */}
@@ -743,7 +743,7 @@ export default function App() {
             key="preview"
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full flex-1 md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5 select-none"
+            className="w-full flex-1 min-h-0 md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5 select-none"
           >
             {/* Main Preview Area - Structured at exactly 77% of parent */}
             <div className="h-[77%] max-h-[77%] bg-[#F1F5F9] p-3 flex items-center justify-center overflow-hidden relative select-none shrink-0 border-b border-gray-100">
