@@ -743,14 +743,14 @@ export default function App() {
             key="preview"
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full h-[100dvh] md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5 select-none"
+            className="w-full flex-1 md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5 select-none"
           >
             {/* Main Preview Area - Structured at exactly 77% of parent */}
             <div className="h-[77%] max-h-[77%] bg-[#F1F5F9] p-3 flex items-center justify-center overflow-hidden relative select-none shrink-0 border-b border-gray-100">
               {/* Absolute Close/Reset Button inside the Preview Area */}
               <button
                 onClick={() => setAppState("upload")}
-                className="absolute top-3.5 left-3.5 z-30 p-2 bg-white/95 hover:bg-white text-gray-700 hover:text-gray-900 backdrop-blur rounded-full shadow border border-gray-200/50 transition-all active:scale-95 cursor-pointer"
+                className="absolute bottom-3.5 left-3.5 z-30 p-2 bg-white/95 hover:bg-white text-gray-700 hover:text-gray-900 backdrop-blur rounded-full shadow border border-gray-200/50 transition-all active:scale-95 cursor-pointer"
                 title={t("startOverBtn")}
               >
                 <X className="w-4 h-4" />
