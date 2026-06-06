@@ -27,7 +27,7 @@ import { removeBackground } from "@imgly/background-removal";
 import { Styles, PhoneLayouts, applyStyle } from "./lib/imageProcessor";
 import { PHONE_FRAMES } from "./lib/phoneFrames";
 import { translations, LanguageKey } from "./i18n";
-import { AdMobBanner, admobManager } from "./lib/admob";
+import { admobManager, isNative } from "./lib/admob";
 
 type Tool = "none" | "crop" | "draw" | "blur" | "text" | "sticker" | "adjust" | "size" | "removebg";
 
@@ -180,7 +180,9 @@ export default function EditorCanvas({
     const layout = PhoneLayouts[lName] || PhoneLayouts["None"];
 
     let basePaddingFactor = config.paddingFactor;
-    if (layout.name === "None" && bgVal && sName === "Original") {
+    if (layout.name !== "None") {
+      basePaddingFactor = 0;
+    } else if (layout.name === "None" && bgVal && sName === "Original") {
       basePaddingFactor = 0.15;
     }
 
@@ -196,7 +198,9 @@ export default function EditorCanvas({
     const layout = PhoneLayouts[lName] || PhoneLayouts["None"];
 
     let basePaddingFactor = config.paddingFactor;
-    if (layout.name === "None" && bgVal && sName === "Original") {
+    if (layout.name !== "None") {
+      basePaddingFactor = 0;
+    } else if (layout.name === "None" && bgVal && sName === "Original") {
       basePaddingFactor = 0.15;
     }
 
@@ -286,20 +290,9 @@ export default function EditorCanvas({
 
       let drawW = screenW;
       let drawH = screenW / imgRatio;
-      if (imgRatio > screenRatio) {
-        drawW = screenW;
-        drawH = screenW / imgRatio;
-        if (drawH < screenH) {
-          drawH = screenH;
-          drawW = screenH * imgRatio;
-        }
-      } else {
+      if (drawH > screenH) {
         drawH = screenH;
         drawW = screenH * imgRatio;
-        if (drawW < screenW) {
-          drawW = screenW;
-          drawH = screenW / imgRatio;
-        }
       }
 
       const scale = drawW / rect.w;
@@ -783,8 +776,8 @@ export default function EditorCanvas({
     // We update the dynamic layout styling purely for the preview representation of the current layout with the new size!
     const timer = setTimeout(async () => {
       try {
-        const sourceSrc = workingOriginalSrc || currentCleanSrc;
-        const finalCrop = workingOriginalSrc ? cropRect : null;
+        const sourceSrc = currentCleanSrc || workingOriginalSrc;
+        const finalCrop = currentCleanSrc ? null : (workingOriginalSrc ? cropRect : null);
 
         const newPreviewSrc = await applyStyle(
           sourceSrc,
@@ -2679,10 +2672,11 @@ export default function EditorCanvas({
   };
 
   return (
-    <div className="flex flex-col h-full bg-black text-white absolute inset-0 z-50">
+    <div 
+      className="flex flex-col h-full bg-black text-white absolute inset-0 z-50"
+      style={{ paddingTop: (!isPremium && isNative) ? '60px' : undefined }}
+    >
       <canvas ref={blurCanvasRef} className="hidden" />
-
-      {!isPremium && <AdMobBanner />}
 
       <div className="flex items-center justify-between p-4 bg-[#111] z-10 pt-safe border-b border-white/10">
         <button

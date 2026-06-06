@@ -640,10 +640,6 @@ function drawDevice(
       else ctx.rect(screenX, screenY, screenW, screenH);
       ctx.clip();
 
-      // Fill background for screen
-      ctx.fillStyle = "#111";
-      ctx.fillRect(screenX, screenY, screenW, screenH);
-
       // Draw image adjusted to screen
       const isImgLandscape = img.width > img.height;
       const isScreenLandscape = screenW > screenH;
@@ -655,37 +651,24 @@ function drawDevice(
       const imgRatio = virtualImgW / virtualImgH;
       const screenRatio = screenW / screenH;
 
-      let drawW, drawH;
-      if (imgRatio > screenRatio) {
-        drawW = screenW;
-        drawH = screenW / imgRatio;
-        if (drawH < screenH) {
-          drawH = screenH;
-          drawW = screenH * imgRatio;
-        }
-      } else {
-        drawH = screenH;
-        drawW = screenH * imgRatio;
-        if (drawW < screenW) {
-          drawW = screenW;
-          drawH = screenW / imgRatio;
-        }
-      }
-
-      // Slightly zoom in to hide any baked-in rounded corners or borders from the original screenshot
-      drawW *= 1.03;
-      drawH *= 1.03;
-
       ctx.save();
       ctx.translate(screenX + screenW / 2, screenY + screenH / 2);
+
+      let drawW = screenW;
+      let drawH = screenW / imgRatio;
+      if (drawH < screenH) {
+        drawH = screenH;
+        drawW = screenH * imgRatio;
+      }
+      
+      // Draw foreground
+      ctx.filter = "none";
       if (shouldRotate) {
-        // Negative 90 degrees CCW
         ctx.rotate(-Math.PI / 2);
         ctx.drawImage(img, -drawH / 2, -drawW / 2, drawH, drawW);
       } else {
         ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
       }
-      ctx.restore();
       ctx.restore();
       ctx.restore();
       return;
@@ -747,10 +730,6 @@ function drawDevice(
   );
   ctx.clip();
 
-  // Fill screen background before image
-  ctx.fillStyle = "#111";
-  ctx.fillRect(-devW / 2, -devH / 2, devW, devH);
-
   // Draw Image - fitted to screen
   const screenW = devW - screenMargin * 2;
   const screenH = devH - screenMargin * 2;
@@ -764,35 +743,23 @@ function drawDevice(
   const imgRatio = virtualImgW / virtualImgH;
   const screenRatio = screenW / screenH;
 
-  let drawW, drawH;
-  if (imgRatio > screenRatio) {
-    drawW = screenW;
-    drawH = screenW / imgRatio;
-    if (drawH < screenH) {
-      drawH = screenH;
-      drawW = screenH * imgRatio;
-    }
-  } else {
+  ctx.save();
+  // Cover fit for foreground
+  let drawW = screenW;
+  let drawH = screenW / imgRatio;
+  if (drawH < screenH) {
     drawH = screenH;
     drawW = screenH * imgRatio;
-    if (drawW < screenW) {
-      drawW = screenW;
-      drawH = screenW / imgRatio;
-    }
   }
 
-  // Slightly zoom in to hide any baked-in rounded corners or borders from the original screenshot
-  drawW *= 1.03;
-  drawH *= 1.03;
-
-  ctx.save();
+  // Draw foreground
+  ctx.filter = "none";
   if (shouldRotate) {
     ctx.rotate(-Math.PI / 2);
     ctx.drawImage(img, -drawH / 2, -drawW / 2, drawH, drawW);
   } else {
     ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
   }
-  ctx.restore();
   ctx.restore();
 
   // Draw Dynamic Island / Camera
@@ -968,7 +935,9 @@ export async function applyStyle(
         let basePaddingFactor = config.paddingFactor;
         let baseRadiusFactor = config.cornerRadiusFactor;
         let baseShadowAlpha = config.shadowAlpha;
-        if (layout.name === "None" && customBg && styleName === "Original") {
+        if (layout.name !== "None") {
+          basePaddingFactor = 0;
+        } else if (layout.name === "None" && customBg && styleName === "Original") {
           // Add default padding if custom background color is selected on Original style without layout
           basePaddingFactor = 0.15;
           baseRadiusFactor = 0.04;
@@ -1121,7 +1090,7 @@ export async function applyStyle(
               y: layout.deviceY,
               scale: layout.deviceScale,
               rotation: layout.rotation,
-              isLandscape: layout.isLandscape !== undefined ? layout.isLandscape : isContentLandscape,
+              isLandscape: layout.isLandscape !== undefined ? layout.isLandscape : false,
             },
           ];
 

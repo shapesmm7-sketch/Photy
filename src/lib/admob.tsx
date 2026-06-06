@@ -36,20 +36,41 @@ export async function initializeAdMob() {
   }
 }
 
+let bannerStatus: "none" | "created" = "none";
+
 // Simple legacy function to support backward-compatibility
 export async function showBannerAd() {
   if (isNative) {
-    const options: BannerAdOptions = {
-      adId: BANNER_ID,
-      adSize: BannerAdSize.ADAPTIVE_BANNER,
-      position: BannerAdPosition.TOP_CENTER,
-      margin: 0,
-    };
     try {
-      await AdMob.showBanner(options);
-      console.log("AdMob: Native banner shown");
+      if (bannerStatus === "created") {
+        await AdMob.resumeBanner();
+        console.log("AdMob: Native banner resumed");
+      } else {
+        const options: BannerAdOptions = {
+          adId: BANNER_ID,
+          adSize: BannerAdSize.ADAPTIVE_BANNER,
+          position: BannerAdPosition.TOP_CENTER,
+          margin: 0,
+        };
+        await AdMob.showBanner(options);
+        bannerStatus = "created";
+        console.log("AdMob: Native banner shown");
+      }
     } catch (e) {
-      console.error("AdMob: Failed to show banner", e);
+      console.error("AdMob: Failed to show/resume banner", e);
+      // Try to recreate if it failed
+      try {
+        const options: BannerAdOptions = {
+          adId: BANNER_ID,
+          adSize: BannerAdSize.ADAPTIVE_BANNER,
+          position: BannerAdPosition.TOP_CENTER,
+          margin: 0,
+        };
+        await AdMob.showBanner(options);
+        bannerStatus = "created";
+      } catch (err) {
+        console.error("AdMob: Recovery failed", err);
+      }
     }
   }
 }

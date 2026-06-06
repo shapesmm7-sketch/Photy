@@ -636,11 +636,10 @@ export default function App() {
   return (
     <div
       className={`min-h-screen font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col pt-safe ${isDarkMode ? "bg-slate-900 text-white" : "bg-blue-600 text-gray-900"}`}
+      style={{ paddingTop: (!isPremium && isNative) ? 'calc(env(safe-area-inset-top) + 60px)' : undefined }}
     >
       {/* Banner Ads on top of landing page, main page, and edit page */}
-      {!isPremium && (appState === "upload" || appState === "preview") && (
-        <AdMobBanner className="shrink-0 z-[60]" />
-      )}
+      {!isPremium && <AdMobBanner className="shrink-0 z-[60]" />}
 
       {/* Full-screen simulated AdMob Interstitial Overlay */}
       <AdMobInterstitialContainer />
