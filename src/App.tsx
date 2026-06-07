@@ -31,6 +31,7 @@ import {
   Styles,
   PhoneLayouts,
   burnEditsToImage,
+  preloadPhoneFrames,
 } from "./lib/imageProcessor";
 import EditorCanvas from "./EditorCanvas";
 import { translations, LanguageKey } from "./i18n";
@@ -100,11 +101,22 @@ const EXTENDED_PALETTE = [
   "#11998e,#38ef7d", // Fresh Mint
   "#eb3349,#f45c43", // Cherry
   "#4cb8c4,#3cd3ad", // Turquoise Flow
+  "#fdfc47,#24fe41", // Yellow & Green Mix
+  "#9a55ff,#33bfff", // Purple & Blue Mix
+  "#ff416c,#ff4b2b", // Red & Orange Mix
+  "#1380a1,#34e89e", // Tealish Blue & Mint Green Mix
+  "#da22ff,#9733ee", // Pinkish Purple & Purple Mix
+  "#ff8c00,#ff0080", // Orange & Pinkish Red Mix
+  "#8ec5fc,#e0c3fc", // Lilac & Sky Blue Mix
+  "#4facfe,#00f2fe", // Blue & Teal Mix
+  "#ff3366,#6600cc", // Ruby Pink & Purple Indigo Mix
+  "#a8ff78,#78ffd6", // Lime & Aquamarine Mix
 ];
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>("upload");
   const [originalImage, setOriginalImage] = useState<string | null>(null); // Baked version for style
+  const [loadedOriginalImage, setLoadedOriginalImage] = useState<HTMLImageElement | null>(null);
   const [cleanImage, setCleanImage] = useState<string | null>(null); // Clean version for editor (un-baked)
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [baseStyledImage, setBaseStyledImage] = useState<string | null>(null);
@@ -298,6 +310,7 @@ export default function App() {
     if (!isPremium) {
       initializeAdMob().then(() => {
         showBannerAd();
+        admobManager.preloadInterstitial();
       });
     } else {
       hideBannerAd();
@@ -310,13 +323,31 @@ export default function App() {
     admobManager.incrementInteractions();
   }, [selectedStyle, selectedLayout, customBgColor]);
 
-  // Sync processed image when any parameter changes
+  // Preload all frames on mount
+  React.useEffect(() => {
+    preloadPhoneFrames();
+  }, []);
+
+  // Preload original image into HTMLImageElement for instant subsequent rendering
   React.useEffect(() => {
     if (originalImage) {
+      const img = new Image();
+      img.onload = () => {
+        setLoadedOriginalImage(img);
+      };
+      img.src = originalImage;
+    } else {
+      setLoadedOriginalImage(null);
+    }
+  }, [originalImage]);
+
+  // Sync processed image when any parameter changes
+  React.useEffect(() => {
+    if (originalImage && loadedOriginalImage) {
       setZoomScale(1);
       setZoomOffset({ x: 0, y: 0 });
       applyStyle(
-        originalImage,
+        loadedOriginalImage,
         selectedStyle,
         selectedLayout,
         sensitiveAreas,
@@ -366,6 +397,7 @@ export default function App() {
     }
   }, [
     originalImage,
+    loadedOriginalImage,
     selectedStyle,
     selectedLayout,
     sensitiveAreas,
@@ -745,8 +777,8 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             className="w-full flex-1 min-h-0 md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5 select-none"
           >
-            {/* Main Preview Area - Structured at exactly 77% of parent */}
-            <div className="h-[77%] max-h-[77%] bg-[#F1F5F9] p-3 flex items-center justify-center overflow-hidden relative select-none shrink-0 border-b border-gray-100">
+            {/* Main Preview Area - Structured at exactly 74% of parent */}
+            <div className="h-[74%] max-h-[74%] bg-[#F1F5F9] p-3 flex items-center justify-center overflow-hidden relative select-none shrink-0 border-b border-gray-100">
               {/* Absolute Close/Reset Button inside the Preview Area */}
               <button
                 onClick={() => setAppState("upload")}
@@ -770,7 +802,7 @@ export default function App() {
               >
                 <img
                   src={processedImage}
-                  className={`max-h-[90%] max-w-full object-contain rounded-xl shadow-xl ${
+                  className={`max-h-[85%] max-w-full object-contain rounded-xl shadow-xl ${
                     zoomScale > 1.1
                       ? "cursor-grab active:cursor-grabbing"
                       : "cursor-zoom-in"
@@ -802,8 +834,8 @@ export default function App() {
               )}
             </div>
 
-            {/* Bottom Controls Panel - Structured at exactly 23% of parent */}
-            <div className="h-[23%] max-h-[23%] shrink-0 bg-white flex flex-col justify-between overflow-hidden p-2.5 pb-2">
+            {/* Bottom Controls Panel - Structured at exactly 26% of parent */}
+            <div className="h-[26%] max-h-[26%] shrink-0 bg-white flex flex-col justify-between overflow-hidden p-2.5 pb-2">
               {/* Selectors Wrapper: Scrollable to avoid overflow on tiny screens */}
               <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 mt-0.5">
                 {/* Tabs for Organization */}

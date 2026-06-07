@@ -174,7 +174,6 @@ export default function EditorCanvas({
   const getPadding = (w: number, h: number) => {
     const sName = styleName || "Minimal";
     const lName = layoutName || "None";
-    const bgVal = customBg || null;
 
     const config = Styles[sName] || Styles["Minimal"];
     const layout = PhoneLayouts[lName] || PhoneLayouts["None"];
@@ -182,8 +181,8 @@ export default function EditorCanvas({
     let basePaddingFactor = config.paddingFactor;
     if (layout.name !== "None") {
       basePaddingFactor = 0;
-    } else if (layout.name === "None" && bgVal && sName === "Original") {
-      basePaddingFactor = 0.15;
+    } else if (layout.name === "None" && sName === "Original") {
+      basePaddingFactor = 0;
     }
 
     return Math.max(w, h) * basePaddingFactor;
@@ -192,7 +191,6 @@ export default function EditorCanvas({
   const getScreenshotCenterAndScale = (rect: { x: number; y: number; w: number; h: number }) => {
     const sName = styleName || "Minimal";
     const lName = layoutName || "None";
-    const bgVal = customBg || null;
 
     const config = Styles[sName] || Styles["Minimal"];
     const layout = PhoneLayouts[lName] || PhoneLayouts["None"];
@@ -200,8 +198,8 @@ export default function EditorCanvas({
     let basePaddingFactor = config.paddingFactor;
     if (layout.name !== "None") {
       basePaddingFactor = 0;
-    } else if (layout.name === "None" && bgVal && sName === "Original") {
-      basePaddingFactor = 0.15;
+    } else if (layout.name === "None" && sName === "Original") {
+      basePaddingFactor = 0;
     }
 
     const padding = Math.max(rect.w, rect.h) * basePaddingFactor;
@@ -280,7 +278,7 @@ export default function EditorCanvas({
 
       const isImgLandscape = rect.w > rect.h;
       const isScreenLandscape = screenW > screenH;
-      const shouldRotate = isImgLandscape !== isScreenLandscape;
+      const shouldRotate = !!layout.isLandscape && !isImgLandscape;
 
       const virtualImgW = shouldRotate ? rect.h : rect.w;
       const virtualImgH = shouldRotate ? rect.w : rect.h;
@@ -546,6 +544,7 @@ export default function EditorCanvas({
   // Size tool states
   const [canvasWidthInput, setCanvasWidthInput] = useState<string>("");
   const [canvasHeightInput, setCanvasHeightInput] = useState<string>("");
+  const [selectedPresetLabel, setSelectedPresetLabel] = useState<string | null>(null);
   const [manualCanvasSize, setManualCanvasSize] = useState<{ width: number; height: number } | null>(initialCustomSize);
   
   // Create local states to handle rotated internal images safely apart from props
@@ -1112,14 +1111,48 @@ export default function EditorCanvas({
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw background color if provided
+    // Load config for background drawing
+    const sName = styleName || "Minimal";
+    const config = Styles[sName] || Styles["Minimal"];
+
+    // Draw background color if provided, else use config
     if (customBg) {
-      ctx.fillStyle = customBg;
+      if (customBg.includes(",")) {
+        const colors = customBg.split(",");
+        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        colors.forEach((color, i, arr) => {
+          grad.addColorStop(i / (arr.length - 1), color.trim());
+        });
+        ctx.fillStyle = grad;
+      } else {
+        ctx.fillStyle = customBg;
+      }
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else {
+      if (config.bgGradient) {
+        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        config.bgGradient.forEach((color, i, arr) => {
+          grad.addColorStop(i / (arr.length - 1), color);
+        });
+        ctx.fillStyle = grad;
+      } else {
+        ctx.fillStyle = config.bgColor || "#FFFFFF";
+      }
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    const drawX = manualCanvasSize ? (canvas.width - activeRect.w) / 2 : 0;
-    const drawY = manualCanvasSize ? (canvas.height - activeRect.h) / 2 : topPad;
+    let drawX = 0;
+    let drawY = topPad;
+    let drawW = activeRect.w;
+    let drawH = activeRect.h;
+
+    if (manualCanvasSize) {
+      const scale = Math.max(canvas.width / activeRect.w, canvas.height / activeRect.h);
+      drawW = activeRect.w * scale;
+      drawH = activeRect.h * scale;
+      drawX = (canvas.width - drawW) / 2;
+      drawY = (drawH > canvas.height) ? 0 : (canvas.height - drawH) / 2;
+    }
 
     // Base image (cropped region or full original depending on activeRect)
     ctx.save();
@@ -1134,8 +1167,8 @@ export default function EditorCanvas({
       activeRect.h,
       drawX,
       drawY,
-      activeRect.w,
-      activeRect.h,
+      drawW,
+      drawH,
     );
     ctx.restore();
 
@@ -1183,10 +1216,17 @@ export default function EditorCanvas({
             const bgH = t.size + padY * 2;
             const r = bgH / 2;
 
-            ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-            ctx.shadowBlur = Math.max(6, t.size * 0.15);
-            ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
-            ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+            if (t.hasShadow !== false) {
+              ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.4)";
+              ctx.shadowBlur = Math.max(6, t.size * 0.15);
+              ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
+              ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+            } else {
+              ctx.shadowColor = "transparent";
+              ctx.shadowBlur = 0;
+              ctx.shadowOffsetX = 0;
+              ctx.shadowOffsetY = 0;
+            }
 
             ctx.fillStyle = t.badgeBg || "#2563EB";
             ctx.beginPath();
@@ -3288,6 +3328,7 @@ export default function EditorCanvas({
               <button
                 onClick={() => {
                   setManualCanvasSize(null);
+                  setSelectedPresetLabel(null);
                   if (originalImageRef.current) {
                     setCanvasWidthInput(
                       originalImageRef.current.width.toString(),
@@ -3307,7 +3348,52 @@ export default function EditorCanvas({
                 Reset Size
               </button>
             </div>
-
+ 
+            {/* Quick Presets for Common Sizes */}
+            <div className="flex flex-col gap-1.5 bg-white/5 border border-white/5 p-3 rounded-2xl">
+              <label className="text-[9px] font-extrabold text-gray-500 uppercase tracking-widest pl-1">
+                Common Presets
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: "Insta Post", w: 1080, h: 1080 },
+                  { label: "Insta Story", w: 1080, h: 1920 },
+                  { label: "FB Post", w: 1080, h: 1080 },
+                  { label: "Play Store", w: 1080, h: 1920 }
+                ].map((preset, idx) => {
+                  const isSelected = selectedPresetLabel === preset.label && parseInt(canvasWidthInput) === preset.w && parseInt(canvasHeightInput) === preset.h;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setCanvasWidthInput(preset.w.toString());
+                        setCanvasHeightInput(preset.h.toString());
+                        setSelectedPresetLabel(preset.label);
+                        setManualCanvasSize({ width: preset.w, height: preset.h });
+                        setTimeout(() => {
+                          if (originalImageRef.current && cropRect) {
+                            fitImageToContainer(
+                              originalImageRef.current,
+                              cropRect,
+                            );
+                          }
+                        }, 0);
+                      }}
+                      className={`py-1.5 px-1.5 rounded-xl text-[9px] font-bold text-center border transition-all active:scale-95 cursor-pointer flex flex-col items-center justify-center min-h-[44px] ${
+                        isSelected
+                          ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20"
+                          : "bg-black/20 border-white/10 text-gray-300 hover:bg-black/40 hover:text-white"
+                      }`}
+                    >
+                      <span className="truncate w-full block">{preset.label}</span>
+                      <span className="text-[7.5px] opacity-65 font-mono block mt-0.5 mt-auto">{preset.w}×{preset.h}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+ 
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider pl-1">
@@ -3319,6 +3405,7 @@ export default function EditorCanvas({
                   onChange={(e) => {
                     const val = e.target.value;
                     setCanvasWidthInput(val);
+                    setSelectedPresetLabel(null);
                     const w = parseInt(val);
                     const h = parseInt(canvasHeightInput);
                     if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
@@ -3347,6 +3434,7 @@ export default function EditorCanvas({
                   onChange={(e) => {
                     const val = e.target.value;
                     setCanvasHeightInput(val);
+                    setSelectedPresetLabel(null);
                     const h = parseInt(val);
                     const w = parseInt(canvasWidthInput);
                     if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {

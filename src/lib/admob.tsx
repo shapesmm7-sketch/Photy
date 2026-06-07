@@ -115,6 +115,8 @@ class AdMobManager {
   private currentOnClose: (() => void) | null = null;
   private isInterstitialLoading = false;
   private isListenerSetup = false;
+  private isAdReady = false;
+  private safetyTimeoutRef: any = null;
 
   async setupListeners() {
     if (!isNative || this.isListenerSetup) return;
@@ -126,6 +128,11 @@ class AdMobManager {
       });
       await AdMob.addListener(InterstitialAdPluginEvents.FailedToLoad, () => {
         console.log("AdMob: Interstitial failed to load event");
+        this.handleClose();
+      });
+      const failedToShowEvent = (InterstitialAdPluginEvents as any).FailedToShow || "interstitialAdFailedToShow";
+      await AdMob.addListener(failedToShowEvent, () => {
+        console.log("AdMob: Interstitial failed to show event");
         this.handleClose();
       });
     } catch (e) {
@@ -148,8 +155,44 @@ class AdMobManager {
     this.interactionCount = 0;
   }
 
+  async preloadInterstitial() {
+    if (!isNative) return;
+    if (this.isInterstitialLoading || this.isAdReady) return;
+    
+    this.isInterstitialLoading = true;
+    await this.setupListeners();
+    
+    try {
+      console.log("AdMob: Starting background preloading of Interstitial...");
+      const options: AdOptions = {
+        adId: INTERSTITIAL_ID,
+        isTesting: false
+      };
+      
+      const preloadPromise = AdMob.prepareInterstitial(options);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Preload timeout")), 6000)
+      );
+
+      await Promise.race([preloadPromise, timeoutPromise]);
+      this.isAdReady = true;
+      console.log("AdMob: Interstitial preloaded successfully and ready to show instantly");
+    } catch (e) {
+      console.error("AdMob: Failed to preload interstitial", e);
+      this.isAdReady = false;
+    } finally {
+      this.isInterstitialLoading = false;
+    }
+  }
+
   incrementInteractions(onTriggerInterstitial?: () => void) {
     this.interactionCount++;
+    
+    // Periodically make sure an ad is loaded when interaction count is close to threshold
+    if (this.interactionCount >= 6) {
+      this.preloadInterstitial();
+    }
+
     if (this.interactionCount >= 10) {
       this.interactionCount = 0;
       this.showInterstitial(() => {
@@ -166,38 +209,65 @@ class AdMobManager {
       return;
     }
 
-    if (this.isInterstitialLoading) return;
-    this.isInterstitialLoading = true;
+    if (this.safetyTimeoutRef) {
+      clearTimeout(this.safetyTimeoutRef);
+    }
 
-    await this.setupListeners();
+    this.currentOnClose = onClose;
+
+    // Safety timeout: if the ad sequence gets stuck or native window remains black,
+    // we MUST resume/unfreeze the app after 5 seconds of no dismiss event.
+    this.safetyTimeoutRef = setTimeout(() => {
+      console.warn("AdMob: Interstitial show safety timeout triggered!");
+      this.handleClose();
+    }, 5000);
 
     try {
-      const options: AdOptions = {
-        adId: INTERSTITIAL_ID,
-        isTesting: false
-      };
-      
-      await AdMob.prepareInterstitial(options);
-      
-      this.currentOnClose = onClose;
+      await this.setupListeners();
+
+      if (!this.isAdReady) {
+        console.log("AdMob: Ad not preloaded. Preparing now with short timeout...");
+        const options: AdOptions = {
+          adId: INTERSTITIAL_ID,
+          isTesting: false
+        };
+        
+        const preparePromise = AdMob.prepareInterstitial(options);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Sync prepare timeout")), 1500)
+        );
+        await Promise.race([preparePromise, timeoutPromise]);
+        this.isAdReady = true;
+      }
+
+      console.log("AdMob: Showing interstitial now...");
       await AdMob.showInterstitial();
+      this.isAdReady = false; // Consumed
       
       this.listeners.forEach((l) => l(false, () => this.handleClose()));
     } catch (e) {
-      console.error("AdMob: Failed to show interstitial", e);
-      onClose();
-    } finally {
-      this.isInterstitialLoading = false;
+      console.error("AdMob: Failed in showInterstitial sequence", e);
+      this.handleClose();
     }
   }
 
   private handleClose() {
+    if (this.safetyTimeoutRef) {
+      clearTimeout(this.safetyTimeoutRef);
+      this.safetyTimeoutRef = null;
+    }
+
     if (this.currentOnClose) {
       const cb = this.currentOnClose;
       this.currentOnClose = null;
       cb();
     }
     this.listeners.forEach((l) => l(false));
+
+    // Preload again in background after a short delay so the next ad is ready in advance
+    setTimeout(() => {
+      this.preloadInterstitial();
+    }, 1500);
   }
 }
 

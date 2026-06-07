@@ -296,7 +296,10 @@ const frameImageCache: Record<string, HTMLImageElement> = {};
 
 const imageCache = new Map<string, HTMLImageElement>();
 
-export function getCachedImage(src: string): Promise<HTMLImageElement> {
+export function getCachedImage(src: string | HTMLImageElement): Promise<HTMLImageElement> {
+  if (src instanceof HTMLImageElement) {
+    return Promise.resolve(src);
+  }
   const cached = imageCache.get(src);
   if (cached) return Promise.resolve(cached);
   return new Promise((resolve, reject) => {
@@ -314,6 +317,18 @@ export function getCachedImage(src: string): Promise<HTMLImageElement> {
     };
     img.onerror = (err) => reject(err);
     img.src = src;
+  });
+}
+
+export function preloadPhoneFrames(): void {
+  PHONE_FRAMES.forEach((frame) => {
+    if (frame.id && frame.image && !frameImageCache[frame.id]) {
+      const img = new Image();
+      img.onload = () => {
+        frameImageCache[frame.id] = img;
+      };
+      img.src = frame.image;
+    }
   });
 }
 
@@ -643,7 +658,7 @@ function drawDevice(
       // Draw image adjusted to screen
       const isImgLandscape = img.width > img.height;
       const isScreenLandscape = screenW > screenH;
-      const shouldRotate = isImgLandscape !== isScreenLandscape;
+      const shouldRotate = !!layout.isLandscape && !isImgLandscape;
 
       const virtualImgW = shouldRotate ? img.height : img.width;
       const virtualImgH = shouldRotate ? img.width : img.height;
@@ -735,7 +750,7 @@ function drawDevice(
   const screenH = devH - screenMargin * 2;
   const isImgLandscape = img.width > img.height;
   const isScreenLandscape = screenW > screenH;
-  const shouldRotate = isImgLandscape !== isScreenLandscape;
+  const shouldRotate = !!layout.isLandscape && !isImgLandscape;
 
   const virtualImgW = shouldRotate ? img.height : img.width;
   const virtualImgH = shouldRotate ? img.width : img.height;
@@ -937,11 +952,11 @@ export async function applyStyle(
         let baseShadowAlpha = config.shadowAlpha;
         if (layout.name !== "None") {
           basePaddingFactor = 0;
-        } else if (layout.name === "None" && customBg && styleName === "Original") {
-          // Add default padding if custom background color is selected on Original style without layout
-          basePaddingFactor = 0.15;
-          baseRadiusFactor = 0.04;
-          baseShadowAlpha = 0.15;
+        } else if (layout.name === "None" && styleName === "Original") {
+          // Unstyled Original should have zero padding, zero radius, and zero shadow ALWAYS
+          basePaddingFactor = 0;
+          baseRadiusFactor = 0;
+          baseShadowAlpha = 0;
         }
 
         const padding =
@@ -979,6 +994,9 @@ export async function applyStyle(
             ctx.fillStyle = customBg;
           }
           ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } else if (styleName === "Original" && layout.name === "None") {
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
         } else if (layout.name !== "None" && styleName === "Original") {
           ctx.fillStyle = layout.themeColor;
           ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1001,8 +1019,14 @@ export async function applyStyle(
 
         // Center content mapping
         ctx.save();
-        if (customCanvasSize && layout.name === "None") {
-           ctx.translate((canvas.width - contentW) / 2, (canvas.height - contentH) / 2);
+        if (customCanvasSize) {
+          const scale = Math.max(canvas.width / contentW, canvas.height / contentH);
+          const drawW = contentW * scale;
+          const drawH = contentH * scale;
+          const drawX = (canvas.width - drawW) / 2;
+          const drawY = (drawH > canvas.height) ? 0 : (canvas.height - drawH) / 2;
+          ctx.translate(drawX, drawY);
+          ctx.scale(scale, scale);
         }
 
         // Decorative lines for layouts removed per user request
@@ -1016,20 +1040,20 @@ export async function applyStyle(
             const layers = 3;
             for (let i = layers; i > 0; i--) {
               let offsetX = 0;
-              let offsetY = i * (canvas.height * 0.03);
+              let offsetY = i * (contentH * 0.03);
               if (styleName === "Stacked Right")
-                offsetX = i * (canvas.width * 0.03);
+                offsetX = i * (contentW * 0.03);
               if (styleName === "Stacked Left")
-                offsetX = -i * (canvas.width * 0.03);
+                offsetX = -i * (contentW * 0.03);
               const scale = 1 - i * 0.05;
               ctx.save();
-              ctx.translate(canvas.width / 2, canvas.height / 2);
+              ctx.translate(contentW / 2, contentH / 2);
               ctx.translate(offsetX, offsetY);
               ctx.scale(scale, scale);
-              ctx.translate(-canvas.width / 2, -canvas.height / 2);
+              ctx.translate(-contentW / 2, -contentH / 2);
               ctx.shadowColor = `rgba(0, 0, 0, 0.15)`;
-              ctx.shadowBlur = canvas.width * 0.02;
-              ctx.shadowOffsetY = canvas.width * 0.01;
+              ctx.shadowBlur = contentW * 0.02;
+              ctx.shadowOffsetY = contentW * 0.01;
               ctx.beginPath();
               if (ctx.roundRect)
                 ctx.roundRect(
@@ -1052,8 +1076,8 @@ export async function applyStyle(
           if (baseShadowAlpha > 0) {
             ctx.save();
             ctx.shadowColor = `rgba(0, 0, 0, ${baseShadowAlpha})`;
-            ctx.shadowBlur = canvas.width * 0.03;
-            ctx.shadowOffsetY = canvas.width * 0.015;
+            ctx.shadowBlur = contentW * 0.03;
+            ctx.shadowOffsetY = contentW * 0.015;
             ctx.beginPath();
             if (ctx.roundRect)
               ctx.roundRect(
@@ -1097,10 +1121,10 @@ export async function applyStyle(
           // Sort placements to draw from back to front if needed?
           // Usually the order in the array should define the depth.
           placements.forEach((p) => {
-            const devX = canvas.width * p.x;
-            const devY = canvas.height * p.y;
-            const maxWidth = canvas.width * p.scale;
-            const maxHeight = canvas.height * p.scale;
+            const devX = contentW * p.x;
+            const devY = contentH * p.y;
+            const maxWidth = contentW * p.scale;
+            const maxHeight = contentH * p.scale;
             drawDevice(
               ctx,
               sourceCanvas,
@@ -1331,10 +1355,17 @@ export async function burnEditsToImage(
               const bgH = t.size + padY * 2;
               const r = bgH / 2;
 
-              ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-              ctx.shadowBlur = Math.max(6, t.size * 0.15);
-              ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
-              ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+              if (t.hasShadow !== false) {
+                ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.4)";
+                ctx.shadowBlur = Math.max(6, t.size * 0.15);
+                ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
+                ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+              } else {
+                ctx.shadowColor = "transparent";
+                ctx.shadowBlur = 0;
+                ctx.shadowOffsetX = 0;
+                ctx.shadowOffsetY = 0;
+              }
 
               ctx.fillStyle = t.badgeBg || "#2563EB";
               ctx.beginPath();
