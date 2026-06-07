@@ -244,6 +244,14 @@ class AdMobManager {
       await AdMob.showInterstitial();
       this.isAdReady = false; // Consumed
       
+      // AD SUCCESSFULLY SHOWING!
+      // Clear the timeout so we don't interrupt the user while they watch the ad
+      // or trigger another preload while this ad is playing.
+      if (this.safetyTimeoutRef) {
+        clearTimeout(this.safetyTimeoutRef);
+        this.safetyTimeoutRef = null;
+      }
+      
       this.listeners.forEach((l) => l(false, () => this.handleClose()));
     } catch (e) {
       console.error("AdMob: Failed in showInterstitial sequence", e);
