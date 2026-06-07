@@ -179,7 +179,7 @@ export default function EditorCanvas({
     const layout = PhoneLayouts[lName] || PhoneLayouts["None"];
 
     let basePaddingFactor = config.paddingFactor;
-    if (layout.name !== "None") {
+    if (layout.name !== "None" || manualCanvasSize) {
       basePaddingFactor = 0;
     } else if (layout.name === "None" && sName === "Original") {
       basePaddingFactor = 0;
@@ -196,7 +196,7 @@ export default function EditorCanvas({
     const layout = PhoneLayouts[lName] || PhoneLayouts["None"];
 
     let basePaddingFactor = config.paddingFactor;
-    if (layout.name !== "None") {
+    if (layout.name !== "None" || manualCanvasSize) {
       basePaddingFactor = 0;
     } else if (layout.name === "None" && sName === "Original") {
       basePaddingFactor = 0;
@@ -785,8 +785,7 @@ export default function EditorCanvas({
           [],
           15,
           customBg,
-          finalCrop,
-          manualCanvasSize
+          finalCrop
         );
         const img = new Image();
         if (!newPreviewSrc.startsWith("data:")) {
@@ -803,10 +802,10 @@ export default function EditorCanvas({
       } catch (err) {
         console.error("Failed to update layout preview on resize", err);
       }
-    }, 250);
+    }, 10);
 
     return () => clearTimeout(timer);
-  }, [manualCanvasSize, currentCleanSrc, workingOriginalSrc, cropRect, styleName, layoutName, customBg]);
+  }, [currentCleanSrc, workingOriginalSrc, cropRect, styleName, layoutName, customBg]);
 
   const handleAutoDetectSensitive = async () => {
     const rawImg = rawScreenshotRef.current || originalImageRef.current;
@@ -974,8 +973,8 @@ export default function EditorCanvas({
 
     const virtualH = rect.h + topPad + bottomPad;
 
-    const finalW = manualCanvasSize ? manualCanvasSize.width : rect.w;
-    const finalH = manualCanvasSize ? manualCanvasSize.height : virtualH;
+    let finalW = manualCanvasSize ? manualCanvasSize.width : rect.w;
+    let finalH = manualCanvasSize ? manualCanvasSize.height : virtualH;
 
     // Calculate aspect ratios based on final dimensions
     const imageAspect = finalW / finalH;
@@ -998,28 +997,9 @@ export default function EditorCanvas({
     canvasObj.height = finalH;
     blurCanvasObj.width = finalW;
     blurCanvasObj.height = finalH;
+    blurCanvasObj.setAttribute("data-dirty", "true");
 
     setCanvasSize({ width: destW, height: destH });
-
-    // Re-prepare blurred version
-    const bCtx = blurCanvasObj.getContext("2d");
-    if (bCtx) {
-      bCtx.clearRect(0, 0, blurCanvasObj.width, blurCanvasObj.height);
-      const blurRadius = Math.max(25, Math.round(rect.w * 0.04));
-      bCtx.filter = `blur(${blurRadius}px)`;
-      bCtx.drawImage(
-        img,
-        rect.x,
-        rect.y,
-        rect.w,
-        rect.h,
-        0,
-        topPad,
-        rect.w,
-        rect.h,
-      );
-      bCtx.filter = "none";
-    }
 
     redraw(rect); // Pass rect to use latest crop
   };
@@ -1104,6 +1084,32 @@ export default function EditorCanvas({
     }
     if (!activeRect) return;
 
+    const hasBlurPaths = explicitPaths ? explicitPaths.some((p) => p.isBlur) : paths.some((p) => p.isBlur);
+    const needBlur = activeTool === "blur" || hasBlurPaths;
+
+    if (needBlur && blurCanvasRef.current?.getAttribute("data-dirty") === "true") {
+      const bCanvas = blurCanvasRef.current;
+      const bCtx = bCanvas.getContext("2d");
+      if (bCtx) {
+        const blurRadius = Math.max(25, Math.round((activeRect?.w || img.width) * 0.04));
+        bCtx.clearRect(0, 0, bCanvas.width, bCanvas.height);
+        bCtx.filter = `blur(${blurRadius}px)`;
+        bCtx.drawImage(
+          img,
+          activeRect.x,
+          activeRect.y,
+          activeRect.w,
+          activeRect.h,
+          0,
+          0,
+          activeRect.w,
+          activeRect.h,
+        );
+        bCtx.filter = "none";
+        bCanvas.removeAttribute("data-dirty");
+      }
+    }
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -1115,7 +1121,19 @@ export default function EditorCanvas({
     const sName = styleName || "Minimal";
     const config = Styles[sName] || Styles["Minimal"];
 
-    // Draw background color if provided, else use config
+    let drawX = 0;
+    let drawY = topPad;
+    let drawW = activeRect.w;
+    let drawH = activeRect.h;
+
+    if (manualCanvasSize) {
+      const scale = Math.max(canvas.width / activeRect.w, canvas.height / activeRect.h);
+      drawW = activeRect.w * scale;
+      drawH = activeRect.h * scale;
+      drawX = (canvas.width - drawW) / 2;
+      drawY = (canvas.height - drawH) / 2;
+    }
+
     if (customBg) {
       if (customBg.includes(",")) {
         const colors = customBg.split(",");
@@ -1138,20 +1156,9 @@ export default function EditorCanvas({
       } else {
         ctx.fillStyle = config.bgColor || "#FFFFFF";
       }
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    let drawX = 0;
-    let drawY = topPad;
-    let drawW = activeRect.w;
-    let drawH = activeRect.h;
-
-    if (manualCanvasSize) {
-      const scale = Math.max(canvas.width / activeRect.w, canvas.height / activeRect.h);
-      drawW = activeRect.w * scale;
-      drawH = activeRect.h * scale;
-      drawX = (canvas.width - drawW) / 2;
-      drawY = (drawH > canvas.height) ? 0 : (canvas.height - drawH) / 2;
+      if (styleName !== "Original" || layoutName !== "None") {
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
     }
 
     // Base image (cropped region or full original depending on activeRect)

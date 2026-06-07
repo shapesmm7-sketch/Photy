@@ -959,14 +959,19 @@ export async function applyStyle(
           baseShadowAlpha = 0;
         }
 
-        const padding =
-          Math.max(croppedWidth, croppedHeight) * basePaddingFactor;
+        // Remove padding when custom canvas size is set to prevent white borders
+        const padding = customCanvasSize ? 0 : Math.max(croppedWidth, croppedHeight) * basePaddingFactor;
 
         let contentW = croppedWidth + padding * 2;
         let contentH = croppedHeight + padding * 2;
 
-        canvas.width = customCanvasSize ? customCanvasSize.width : contentW;
-        canvas.height = customCanvasSize ? customCanvasSize.height : contentH;
+        if (customCanvasSize) {
+          canvas.width = customCanvasSize.width;
+          canvas.height = customCanvasSize.height;
+        } else {
+          canvas.width = contentW;
+          canvas.height = contentH;
+        }
 
         // Optimize: Do not set ctx.filter if brightness and contrast are at default (1.0)
         // Setting filter forces the engine to compile and run a webgl/CPU shader over millions of pixels on every draw.
@@ -974,6 +979,18 @@ export async function applyStyle(
           ctx.filter = `brightness(${config.brightnessFactor}) contrast(${config.contrastFactor})`;
         } else {
           ctx.filter = "none";
+        }
+
+        let contentScale = 1;
+        let contentX = 0;
+        let contentY = 0;
+
+        if (customCanvasSize) {
+          contentScale = Math.max(canvas.width / contentW, canvas.height / contentH);
+          const drawW = contentW * contentScale;
+          const drawH = contentH * contentScale;
+          contentX = (canvas.width - drawW) / 2;
+          contentY = (canvas.height - drawH) / 2;
         }
 
         // Background drawing logic
@@ -995,8 +1012,7 @@ export async function applyStyle(
           }
           ctx.fillRect(0, 0, canvas.width, canvas.height);
         } else if (styleName === "Original" && layout.name === "None") {
-          ctx.fillStyle = "#FFFFFF";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          // No background filling necessary for plain image
         } else if (layout.name !== "None" && styleName === "Original") {
           ctx.fillStyle = layout.themeColor;
           ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1020,13 +1036,8 @@ export async function applyStyle(
         // Center content mapping
         ctx.save();
         if (customCanvasSize) {
-          const scale = Math.max(canvas.width / contentW, canvas.height / contentH);
-          const drawW = contentW * scale;
-          const drawH = contentH * scale;
-          const drawX = (canvas.width - drawW) / 2;
-          const drawY = (drawH > canvas.height) ? 0 : (canvas.height - drawH) / 2;
-          ctx.translate(drawX, drawY);
-          ctx.scale(scale, scale);
+          ctx.translate(contentX, contentY);
+          ctx.scale(contentScale, contentScale);
         }
 
         // Decorative lines for layouts removed per user request
@@ -1150,8 +1161,8 @@ export async function applyStyle(
           ctx.fillStyle = isDarkBg
             ? "rgba(255, 255, 255, 0.45)"
             : "rgba(0, 0, 0, 0.35)";
-          // Set font size based on the content or final canvas width, taking minimum
-          const referenceWidth = customCanvasSize ? contentW : canvas.width;
+          // Set font size based on final canvas width
+          const referenceWidth = canvas.width;
           ctx.font = `${referenceWidth * 0.024}px sans-serif`;
           ctx.textAlign = "right";
 
