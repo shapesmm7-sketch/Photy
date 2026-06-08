@@ -24,6 +24,14 @@ import {
   Upload,
   ChevronRight,
   Trash2,
+  Move,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { removeBackground } from "@imgly/background-removal";
@@ -137,6 +145,8 @@ interface EditorCanvasProps {
   originalScreenshotSrc?: string;
   initialCropRect?: { x: number; y: number; w: number; h: number } | null;
   initialCustomSize?: { width: number; height: number } | null;
+  initialImageOffset?: { x: number; y: number };
+  initialImageScale?: number;
   initialPaths?: DrawingPath[];
   initialTexts?: TextItem[];
   onSave: (
@@ -147,6 +157,8 @@ interface EditorCanvasProps {
     customCropRect?: { x: number; y: number; w: number; h: number } | null,
     customSize?: { width: number; height: number } | null,
     newOriginalSrc?: string,
+    manualImageOffset?: { x: number; y: number },
+    manualImageScale?: number
   ) => void;
   onCancel: () => void;
   styleName?: string;
@@ -163,6 +175,8 @@ export default function EditorCanvas({
   originalScreenshotSrc,
   initialCropRect = null,
   initialCustomSize = null,
+  initialImageOffset = { x: 0, y: 0 },
+  initialImageScale = 1,
   initialPaths = [],
   initialTexts = [],
   onSave,
@@ -566,6 +580,10 @@ export default function EditorCanvas({
   const [canvasHeightInput, setCanvasHeightInput] = useState<string>("");
   const [selectedPresetLabel, setSelectedPresetLabel] = useState<string | null>(null);
   const [manualCanvasSize, setManualCanvasSize] = useState<{ width: number; height: number } | null>(initialCustomSize);
+  const [manualImageOffset, setManualImageOffset] = useState<{ x: number; y: number }>(initialImageOffset);
+  const [manualImageScale, setManualImageScale] = useState<number>(initialImageScale);
+  const [resizeMode, setResizeMode] = useState<"cover" | "fit_no_border" | "fit_border" | "stretch">("stretch");
+  const [resizerBg, setResizerBg] = useState<string>("transparent");
   
   // Create local states to handle rotated internal images safely apart from props
   const [workingOriginalSrc, setWorkingOriginalSrc] = useState<string | undefined>(originalScreenshotSrc);
@@ -620,6 +638,20 @@ export default function EditorCanvas({
 
   const hasInitializedCropRef = useRef(false);
 
+  // Keep local image sources and states in sync with props when they change (e.g., following new image uploads)
+  useEffect(() => {
+    if (originalScreenshotSrc) {
+      setWorkingOriginalSrc(originalScreenshotSrc);
+      hasInitializedCropRef.current = false;
+    }
+  }, [originalScreenshotSrc]);
+
+  useEffect(() => {
+    if (cleanImageSrc) {
+      setCurrentCleanSrc(cleanImageSrc);
+    }
+  }, [cleanImageSrc]);
+
   // Load raw original screenshot
   useEffect(() => {
     if (!workingOriginalSrc) return;
@@ -637,8 +669,9 @@ export default function EditorCanvas({
         if (initialCropRect) {
           setCropRect(initialCropRect);
         } else {
-          const topH = Math.round(img.height * 0.04);
-          const bottomH = Math.round(img.height * 0.05);
+          const isQuickFeatureMode = activeTool === "size" || activeTool === "draw" || activeTool === "blur" || activeTool === "text";
+          const topH = isQuickFeatureMode ? 0 : Math.round(img.height * 0.04);
+          const bottomH = isQuickFeatureMode ? 0 : Math.round(img.height * 0.05);
           const defaultCrop = {
             x: 0,
             y: topH,
@@ -648,6 +681,9 @@ export default function EditorCanvas({
           setCropRect(defaultCrop);
         }
       }
+
+      setCanvasWidthInput((prev) => prev || img.width.toString());
+      setCanvasHeightInput((prev) => prev || img.height.toString());
 
       const tryFit = () => {
         if (!isCurrent) return;
@@ -947,6 +983,14 @@ export default function EditorCanvas({
     };
   }, [cropRect, activeTool]);
 
+  useEffect(() => {
+    if (originalImageRef.current && cropRect) {
+      fitImageToContainer(originalImageRef.current, cropRect);
+    } else {
+      redraw();
+    }
+  }, [resizeMode, resizerBg]);
+
   const fitImageToContainer = (
     img: HTMLImageElement,
     rect: { x: number; y: number; w: number; h: number },
@@ -995,6 +1039,18 @@ export default function EditorCanvas({
 
     let finalW = manualCanvasSize ? manualCanvasSize.width : rect.w;
     let finalH = manualCanvasSize ? manualCanvasSize.height : virtualH;
+
+    if (manualCanvasSize && resizeMode === "fit_no_border") {
+      const imgAspect = rect.w / rect.h;
+      const targetAspect = manualCanvasSize.width / manualCanvasSize.height;
+      if (imgAspect > targetAspect) {
+        finalW = manualCanvasSize.width;
+        finalH = Math.round(manualCanvasSize.width / imgAspect);
+      } else {
+        finalH = manualCanvasSize.height;
+        finalW = Math.round(manualCanvasSize.height * imgAspect);
+      }
+    }
 
     // Calculate aspect ratios based on final dimensions
     const imageAspect = finalW / finalH;
@@ -1148,37 +1204,85 @@ export default function EditorCanvas({
     let drawH = activeRect.h;
 
     if (manualCanvasSize) {
-      const scale = Math.max(canvas.width / activeRect.w, canvas.height / activeRect.h);
-      drawW = activeRect.w * scale;
-      drawH = activeRect.h * scale;
-      drawX = (canvas.width - drawW) / 2;
-      drawY = (canvas.height - drawH) / 2;
+      if (resizeMode === "stretch") {
+        drawW = canvas.width;
+        drawH = canvas.height;
+        drawX = manualImageOffset.x;
+        drawY = manualImageOffset.y;
+      } else {
+        const isFitBorder = resizeMode === "fit_border";
+        const scaleFunc = isFitBorder ? Math.min : Math.max;
+        const scale = scaleFunc(canvas.width / activeRect.w, canvas.height / activeRect.h) * manualImageScale;
+        drawW = activeRect.w * scale;
+        drawH = activeRect.h * scale;
+        drawX = (canvas.width - drawW) / 2 + manualImageOffset.x;
+        drawY = (canvas.height - drawH) / 2 + manualImageOffset.y;
+      }
     }
 
-    if (customBg) {
-      if (customBg.includes(",")) {
-        const colors = customBg.split(",");
-        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        colors.forEach((color, i, arr) => {
-          grad.addColorStop(i / (arr.length - 1), color.trim());
-        });
-        ctx.fillStyle = grad;
+    if (manualCanvasSize) {
+      // In custom dimension/resizing mode
+      if (resizeMode === "fit_border") {
+        if (resizerBg === "blur" && blurCanvasRef.current) {
+          ctx.drawImage(blurCanvasRef.current, 0, 0, canvas.width, canvas.height);
+        } else if (resizerBg !== "transparent") {
+          ctx.fillStyle = resizerBg;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
       } else {
-        ctx.fillStyle = customBg;
+        // Other resize modes (fit_no_border, cover, stretch)
+        if (customBg) {
+          if (customBg.includes(",")) {
+            const colors = customBg.split(",");
+            const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            colors.forEach((color, i, arr) => {
+              grad.addColorStop(i / (arr.length - 1), color.trim());
+            });
+            ctx.fillStyle = grad;
+          } else {
+            ctx.fillStyle = customBg;
+          }
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } else if (styleName !== "Original" || layoutName !== "None") {
+          if (config.bgGradient) {
+            const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            config.bgGradient.forEach((color, i, arr) => {
+              grad.addColorStop(i / (arr.length - 1), color);
+            });
+            ctx.fillStyle = grad;
+          } else {
+            ctx.fillStyle = config.bgColor || "#FFFFFF";
+          }
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
       }
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
     } else {
-      if (config.bgGradient) {
-        const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        config.bgGradient.forEach((color, i, arr) => {
-          grad.addColorStop(i / (arr.length - 1), color);
-        });
-        ctx.fillStyle = grad;
-      } else {
-        ctx.fillStyle = config.bgColor || "#FFFFFF";
-      }
-      if (styleName !== "Original" || layoutName !== "None") {
+      // Standard layout mode (without preset canvas dimensions)
+      if (customBg) {
+        if (customBg.includes(",")) {
+          const colors = customBg.split(",");
+          const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+          colors.forEach((color, i, arr) => {
+            grad.addColorStop(i / (arr.length - 1), color.trim());
+          });
+          ctx.fillStyle = grad;
+        } else {
+          ctx.fillStyle = customBg;
+        }
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+      } else {
+        if (config.bgGradient) {
+          const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+          config.bgGradient.forEach((color, i, arr) => {
+            grad.addColorStop(i / (arr.length - 1), color);
+          });
+          ctx.fillStyle = grad;
+        } else {
+          ctx.fillStyle = config.bgColor || "#FFFFFF";
+        }
+        if (styleName !== "Original" || layoutName !== "None") {
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
       }
     }
 
@@ -1611,9 +1715,16 @@ export default function EditorCanvas({
     redraw();
   }, [paths, brushSize, selectedDrawColor, selectedBlurColor, brightness]);
 
+  useEffect(() => {
+    const t = setTimeout(() => {
+      redraw();
+    }, 10);
+    return () => clearTimeout(t);
+  }, [manualImageScale, manualImageOffset]);
+
   const getCanvasPoint = (e: React.MouseEvent | React.TouchEvent) => {
     const canvas = canvasRef.current;
-    if (!canvas || !cropRect) return { x: 0, y: 0 };
+    if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
 
     let clientX, clientY;
@@ -1654,13 +1765,23 @@ export default function EditorCanvas({
         return;
       }
 
+      const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
       isPinchZoomingRef.current = true;
       setIsDrawing(false);
       currentPathRef.current = null;
       drawingPointsRef.current = [];
       setSuggestedShape(null);
 
-      const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+      if (activeTool === "size") {
+        zoomInitialDistanceRef.current = dist;
+        zoomInitialScaleRef.current = manualImageScale;
+        zoomStartRef.current = {
+          x: ((touch1.clientX + touch2.clientX) / 2) - manualImageOffset.x,
+          y: ((touch1.clientY + touch2.clientY) / 2) - manualImageOffset.y
+        };
+        return;
+      }
+
       zoomInitialDistanceRef.current = dist;
       zoomInitialScaleRef.current = zoomScale;
       zoomStartRef.current = {
@@ -1838,6 +1959,14 @@ export default function EditorCanvas({
     } else {
       // Tap outside all text/stickers: deselect currently active bounding box
       setSelectedTextIndex(null);
+      if (activeTool === "size") {
+        textDragModeRef.current = "image_pan" as any;
+        dragOffsetRef.current = {
+          x: pt.x - manualImageOffset.x,
+          y: pt.y - manualImageOffset.y
+        };
+        return;
+      }
     }
 
     // Hit test for paths (Draw/Blur)
@@ -1990,6 +2119,22 @@ export default function EditorCanvas({
       drawingPointsRef.current = [];
       setSuggestedShape(null);
       if (zoomInitialDistanceRef.current && zoomStartRef.current) {
+        if (activeTool === "size") {
+          const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+          const factor = dist / zoomInitialDistanceRef.current;
+          const newScale = Math.max(0.1, Math.min(10, zoomInitialScaleRef.current * factor));
+          setManualImageScale(newScale);
+
+          const midX = (touch1.clientX + touch2.clientX) / 2;
+          const midY = (touch1.clientY + touch2.clientY) / 2;
+          setManualImageOffset({
+            x: midX - zoomStartRef.current.x,
+            y: midY - zoomStartRef.current.y
+          });
+          redraw();
+          return;
+        }
+
         const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
         const factor = dist / zoomInitialDistanceRef.current;
         const newScale = Math.max(1, Math.min(6, zoomInitialScaleRef.current * factor));
@@ -2014,6 +2159,16 @@ export default function EditorCanvas({
     }
 
     const pt = getCanvasPoint(e);
+
+    if (textDragModeRef.current === ("image_pan" as any)) {
+      e.preventDefault();
+      setManualImageOffset({
+        x: pt.x - dragOffsetRef.current.x,
+        y: pt.y - dragOffsetRef.current.y
+      });
+      redraw();
+      return;
+    }
 
     if (draggingTextIndex !== null) {
       e.preventDefault();
@@ -2129,7 +2284,7 @@ export default function EditorCanvas({
           isPinchZoomingRef.current = false;
           zoomStartRef.current = null;
           zoomInitialDistanceRef.current = null;
-          if (zoomScale <= 1.05) {
+          if (activeTool !== "size" && zoomScale <= 1.05) {
             setZoomScale(1);
             setZoomOffset({ x: 0, y: 0 });
           }
@@ -2137,16 +2292,29 @@ export default function EditorCanvas({
         }
       } else if (e.touches.length === 1 && isPinchZoomingRef.current) {
         const touch = e.touches[0];
-        zoomStartRef.current = {
-          x: touch.clientX - zoomOffset.x,
-          y: touch.clientY - zoomOffset.y
-        };
+        if (activeTool === "size") {
+          zoomStartRef.current = {
+            x: touch.clientX - manualImageOffset.x,
+            y: touch.clientY - manualImageOffset.y
+          };
+        } else {
+          zoomStartRef.current = {
+            x: touch.clientX - zoomOffset.x,
+            y: touch.clientY - zoomOffset.y
+          };
+        }
         zoomInitialDistanceRef.current = null;
         return;
       }
     }
 
     if (isPinchZoomingRef.current) {
+      return;
+    }
+
+    if (textDragModeRef.current === ("image_pan" as any)) {
+      textDragModeRef.current = null;
+      redraw();
       return;
     }
 
@@ -2588,7 +2756,7 @@ export default function EditorCanvas({
           setPreBgRemovalImageSrc(imageSrc);
           styledImageRef.current = img;
           originalImageRef.current = img;
-          onSave(base64, base64, paths, texts, cropRect, manualCanvasSize, workingOriginalSrc);
+          onSave(base64, base64, paths, texts, cropRect, manualCanvasSize, workingOriginalSrc, manualImageOffset, manualImageScale);
           setIsRemovingBackground(false);
           setRemovalStatus("");
           setRemovalProgress(0);
@@ -2617,7 +2785,7 @@ export default function EditorCanvas({
       img.onload = () => {
         styledImageRef.current = img;
         originalImageRef.current = img;
-        onSave(preBgRemovalImageSrc, preBgRemovalImageSrc, paths, texts, cropRect, manualCanvasSize, workingOriginalSrc);
+        onSave(preBgRemovalImageSrc, preBgRemovalImageSrc, paths, texts, cropRect, manualCanvasSize, workingOriginalSrc, manualImageOffset, manualImageScale);
         setPreBgRemovalImageSrc(null);
         setActiveTool("none");
       };
@@ -2693,7 +2861,9 @@ export default function EditorCanvas({
           texts,
           cropRect,
           manualCanvasSize,
-          workingOriginalSrc
+          workingOriginalSrc,
+          manualImageOffset,
+          manualImageScale
         );
 
         // Force a redraw with the new image loaded. Since we now set the styled image,
@@ -2756,7 +2926,9 @@ export default function EditorCanvas({
           texts,
           cropRect,
           manualCanvasSize,
-          workingOriginalSrc
+          workingOriginalSrc,
+          manualImageOffset,
+          manualImageScale
         );
       }
     }
@@ -2809,7 +2981,7 @@ export default function EditorCanvas({
 
       <div
         ref={containerRef}
-        className="flex items-center justify-center relative overflow-hidden bg-[#0a0a0a] flex-1"
+        className="flex items-center justify-center relative overflow-hidden bg-[#0a0a0a] flex-1 min-h-[240px] sm:min-h-[350px]"
       >
         {activeTool === "crop" && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-blue-600/95 backdrop-blur-md text-white font-bold text-xs px-4 py-2.5 rounded-full border border-blue-400/30 shadow-2xl flex items-center gap-2 pointer-events-none whitespace-nowrap animate-bounce">
@@ -2838,6 +3010,14 @@ export default function EditorCanvas({
               zIndex: 10,
             }}
             className="shadow-2xl rounded border border-white/20"
+            onWheel={(e) => {
+              if (activeTool === "size") {
+                e.preventDefault();
+                const zoomFactor = -e.deltaY * 0.005;
+                setManualImageScale(prev => Math.max(0.1, Math.min(10, prev + zoomFactor)));
+                setTimeout(() => redraw(), 0);
+              }
+            }}
             onMouseDown={handlePointerDown}
             onMouseMove={handlePointerMove}
             onMouseUp={handlePointerUp}
@@ -3611,16 +3791,18 @@ export default function EditorCanvas({
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="px-4 py-4 bg-[#111111] border-t border-white/5 flex flex-col gap-3 shrink-0 z-20 overflow-hidden"
+            className="px-4 py-4 bg-[#111111] border-t border-white/5 flex flex-col gap-3 shrink-0 z-20 max-h-[44vh] md:max-h-none overflow-y-auto"
           >
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">
-                Canvas Size
+              <span className="text-[10px] font-extrabold tracking-widest text-[#22D3EE] uppercase">
+                Image Resizer & Canvas Dimensions
               </span>
               <button
                 onClick={() => {
                   setManualCanvasSize(null);
                   setSelectedPresetLabel(null);
+                  setResizeMode("stretch");
+                  setResizerBg("transparent");
                   if (originalImageRef.current) {
                     setCanvasWidthInput(
                       originalImageRef.current.width.toString(),
@@ -3635,16 +3817,117 @@ export default function EditorCanvas({
                     }
                   }, 0);
                 }}
-                className="text-[10px] text-blue-400 font-extrabold tracking-wider uppercase hover:underline cursor-pointer"
+                className="text-[10px] text-cyan-400 font-extrabold tracking-wider uppercase hover:underline cursor-pointer"
               >
                 Reset Size
               </button>
             </div>
+
+            {/* Resize Style / Fitting Mode Selector */}
+            <div className="flex flex-col gap-1.5 bg-white/5 border border-white/5 p-3 rounded-2xl">
+              <label className="text-[9px] font-extrabold text-[#22D3EE] uppercase tracking-widest pl-1">
+                Resize Style (Fits All Photo Sizes Perfectly)
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  {
+                    id: "fit_no_border",
+                    label: "Aspect Match (No Borders)",
+                    desc: "Shrinks photo to 1080 bounds, auto-sizing canvas to fit aspect ratio.",
+                  },
+                  {
+                    id: "fit_border",
+                    label: "Contain (Custom Borders)",
+                    desc: "Reduces all 4 sides of the photo to fit inside selected size.",
+                  },
+                  {
+                    id: "cover",
+                    label: "Crop & Fill (Stretch Crop)",
+                    desc: "Covers selected size completely by cutting/cropping excess edges.",
+                  },
+                  {
+                    id: "stretch",
+                    label: "Stretch to Fit",
+                    desc: "Stretches and squishes photo to fill dimensions with zero black space.",
+                  },
+                ].map((mode) => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    onClick={() => {
+                      setResizeMode(mode.id as any);
+                      // Recalculate dimensions for the new fitting mode immediately
+                      if (originalImageRef.current) {
+                        const img = originalImageRef.current;
+                        const aspect = cropRect ? (cropRect.w / cropRect.h) : (img.width / img.height);
+                        let w = parseInt(canvasWidthInput) || img.width;
+                        let h = parseInt(canvasHeightInput) || img.height;
+                        if (mode.id === "fit_no_border") {
+                          const targetAspect = w / h;
+                          if (aspect > targetAspect) {
+                            h = Math.round(w / aspect);
+                          } else {
+                            w = Math.round(h * aspect);
+                          }
+                          setCanvasWidthInput(w.toString());
+                          setCanvasHeightInput(h.toString());
+                          setManualCanvasSize({ width: w, height: h });
+                        }
+                      }
+                    }}
+                    className={`p-2 rounded-xl text-left border transition-all active:scale-95 cursor-pointer flex flex-col justify-between min-h-[64px] ${
+                      resizeMode === mode.id
+                        ? "bg-gradient-to-r from-blue-600 to-cyan-600 border-cyan-400/50 text-white shadow-lg shadow-cyan-500/10"
+                        : "bg-black/20 border-white/10 text-gray-300 hover:bg-black/40 hover:text-white"
+                    }`}
+                  >
+                    <span className="text-[10px] font-extrabold block">{mode.label}</span>
+                    <span className="text-[8px] opacity-75 leading-tight block mt-1">{mode.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Border Background Fill Selector (rendered ONLY under contain fit with borders) */}
+            {resizeMode === "fit_border" && (
+              <div className="flex flex-col gap-1.5 bg-white/5 border border-white/5 p-3 rounded-2xl">
+                <label className="text-[9px] font-extrabold text-gray-400 uppercase tracking-widest pl-1">
+                  Border Background/Space Fill
+                </label>
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+                  {[
+                    { id: "transparent", label: "Transparent", class: "bg-neutral-800 border-dashed border-white/30 text-gray-400" },
+                    { id: "#FFFFFF", label: "White", class: "bg-white border-white/20 text-black" },
+                    { id: "#000000", label: "Black", class: "bg-black border-white/10 text-white" },
+                    { id: "#1E293B", label: "Dark Blue", class: "bg-slate-800 text-white" },
+                    { id: "#3B82F6", label: "Vibrant Blue", class: "bg-blue-500 text-white" },
+                    { id: "#EF4444", label: "Modern Red", class: "bg-red-500 text-white" },
+                    { id: "blur", label: "Blurred Backdrop", class: "bg-gradient-to-tr from-cyan-500/50 to-indigo-500/50 text-white font-semibold" },
+                  ].map((bg) => {
+                    const isSelected = resizerBg === bg.id;
+                    return (
+                      <button
+                        key={bg.id}
+                        type="button"
+                        onClick={() => setResizerBg(bg.id)}
+                        className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-[9px] font-bold text-center border transition-all active:scale-95 cursor-pointer max-h-[32px] flex items-center justify-center gap-1 ${
+                          isSelected
+                            ? "ring-2 ring-cyan-500 border-white shadow-lg shadow-cyan-500/20"
+                            : "border-white/5 hover:border-white/20 text-gray-300"
+                        } ${bg.class}`}
+                      >
+                        {bg.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
  
             {/* Quick Presets for Common Sizes */}
             <div className="flex flex-col gap-1.5 bg-white/5 border border-white/5 p-3 rounded-2xl">
               <label className="text-[9px] font-extrabold text-gray-500 uppercase tracking-widest pl-1">
-                Common Presets
+                Common Size Preset Bounds
               </label>
               <div className="grid grid-cols-4 gap-2">
                 {[
@@ -3653,16 +3936,32 @@ export default function EditorCanvas({
                   { label: "FB Post", w: 1080, h: 1080 },
                   { label: "Play Store", w: 1080, h: 1920 }
                 ].map((preset, idx) => {
-                  const isSelected = selectedPresetLabel === preset.label && parseInt(canvasWidthInput) === preset.w && parseInt(canvasHeightInput) === preset.h;
+                  const isSelected = selectedPresetLabel === preset.label;
                   return (
                     <button
                       key={idx}
                       type="button"
                       onClick={() => {
-                        setCanvasWidthInput(preset.w.toString());
-                        setCanvasHeightInput(preset.h.toString());
+                        const aspect = cropRect ? (cropRect.w / cropRect.h) : (originalImageRef.current ? (originalImageRef.current.width / originalImageRef.current.height) : 1);
+                        let finalW = preset.w;
+                        let finalH = preset.h;
+                        
+                        if (resizeMode === "fit_no_border") {
+                          const targetAspect = preset.w / preset.h;
+                          if (aspect > targetAspect) {
+                            finalW = preset.w;
+                            finalH = Math.round(preset.w / aspect);
+                          } else {
+                            finalH = preset.h;
+                            finalW = Math.round(preset.h * aspect);
+                          }
+                        }
+                        
+                        setCanvasWidthInput(finalW.toString());
+                        setCanvasHeightInput(finalH.toString());
                         setSelectedPresetLabel(preset.label);
-                        setManualCanvasSize({ width: preset.w, height: preset.h });
+                        setManualCanvasSize({ width: finalW, height: finalH });
+                        
                         setTimeout(() => {
                           if (originalImageRef.current && cropRect) {
                             fitImageToContainer(
@@ -3674,7 +3973,7 @@ export default function EditorCanvas({
                       }}
                       className={`py-1.5 px-1.5 rounded-xl text-[9px] font-bold text-center border transition-all active:scale-95 cursor-pointer flex flex-col items-center justify-center min-h-[44px] ${
                         isSelected
-                          ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20"
+                          ? "bg-cyan-600 border-cyan-400 text-white shadow-lg shadow-cyan-500/25"
                           : "bg-black/20 border-white/10 text-gray-300 hover:bg-black/40 hover:text-white"
                       }`}
                     >
@@ -3699,17 +3998,29 @@ export default function EditorCanvas({
                     setCanvasWidthInput(val);
                     setSelectedPresetLabel(null);
                     const w = parseInt(val);
-                    const h = parseInt(canvasHeightInput);
-                    if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
-                      setManualCanvasSize({ width: w, height: h });
-                      setTimeout(() => {
-                        if (originalImageRef.current && cropRect) {
-                          fitImageToContainer(
-                            originalImageRef.current,
-                            cropRect,
-                          );
+                    if (!isNaN(w) && w > 0) {
+                      const img = originalImageRef.current;
+                      if (img) {
+                        const aspect = cropRect ? (cropRect.w / cropRect.h) : (img.width / img.height);
+                        if (resizeMode === "fit_no_border") {
+                          const h = Math.round(w / aspect);
+                          setCanvasHeightInput(h.toString());
+                          setManualCanvasSize({ width: w, height: h });
+                        } else {
+                          const h = parseInt(canvasHeightInput);
+                          if (!isNaN(h) && h > 0) {
+                            setManualCanvasSize({ width: w, height: h });
+                          }
                         }
-                      }, 0);
+                        setTimeout(() => {
+                          if (originalImageRef.current && cropRect) {
+                            fitImageToContainer(
+                              originalImageRef.current,
+                              cropRect,
+                            );
+                          }
+                        }, 0);
+                      }
                     }
                   }}
                   className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none focus:ring-1 ring-blue-500/50"
@@ -3717,7 +4028,7 @@ export default function EditorCanvas({
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider pl-1">
+                <label className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider pl-1 font-sans">
                   Height (px)
                 </label>
                 <input
@@ -3728,17 +4039,29 @@ export default function EditorCanvas({
                     setCanvasHeightInput(val);
                     setSelectedPresetLabel(null);
                     const h = parseInt(val);
-                    const w = parseInt(canvasWidthInput);
-                    if (!isNaN(w) && !isNaN(h) && w > 0 && h > 0) {
-                      setManualCanvasSize({ width: w, height: h });
-                      setTimeout(() => {
-                        if (originalImageRef.current && cropRect) {
-                          fitImageToContainer(
-                            originalImageRef.current,
-                            cropRect,
-                          );
+                    if (!isNaN(h) && h > 0) {
+                      const img = originalImageRef.current;
+                      if (img) {
+                        const aspect = cropRect ? (cropRect.w / cropRect.h) : (img.width / img.height);
+                        if (resizeMode === "fit_no_border") {
+                          const w = Math.round(h * aspect);
+                          setCanvasWidthInput(w.toString());
+                          setManualCanvasSize({ width: w, height: h });
+                        } else {
+                          const w = parseInt(canvasWidthInput);
+                          if (!isNaN(w) && w > 0) {
+                            setManualCanvasSize({ width: w, height: h });
+                          }
                         }
-                      }, 0);
+                        setTimeout(() => {
+                          if (originalImageRef.current && cropRect) {
+                            fitImageToContainer(
+                              originalImageRef.current,
+                              cropRect,
+                            );
+                          }
+                        }, 0);
+                      }
                     }
                   }}
                   className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm outline-none focus:ring-1 ring-blue-500/50"
@@ -3746,7 +4069,8 @@ export default function EditorCanvas({
                 />
               </div>
             </div>
-            <p className="text-[9px] text-gray-500 font-medium italic mt-1 px-1">
+
+            <p className="text-[9px] text-gray-500 font-medium italic mt-0.5 px-1">
               Typing a custom size will resize the whole canvas and background.
             </p>
             <button

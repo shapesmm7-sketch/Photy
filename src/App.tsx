@@ -132,6 +132,8 @@ export default function App() {
     width: number;
     height: number;
   } | null>(null);
+  const [customImageOffset, setCustomImageOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [customImageScale, setCustomImageScale] = useState<number>(1);
   const [showEditor, setShowEditor] = useState(false);
 
   // Quick Landing Feature states
@@ -368,6 +370,8 @@ export default function App() {
         customBgColor,
         customCropRect,
         customCanvasSize,
+        customImageOffset,
+        customImageScale
       )
         .then((res) => {
           setBaseStyledImage(res);
@@ -420,6 +424,8 @@ export default function App() {
     customBgColor,
     customCropRect,
     customCanvasSize,
+    customImageOffset,
+    customImageScale,
     editorPaths,
     editorTexts,
   ]);
@@ -1614,6 +1620,8 @@ export default function App() {
               originalScreenshotSrc={originalImage || undefined}
               initialCropRect={customCropRect}
               initialCustomSize={customCanvasSize}
+              initialImageOffset={customImageOffset}
+              initialImageScale={customImageScale}
               initialPaths={editorPaths}
               initialTexts={editorTexts}
               onCancel={() => {
@@ -1636,7 +1644,9 @@ export default function App() {
                 finalTexts,
                 customCrop,
                 customSize,
-                newOriginalSrc
+                newOriginalSrc,
+                newImageOffset,
+                newImageScale
               ) => {
                 if (activeQuickFeature) {
                   await triggerDownloadOfBase64(newImgDataUrl, `${activeQuickFeature}_edited.png`);
@@ -1657,6 +1667,12 @@ export default function App() {
                   setCustomCanvasSize(customSize);
                 } else if (customSize === null) {
                   setCustomCanvasSize(null);
+                }
+                if (newImageOffset) {
+                  setCustomImageOffset(newImageOffset);
+                }
+                if (newImageScale !== undefined) {
+                  setCustomImageScale(newImageScale);
                 }
                 if (customCrop) {
                   setCustomCropRect((prev) => {
