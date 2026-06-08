@@ -21,6 +21,9 @@ import {
   Wand2,
   ChevronDown,
   ChevronUp,
+  Upload,
+  ChevronRight,
+  Trash2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { removeBackground } from "@imgly/background-removal";
@@ -46,6 +49,10 @@ interface TextItem {
   isSticker?: boolean;
   stickerType?: "emoji" | "badge";
   badgeBg?: string;
+  isLogo?: boolean;
+  logoSrc?: string;
+  logoImg?: HTMLImageElement | null;
+  opacity?: number;
 }
 
 const fontNames = [
@@ -146,6 +153,8 @@ interface EditorCanvasProps {
   layoutName?: string;
   customBg?: string | null;
   isPremium?: boolean;
+  initialTool?: Tool;
+  isWatermarkMode?: boolean;
 }
 
 export default function EditorCanvas({
@@ -162,12 +171,14 @@ export default function EditorCanvas({
   layoutName,
   customBg,
   isPremium = false,
+  initialTool = "none",
+  isWatermarkMode = false,
 }: EditorCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const blurCanvasRef = useRef<HTMLCanvasElement>(null);
   const scratchCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [activeTool, setActiveTool] = useState<Tool>("none");
+  const [activeTool, setActiveTool] = useState<Tool>(initialTool);
   const [isApplyingCrop, setIsApplyingCrop] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
 
@@ -393,8 +404,10 @@ export default function EditorCanvas({
   };
 
   // Text state
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const [showAllToolsInWatermark, setShowAllToolsInWatermark] = useState(false);
   const [texts, setTexts] = useState<TextItem[]>(initialTexts);
-  const [selectedTextIndex, setSelectedTextIndex] = useState<number | null>(null);
+  const [selectedTextIndex, setSelectedTextIndex] = useState<number | null>(initialTexts.length > 0 ? 0 : null);
 
   // History state for undo/redo
   const [history, setHistory] = useState<{
@@ -467,7 +480,14 @@ export default function EditorCanvas({
   const getTextBounds = (t: TextItem) => {
     let w = 40;
     let h = 40;
-    if (t.isSticker) {
+    if (t.isLogo) {
+      let ratio = 1.0;
+      if (t.logoImg && t.logoImg.naturalWidth && t.logoImg.naturalHeight) {
+        ratio = t.logoImg.naturalWidth / t.logoImg.naturalHeight;
+      }
+      w = t.size * ratio;
+      h = t.size;
+    } else if (t.isSticker) {
       if (t.stickerType === "badge") {
         const charCount = t.text.length;
         const widthPerChar = t.size * 0.55;
@@ -1068,7 +1088,8 @@ export default function EditorCanvas({
   const redraw = (
     currentCrop?: { x: number; y: number; w: number; h: number } | null,
     explicitPaths?: DrawingPath[],
-    explicitTexts?: TextItem[]
+    explicitTexts?: TextItem[],
+    hideSelectionBoxes?: boolean
   ) => {
     const canvas = canvasRef.current;
     const img = originalImageRef.current;
@@ -1201,6 +1222,12 @@ export default function EditorCanvas({
       // Draw texts
       const textsToDraw = explicitTexts || texts;
       textsToDraw.forEach((t) => {
+        if (t.opacity !== undefined) {
+          ctx.globalAlpha = t.opacity;
+        } else {
+          ctx.globalAlpha = 1.0;
+        }
+
         ctx.fillStyle = t.color;
 
         let fontStr = fontCSSMap[t.fontName] || "sans-serif";
@@ -1214,7 +1241,24 @@ export default function EditorCanvas({
           ctx.rotate(t.rotation);
         }
 
-        if (t.isSticker) {
+        if (t.isLogo) {
+          if (t.logoSrc && (!t.logoImg || !t.logoImg.complete)) {
+            if (!t.logoImg) {
+              const img = new Image();
+              img.onload = () => {
+                t.logoImg = img;
+                redraw();
+              };
+              img.src = t.logoSrc;
+              t.logoImg = img;
+            }
+          } else if (t.logoImg) {
+            const aspect = t.logoImg.naturalHeight > 0 ? (t.logoImg.naturalWidth / t.logoImg.naturalHeight) : 1.0;
+            const drawW = t.size * aspect;
+            const drawH = t.size;
+            ctx.drawImage(t.logoImg, -drawW / 2, -drawH / 2, drawW, drawH);
+          }
+        } else if (t.isSticker) {
           if (t.stickerType === "badge") {
             const padX = t.size * 0.5;
             const padY = t.size * 0.3;
@@ -1321,7 +1365,7 @@ export default function EditorCanvas({
       });
 
       // Draw active selected text bounding box with interactive handles (Delete & Resize/Rotate)
-      if (selectedTextIndex !== null && selectedTextIndex < texts.length) {
+      if (!hideSelectionBoxes && selectedTextIndex !== null && selectedTextIndex < texts.length) {
         const t = texts[selectedTextIndex];
         const bounds = getTextBounds(t);
         
@@ -1560,12 +1604,7 @@ export default function EditorCanvas({
 
   // Trigger redraw when state changes for live preview
   useEffect(() => {
-    if (originalImageRef.current) {
-      const rect = { x: 0, y: 0, w: originalImageRef.current.width, h: originalImageRef.current.height };
-      fitImageToContainer(originalImageRef.current, rect);
-    } else {
-      redraw();
-    }
+    redraw();
   }, [currentText, currentTextFont, currentTextColor, currentTextBgColor, currentTextShadow, currentTextShadowColor, currentTextRotation, textPositionMode, texts, showTextModal, activeTool, selectedTextIndex]);
 
   useEffect(() => {
@@ -2696,7 +2735,12 @@ export default function EditorCanvas({
         cCtx.restore();
         const cleanDataUrl = cleanCanvas.toDataURL("image/jpeg", 0.95);
         
+        // Redraw without bounding boxes to capture clean preview
+        redraw(undefined, undefined, undefined, true);
         let previewDataUrl = canvasRef.current.toDataURL("image/jpeg", 0.95);
+        // Put bounding boxes back
+        redraw();
+        
         if (activeTool === "crop") {
           // If we are currently cropping, canvas has dark overlay UI.
           // Don't save the UI into the preview.
@@ -2765,7 +2809,7 @@ export default function EditorCanvas({
 
       <div
         ref={containerRef}
-        className="flex-1 flex items-center justify-center relative overflow-hidden bg-[#0a0a0a]"
+        className="flex items-center justify-center relative overflow-hidden bg-[#0a0a0a] flex-1"
       >
         {activeTool === "crop" && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-blue-600/95 backdrop-blur-md text-white font-bold text-xs px-4 py-2.5 rounded-full border border-blue-400/30 shadow-2xl flex items-center gap-2 pointer-events-none whitespace-nowrap animate-bounce">
@@ -2951,137 +2995,378 @@ export default function EditorCanvas({
         )}
       </div>
 
-      <div className="flex items-center justify-start gap-1 p-3 bg-[#111] pb-safe z-10 border-t border-white/10 overflow-x-auto no-scrollbar">
-        <ToolButton
-          active={false}
-          disabled={isRotating}
-          onClick={handleRotate90}
-          icon={isRotating ? <Loader2 className="animate-spin" /> : <RotateCw />}
-          label="Rotate"
-        />
-        <ToolButton
-          active={activeTool === "crop"}
-          onClick={() => setActiveTool(activeTool === "crop" ? "none" : "crop")}
-          icon={<Crop />}
-          label="Crop"
-        />
-        <ToolButton
-          active={activeTool === "draw"}
-          onClick={() => setActiveTool(activeTool === "draw" ? "none" : "draw")}
-          icon={<PenTool />}
-          label="Draw"
-        />
-        <ToolButton
-          active={activeTool === "blur"}
-          onClick={() => setActiveTool(activeTool === "blur" ? "none" : "blur")}
-          icon={<Droplets />}
-          label="Blur"
-        />
-        <ToolButton
-          active={activeTool === "text"}
-          onClick={() => {
-            if (activeTool === "text") {
-              setActiveTool("none");
-              setShowTextModal(false);
-            } else {
-              setActiveTool("text");
-              setCurrentText("");
-              setCurrentTextRotation(0);
-              setCurrentTextShadow(false);
-              setTextPositionMode("Default");
-              setShowTextModal(true);
-              setShowStickerPanel(false);
-            }
-          }}
-          icon={<Type />}
-          label="Text"
-        />
-        <ToolButton
-          active={activeTool === "sticker"}
-          onClick={() => {
-            if (activeTool === "sticker") {
-              setActiveTool("none");
-              setShowStickerPanel(false);
-            } else {
-              setActiveTool("sticker");
-              setEditingTextIndex(-1);
-              setSelectedStickerFont("Inter");
-              setShowStickerPanel(true);
-              setShowTextModal(false);
-            }
-          }}
-          icon={<Smile />}
-          label="Stickers"
-        />
-        <ToolButton
-          active={activeTool === "adjust"}
-          onClick={() => {
-            if (activeTool === "adjust") {
-              setActiveTool("none");
-            } else {
-              setActiveTool("adjust");
-              setShowStickerPanel(false);
-              setShowTextModal(false);
-            }
-          }}
-          icon={<Sun />}
-          label="Adjust"
-        />
-        <ToolButton
-          active={activeTool === "size"}
-          onClick={() => {
-            if (activeTool === "size") {
-              setActiveTool("none");
-            } else {
-              setActiveTool("size");
-              setShowStickerPanel(false);
-              setShowTextModal(false);
-            }
-          }}
-          icon={<Maximize />}
-          label="Size"
-        />
+      {isWatermarkMode && !showAllToolsInWatermark ? (
+        <div className="bg-[#111] p-3 pb-safe border-t border-white/10 flex flex-col gap-2 shrink-0 z-20">
+          <div className="flex items-center justify-between shrink-0">
+            <span className="text-[10px] font-extrabold tracking-widest text-[#22D3EE] uppercase">
+              Watermark Properties
+            </span>
+            <span className="text-[9px] text-gray-400">
+              Drag / style watermark manually
+            </span>
+          </div>
 
-        <div className="w-[1px] h-8 bg-white/10 mx-2" />
-        <button
-          onClick={() => {
-            setPaths([]);
-            setTexts([]);
-            setBrightness(100);
-            setManualCanvasSize(null);
-            if (originalImageRef.current) {
-              setCanvasWidthInput(originalImageRef.current.width.toString());
-              setCanvasHeightInput(originalImageRef.current.height.toString());
-            }
-            if (rawScreenshotRef.current) {
-              const rect = {
-                x: 0,
-                y: 0,
-                w: rawScreenshotRef.current.width,
-                h: rawScreenshotRef.current.height,
+          <div className="flex flex-col gap-2.5 min-h-[190px]">
+            {texts.length > 0 ? (() => {
+              const activeIdx = selectedTextIndex !== null && selectedTextIndex < texts.length 
+                ? selectedTextIndex 
+                : texts.length - 1;
+              const selectedWatermark = texts[activeIdx];
+              
+              // Helper to handle property changes and ensure selection
+              const updateActive = (updater: (item: TextItem) => void) => {
+                const next = [...texts];
+                updater(next[activeIdx]);
+                setTexts(next);
+                if (selectedTextIndex !== activeIdx) setSelectedTextIndex(activeIdx);
+                redraw(undefined, undefined, next);
               };
-              setCropRect(rect);
-              setShouldCommit(true);
-            }
-            if (originalImageRef.current) {
-              const rect = {
-                x: 0,
-                y: 0,
-                w: originalImageRef.current.width,
-                h: originalImageRef.current.height,
-              };
-              fitImageToContainer(originalImageRef.current, rect);
-              setTimeout(() => redraw(undefined, [], []), 50); // Ensure clear renders
-            }
-          }}
-          className="flex flex-col items-center gap-1 p-2 text-red-400 opacity-80 hover:opacity-100 transition-opacity"
-        >
-          <X className="w-5 h-5 mb-1" />
-          <span className="text-[10px] font-medium tracking-wide uppercase">
-            Reset
-          </span>
-        </button>
-      </div>
+
+              return (
+                <div className="flex flex-col gap-2">
+                  <div className="flex justify-between items-center w-full">
+                    <span className="text-[9px] font-extrabold text-gray-400 tracking-wider flex-1 uppercase">
+                      {selectedWatermark.isLogo ? "Logo Image" : "Watermark Text"}
+                    </span>
+                    <button
+                      onClick={() => {
+                        const next = [...texts];
+                        next.splice(activeIdx, 1);
+                        setTexts(next);
+                        setSelectedTextIndex(null);
+                        redraw(undefined, undefined, next);
+                      }}
+                      className="flex items-center gap-1 text-red-400/80 hover:text-red-400 bg-red-400/10 hover:bg-red-400/20 px-2 py-1 rounded-md transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span className="text-[10px] font-bold">Remove</span>
+                    </button>
+                  </div>
+
+                  {!selectedWatermark.isLogo && (
+                    <div className="flex flex-col gap-0.5">
+                      <input
+                        type="text"
+                        value={selectedWatermark.text}
+                        onChange={(e) => updateActive((item) => { item.text = e.target.value; })}
+                        className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                        placeholder="Enter watermark text"
+                      />
+                    </div>
+                  )}
+
+                  {!selectedWatermark.isLogo && (
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[9px] font-extrabold text-gray-400 tracking-wider uppercase">Text Color</span>
+                      <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                        {textColors.map((color) => (
+                          <button
+                            key={color}
+                            onClick={() => updateActive((item) => { item.color = color; })}
+                            className={`w-5 h-5 shrink-0 rounded-full border transition-transform duration-150 ${
+                              selectedWatermark.color === color ? "border-blue-500 scale-110 ring-2 ring-blue-500/30" : "border-white/10"
+                            }`}
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sizing, Opacity and Rotation adjustments in super compact columns */}
+                  <div className="grid grid-cols-3 gap-2 mt-0.5 shadow-sm">
+                    <div className="flex flex-col gap-1 bg-white/[0.04] px-2.5 py-1.5 rounded-xl border border-white/5">
+                      <div className="flex justify-between items-center text-[8px] font-extrabold text-gray-400 tracking-wider">
+                        <span>SIZE</span>
+                        <span className="text-white font-mono text-[9px]">{selectedWatermark.size}px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={10}
+                        max={selectedWatermark.isLogo ? 600 : 250}
+                        value={selectedWatermark.size}
+                        onChange={(e) => updateActive((item) => { item.size = parseInt(e.target.value); })}
+                        className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1 bg-white/[0.04] px-2.5 py-1.5 rounded-xl border border-white/5">
+                      <div className="flex justify-between items-center text-[8px] font-extrabold text-gray-400 tracking-wider">
+                        <span>OPACITY</span>
+                        <span className="text-white font-mono text-[9px]">{Math.round((selectedWatermark.opacity !== undefined ? selectedWatermark.opacity : 1.0) * 100)}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0.1}
+                        max={1.0}
+                        step={0.05}
+                        value={selectedWatermark.opacity !== undefined ? selectedWatermark.opacity : 1.0}
+                        onChange={(e) => updateActive((item) => { item.opacity = parseFloat(e.target.value); })}
+                        className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1 bg-white/[0.04] px-2.5 py-1.5 rounded-xl border border-white/5">
+                      <div className="flex justify-between items-center text-[8px] font-extrabold text-gray-400 tracking-wider">
+                        <span>ROTATE</span>
+                        <span className="text-white font-mono text-[9px]">{Math.round((selectedWatermark.rotation || 0) * 180 / Math.PI)}°</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={-180}
+                        max={180}
+                        value={Math.round((selectedWatermark.rotation || 0) * 180 / Math.PI)}
+                        onChange={(e) => updateActive((item) => { item.rotation = parseInt(e.target.value) * Math.PI / 180; })}
+                        className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })() : (
+              <div className="text-center py-3 px-4 bg-white/5 rounded-xl border border-dashed border-white/10 text-[11px] text-gray-400 my-auto leading-relaxed">
+                No watermarks added yet. Click the buttons below to add text or a logo!
+              </div>
+            )}
+          </div>
+
+          {/* Action Footer block */}
+          <div className="flex gap-2 justify-between items-center mt-1 border-t border-white/5 pt-3">
+            <div className="flex gap-2">
+              <button
+                onClick={() => logoInputRef.current?.click()}
+                className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 px-3 rounded-xl text-[11px] transition-all active:scale-95 cursor-pointer border border-white/5 shadow-md"
+              >
+                <Upload className="w-4 h-4 text-emerald-400" />
+                Upload Logo
+              </button>
+              <input
+                type="file"
+                ref={logoInputRef}
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    // Clear input so same file can be re-selected
+                    e.target.value = "";
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      const src = event.target?.result as string;
+                      const img = new Image();
+                      img.onload = () => {
+                        const newLogo: TextItem = {
+                          text: "Logo",
+                          x: canvasRef.current ? canvasRef.current.width / 2 : 250,
+                          y: canvasRef.current ? canvasRef.current.height / 2 : 250,
+                          color: "transparent",
+                          size: Math.round(Math.min(canvasRef.current ? canvasRef.current.width : 500, canvasRef.current ? canvasRef.current.height : 500) * 0.25) || 120,
+                          positionMode: "Default",
+                          fontName: "Default",
+                          isLogo: true,
+                          logoSrc: src,
+                          logoImg: img,
+                          opacity: 0.7,
+                          rotation: 0,
+                        };
+                        const updated = [...texts, newLogo];
+                        setTexts(updated);
+                        setSelectedTextIndex(updated.length - 1);
+                        setShouldCommit(true);
+                        redraw(undefined, undefined, updated);
+                      };
+                      img.src = src;
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
+
+              <button
+                onClick={() => {
+                  const newTxt: TextItem = {
+                    text: "Draft Watermark",
+                    x: canvasRef.current ? canvasRef.current.width / 2 : 200,
+                    y: canvasRef.current ? canvasRef.current.height / 2 : 200,
+                    color: "#FFFFFF",
+                    size: Math.round(Math.min(canvasRef.current ? canvasRef.current.width : 500, canvasRef.current ? canvasRef.current.height : 500) * 0.08) || 45,
+                    positionMode: "Default",
+                    fontName: "Space Grotesk",
+                    hasShadow: true,
+                    shadowColor: "rgba(0, 0, 0, 0.4)",
+                    bgColor: "rgba(0, 0, 0, 0.25)",
+                    opacity: 0.7,
+                    rotation: 0,
+                  };
+                  const updated = [...texts, newTxt];
+                  setTexts(updated);
+                  setSelectedTextIndex(updated.length - 1);
+                  setShouldCommit(true);
+                  redraw(undefined, undefined, updated);
+                }}
+                className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-2 px-3 rounded-xl text-[11px] transition-all active:scale-95 cursor-pointer border border-white/5 shadow-md"
+              >
+                <Type className="w-4 h-4 text-blue-400" />
+                Add Text
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowAllToolsInWatermark(true);
+                setActiveTool("none");
+              }}
+              className="flex items-center gap-1 bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-gray-300 hover:text-white font-bold py-2 px-3 rounded-xl text-[11px] transition-all active:scale-95 cursor-pointer font-medium"
+            >
+              Add More <ChevronRight className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-start gap-1 p-3 bg-[#111] pb-safe z-10 border-t border-white/10 overflow-x-auto no-scrollbar">
+          <ToolButton
+            active={false}
+            disabled={isRotating}
+            onClick={handleRotate90}
+            icon={isRotating ? <Loader2 className="animate-spin" /> : <RotateCw />}
+            label="Rotate"
+          />
+          <ToolButton
+            active={activeTool === "crop"}
+            onClick={() => setActiveTool(activeTool === "crop" ? "none" : "crop")}
+            icon={<Crop />}
+            label="Crop"
+          />
+          <ToolButton
+            active={activeTool === "draw"}
+            onClick={() => setActiveTool(activeTool === "draw" ? "none" : "draw")}
+            icon={<PenTool />}
+            label="Draw"
+          />
+          <ToolButton
+            active={activeTool === "blur"}
+            onClick={() => setActiveTool(activeTool === "blur" ? "none" : "blur")}
+            icon={<Droplets />}
+            label="Blur"
+          />
+          <ToolButton
+            active={activeTool === "text"}
+            onClick={() => {
+              if (activeTool === "text") {
+                setActiveTool("none");
+                setShowTextModal(false);
+              } else {
+                setActiveTool("text");
+                setCurrentText("");
+                setCurrentTextRotation(0);
+                setCurrentTextShadow(false);
+                setTextPositionMode("Default");
+                setShowTextModal(true);
+                setShowStickerPanel(false);
+              }
+            }}
+            icon={<Type />}
+            label="Text"
+          />
+          <ToolButton
+            active={activeTool === "sticker"}
+            onClick={() => {
+              if (activeTool === "sticker") {
+                setActiveTool("none");
+                setShowStickerPanel(false);
+              } else {
+                setActiveTool("sticker");
+                setEditingTextIndex(-1);
+                setSelectedStickerFont("Inter");
+                setShowStickerPanel(true);
+                setShowTextModal(false);
+              }
+            }}
+            icon={<Smile />}
+            label="Stickers"
+          />
+          <ToolButton
+            active={activeTool === "adjust"}
+            onClick={() => {
+              if (activeTool === "adjust") {
+                setActiveTool("none");
+              } else {
+                setActiveTool("adjust");
+                setShowStickerPanel(false);
+                setShowTextModal(false);
+              }
+            }}
+            icon={<Sun />}
+            label="Adjust"
+          />
+          <ToolButton
+            active={activeTool === "size"}
+            onClick={() => {
+              if (activeTool === "size") {
+                setActiveTool("none");
+              } else {
+                setActiveTool("size");
+                setShowStickerPanel(false);
+                setShowTextModal(false);
+              }
+            }}
+            icon={<Maximize />}
+            label="Size"
+          />
+
+          <div className="w-[1px] h-8 bg-white/10 mx-2" />
+          <button
+            onClick={() => {
+              setPaths([]);
+              setTexts([]);
+              setBrightness(100);
+              setManualCanvasSize(null);
+              if (originalImageRef.current) {
+                setCanvasWidthInput(originalImageRef.current.width.toString());
+                setCanvasHeightInput(originalImageRef.current.height.toString());
+              }
+              if (rawScreenshotRef.current) {
+                const rect = {
+                  x: 0,
+                  y: 0,
+                  w: rawScreenshotRef.current.width,
+                  h: rawScreenshotRef.current.height,
+                };
+                setCropRect(rect);
+                setShouldCommit(true);
+              }
+              if (originalImageRef.current) {
+                const rect = {
+                  x: 0,
+                  y: 0,
+                  w: originalImageRef.current.width,
+                  h: originalImageRef.current.height,
+                };
+                fitImageToContainer(originalImageRef.current, rect);
+                setTimeout(() => redraw(undefined, [], []), 50); // Ensure clear renders
+              }
+            }}
+            className="flex flex-col items-center gap-1 p-2 text-red-400 opacity-80 hover:opacity-100 transition-opacity"
+          >
+            <X className="w-5 h-5 mb-1" />
+            <span className="text-[10px] font-medium tracking-wide uppercase">
+              Reset
+            </span>
+          </button>
+
+          {isWatermarkMode && (
+            <button
+              onClick={() => {
+                setShowAllToolsInWatermark(false);
+                setActiveTool("none");
+              }}
+              className="flex items-center gap-1 ml-2 bg-[#22D3EE]/20 hover:bg-[#22D3EE]/40 border border-[#22D3EE]/30 text-[#22D3EE] hover:text-white font-bold py-2 px-3 rounded-xl text-xs whitespace-nowrap transition-all cursor-pointer shadow-sm"
+            >
+              Watermark Style
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Floating Color Selector for Draw and Blur */}
       <AnimatePresence>

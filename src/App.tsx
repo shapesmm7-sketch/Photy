@@ -23,6 +23,7 @@ import {
   Globe,
   Crown,
   CheckCircle2,
+  FileText,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -34,6 +35,7 @@ import {
   preloadPhoneFrames,
 } from "./lib/imageProcessor";
 import EditorCanvas from "./EditorCanvas";
+import { convertPhotoToPdf } from "./lib/pdfGenerator";
 import { translations, LanguageKey } from "./i18n";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Share } from "@capacitor/share";
@@ -131,6 +133,17 @@ export default function App() {
     height: number;
   } | null>(null);
   const [showEditor, setShowEditor] = useState(false);
+
+  // Quick Landing Feature states
+  const [activeQuickFeature, setActiveQuickFeature] = useState<"draw" | "blur" | "watermark" | "pdf" | "resizer" | null>(null);
+  const [editorInitialTool, setEditorInitialTool] = useState<any>("none");
+
+  // PDF Export settings
+  const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [pdfPageSize, setPdfPageSize] = useState<"A4" | "Letter" | "Original">("A4");
+  const [pdfOrientation, setPdfOrientation] = useState<"portrait" | "landscape" | "auto">("auto");
+  const [pdfMargin, setPdfMargin] = useState<"none" | "thin" | "normal">("none");
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   // NEW STATES
   const [editorPaths, setEditorPaths] = useState<any[]>([]);
@@ -417,6 +430,9 @@ export default function App() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
+    // Clear input value so selecting the same file works
+    e.target.value = "";
 
     setActiveTab("layouts");
 
@@ -445,24 +461,65 @@ export default function App() {
         const resizedResult = canvas.toDataURL("image/jpeg", 0.9);
         setOriginalImage(resizedResult);
         setCleanImage(resizedResult);
+        setProcessedImage(resizedResult);
 
-        const topH = Math.round(height * 0.04);
-        const bottomH = Math.round(height * 0.05);
-        setCustomCropRect({
-          x: 0,
-          y: topH,
-          w: width,
-          h: height - topH - bottomH,
-        });
-        setCustomCanvasSize(null);
-        setEditorPaths([]);
-        setEditorTexts([]);
+        if (!activeQuickFeature) {
+          const topH = Math.round(height * 0.04);
+          const bottomH = Math.round(height * 0.05);
+          setCustomCropRect({
+            x: 0,
+            y: topH,
+            w: width,
+            h: height - topH - bottomH,
+          });
+          setCustomCanvasSize(null);
+          setEditorPaths([]);
+          setEditorTexts([]);
 
-        setAppState("processing");
+          setAppState("processing");
 
-        setTimeout(() => {
-          setAppState("preview");
-        }, 800);
+          setTimeout(() => {
+            setAppState("preview");
+          }, 800);
+        } else {
+          // If a quick feature from landing page is active:
+          setEditorPaths([]);
+          setCustomCanvasSize(null);
+          setCustomCropRect(null); // Full size canvas, no custom template wrapper
+          
+          if (activeQuickFeature === "pdf") {
+            setIsPdfModalOpen(true);
+          } else {
+            if (activeQuickFeature === "draw") {
+              setEditorInitialTool("draw");
+              setEditorTexts([]);
+            } else if (activeQuickFeature === "blur") {
+              setEditorInitialTool("blur");
+              setEditorTexts([]);
+            } else if (activeQuickFeature === "resizer") {
+              setEditorInitialTool("size");
+              setEditorTexts([]);
+            } else if (activeQuickFeature === "watermark") {
+              setEditorInitialTool("text");
+              // Elegant drag-adjustable watermark centered by default
+              setEditorTexts([
+                {
+                  text: "Draft Watermark",
+                  x: width / 2,
+                  y: height / 2,
+                  color: "#FFFFFF",
+                  size: Math.round(Math.max(width, height) * 0.05),
+                  positionMode: "Default",
+                  fontName: "Space Grotesk",
+                  hasShadow: true,
+                  shadowColor: "rgba(0, 0, 0, 0.4)",
+                  bgColor: "rgba(0, 0, 0, 0.25)"
+                }
+              ]);
+            }
+            setShowEditor(true);
+          }
+        }
       };
       img.src = event.target?.result as string;
     };
@@ -471,13 +528,13 @@ export default function App() {
 
   const currentDisplayImage = showEditor ? null : processedImage;
 
-  const executeDownload = async () => {
-    if (!processedImage) return;
+  const triggerDownloadOfBase64 = async (base64String: string, defaultFilename: string = "edited_screenshot.png") => {
+    if (!base64String) return;
 
     if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
       try {
         const NativeMedia = registerPlugin<any>("NativeMedia");
-        await NativeMedia.saveImage({ base64: processedImage });
+        await NativeMedia.saveImage({ base64: base64String });
         alert(
           "Image saved directly to your phone gallery under 'Pictures/MyApp'!",
         );
@@ -491,8 +548,7 @@ export default function App() {
     }
 
     try {
-      // Direct binary Blob conversion to make saving highly compatible with Android WebView and iOS Mobile browsers
-      const parts = processedImage.split(";base64,");
+      const parts = base64String.split(";base64,");
       const contentType = parts[0].split(":")[1];
       const raw = window.atob(parts[1]);
       const rawLength = raw.length;
@@ -507,12 +563,11 @@ export default function App() {
 
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.download = "shot_clean_edited.png";
+      link.download = defaultFilename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      // Clean up the memory object URL shortly after triggering
       setTimeout(() => {
         URL.revokeObjectURL(blobUrl);
       }, 3000);
@@ -522,12 +577,17 @@ export default function App() {
         e,
       );
       const link = document.createElement("a");
-      link.href = processedImage;
-      link.download = "edited_screenshot.png";
+      link.href = base64String;
+      link.download = defaultFilename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     }
+  };
+
+  const executeDownload = async () => {
+    if (!processedImage) return;
+    await triggerDownloadOfBase64(processedImage, "shot_clean_edited.png");
   };
 
   const downloadImage = () => {
@@ -659,6 +719,11 @@ export default function App() {
     }
   };
 
+  const handleFeaturedClick = (feature: "draw" | "blur" | "watermark" | "pdf" | "resizer") => {
+    setActiveQuickFeature(feature);
+    fileInputRef.current?.click();
+  };
+
   return (
     <div
       className={`h-[100dvh] w-full font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col pt-safe ${isDarkMode ? "bg-slate-900 text-white" : "bg-blue-600 text-gray-900"}`}
@@ -736,6 +801,65 @@ export default function App() {
                 >
                   {t("viralStylesDesc")}
                 </p>
+              </div>
+            </div>
+
+            {/* Quick Actions / Featured Badges */}
+            <div className={`w-full border-t pt-4 ${isDarkMode ? "border-slate-700/60" : "border-white/10"}`}>
+              <p className={`text-[10px] font-extrabold uppercase tracking-widest mb-3 ${isDarkMode ? "text-slate-450" : "text-blue-100/90"}`}>
+                Quick Actions
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  onClick={() => handleFeaturedClick("draw")}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                    isDarkMode
+                      ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
+                      : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
+                  }`}
+                >
+                  Draw
+                </button>
+                <button
+                  onClick={() => handleFeaturedClick("blur")}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                    isDarkMode
+                      ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
+                      : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
+                  }`}
+                >
+                  Blur
+                </button>
+                <button
+                  onClick={() => handleFeaturedClick("watermark")}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                    isDarkMode
+                      ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
+                      : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
+                  }`}
+                >
+                  add watermark
+                </button>
+                <button
+                  onClick={() => handleFeaturedClick("pdf")}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                    isDarkMode
+                      ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
+                      : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
+                  }`}
+                >
+                  photo into pdf
+                </button>
+                <button
+                  onClick={() => handleFeaturedClick("resizer")}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                    isDarkMode
+                      ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
+                      : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
+                  }`}
+                >
+                  image resizer
+                </button>
               </div>
             </div>
           </motion.div>
@@ -1492,12 +1616,20 @@ export default function App() {
               initialCustomSize={customCanvasSize}
               initialPaths={editorPaths}
               initialTexts={editorTexts}
-              onCancel={() => setShowEditor(false)}
+              onCancel={() => {
+                setShowEditor(false);
+                setEditorInitialTool("none");
+                if (activeQuickFeature) {
+                  setActiveQuickFeature(null);
+                }
+              }}
               styleName={selectedStyle}
               layoutName={selectedLayout}
               customBg={customBgColor}
               isPremium={isPremium}
-              onSave={(
+              initialTool={editorInitialTool}
+              isWatermarkMode={activeQuickFeature === "watermark"}
+              onSave={async (
                 newImgDataUrl,
                 finalCleanSrc,
                 finalPaths,
@@ -1506,6 +1638,14 @@ export default function App() {
                 customSize,
                 newOriginalSrc
               ) => {
+                if (activeQuickFeature) {
+                  await triggerDownloadOfBase64(newImgDataUrl, `${activeQuickFeature}_edited.png`);
+                  setShowEditor(false);
+                  setEditorInitialTool("none");
+                  setActiveQuickFeature(null);
+                  return;
+                }
+
                 if (newOriginalSrc) {
                    setOriginalImage(newOriginalSrc);
                 }
@@ -1536,6 +1676,198 @@ export default function App() {
               }}
             />
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* PHOTO TO PDF MODAL */}
+      <AnimatePresence>
+        {isPdfModalOpen && (
+          <>
+            <motion.div
+              key="pdf-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setIsPdfModalOpen(false);
+                setEditorInitialTool("none");
+                if (activeQuickFeature) {
+                  setActiveQuickFeature(null);
+                }
+              }}
+              className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            >
+              <motion.div
+                key="pdf-modal"
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+                className={`w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl relative ${isDarkMode ? "bg-slate-900 border border-slate-700 text-white" : "bg-white text-slate-800"}`}
+              >
+                <button
+                  onClick={() => {
+                    setIsPdfModalOpen(false);
+                    setEditorInitialTool("none");
+                    if (activeQuickFeature) {
+                      setActiveQuickFeature(null);
+                    }
+                  }}
+                  className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                {/* Header */}
+                <div className="bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-600 px-6 py-8 text-center relative overflow-hidden animate-gradient">
+                  <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
+                  <FileText className="w-16 h-16 text-white drop-shadow-lg mx-auto mb-3" />
+                  <h2 className="text-2xl font-black text-white drop-shadow-md">
+                    Convert Photo into PDF
+                  </h2>
+                  <p className="text-white/90 font-medium text-xs px-2 mt-1">
+                    Export your custom screenshot or photo into a highly polished PDF document of your choice.
+                  </p>
+                </div>
+
+                {/* Document Options */}
+                <div className="p-6 space-y-5">
+                  {/* Page Size Selection */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500 pl-1">
+                      Page Layout Size
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(["A4", "Letter", "Original"] as const).map((size) => (
+                        <button
+                          key={size}
+                          onClick={() => setPdfPageSize(size)}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all active:scale-[0.97] cursor-pointer ${
+                            pdfPageSize === size
+                              ? "bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/10"
+                              : isDarkMode
+                              ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Orientation Settings */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500 pl-1">
+                      Page Orientation
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {["Portrait", "Landscape", "Auto Detect"].map((mode) => {
+                        const val = mode === "Portrait" ? "portrait" : mode === "Landscape" ? "landscape" : "auto";
+                        return (
+                          <button
+                            key={mode}
+                            onClick={() => setPdfOrientation(val as any)}
+                            className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all active:scale-[0.97] cursor-pointer ${
+                              pdfOrientation === val
+                                ? "bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/10"
+                                : isDarkMode
+                                ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                                : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                            }`}
+                          >
+                            {mode}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Margins */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500 pl-1">
+                      Border Margins
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {["None (0pt)", "Thin (18pt)", "Normal (36pt)"].map((mode) => {
+                        const val = mode.startsWith("None") ? "none" : mode.startsWith("Thin") ? "thin" : "normal";
+                        return (
+                          <button
+                            key={mode}
+                            onClick={() => setPdfMargin(val as any)}
+                            className={`py-2 px-1 rounded-xl text-[10.5px] font-bold border transition-all active:scale-[0.97] cursor-pointer ${
+                              pdfMargin === val
+                                ? "bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/10"
+                                : isDarkMode
+                                ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                                : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                            }`}
+                          >
+                            {mode.split(" ")[0]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={() => {
+                        setIsPdfModalOpen(false);
+                        setEditorInitialTool("none");
+                        if (activeQuickFeature) {
+                          setActiveQuickFeature(null);
+                        }
+                      }}
+                      className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer text-center ${
+                        isDarkMode
+                          ? "bg-slate-800 hover:bg-slate-700 text-slate-300"
+                          : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      disabled={isGeneratingPdf}
+                      onClick={async () => {
+                        setIsGeneratingPdf(true);
+                        try {
+                          await convertPhotoToPdf(processedImage || cleanImage || originalImage!, {
+                            pageSize: pdfPageSize,
+                            orientation: pdfOrientation,
+                            margin: pdfMargin,
+                          });
+                          setIsPdfModalOpen(false);
+                          if (activeQuickFeature) {
+                            setActiveQuickFeature(null);
+                          }
+                        } catch (err: any) {
+                          alert("Error generating PDF: " + err?.message);
+                        } finally {
+                          setIsGeneratingPdf(false);
+                        }
+                      }}
+                      className="flex-[2] py-3 px-4 rounded-xl text-xs font-extrabold text-white bg-gradient-to-r from-indigo-505 via-purple-600 to-pink-600 hover:opacity-95 shadow-md transition-all active:scale-95 disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      {isGeneratingPdf ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span>Generating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-4 h-4" />
+                          <span>Download PDF</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </div>
