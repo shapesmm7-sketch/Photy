@@ -36,6 +36,8 @@ import {
 } from "./lib/imageProcessor";
 import EditorCanvas from "./EditorCanvas";
 import { convertPhotoToPdf } from "./lib/pdfGenerator";
+import { ConverterModal } from "./components/ConverterModal";
+import { TextConverterModal } from "./components/TextConverterModal";
 import { translations, LanguageKey } from "./i18n";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Share } from "@capacitor/share";
@@ -137,11 +139,13 @@ export default function App() {
   const [showEditor, setShowEditor] = useState(false);
 
   // Quick Landing Feature states
-  const [activeQuickFeature, setActiveQuickFeature] = useState<"draw" | "blur" | "watermark" | "pdf" | "resizer" | null>(null);
+  const [activeQuickFeature, setActiveQuickFeature] = useState<"draw" | "blur" | "watermark" | "pdf" | "resizer" | "arrows" | "converter" | "text" | null>(null);
   const [editorInitialTool, setEditorInitialTool] = useState<any>("none");
 
   // PDF Export settings
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [isConverterModalOpen, setIsConverterModalOpen] = useState(false);
+  const [isTextModalOpen, setIsTextModalOpen] = useState(false);
   const [pdfPageSize, setPdfPageSize] = useState<"A4" | "Letter" | "Original">("A4");
   const [pdfOrientation, setPdfOrientation] = useState<"portrait" | "landscape" | "auto">("auto");
   const [pdfMargin, setPdfMargin] = useState<"none" | "thin" | "normal">("none");
@@ -495,12 +499,19 @@ export default function App() {
           
           if (activeQuickFeature === "pdf") {
             setIsPdfModalOpen(true);
+          } else if (activeQuickFeature === "converter") {
+            setIsConverterModalOpen(true);
+          } else if (activeQuickFeature === "text") {
+            setIsTextModalOpen(true);
           } else {
             if (activeQuickFeature === "draw") {
               setEditorInitialTool("draw");
               setEditorTexts([]);
             } else if (activeQuickFeature === "blur") {
               setEditorInitialTool("blur");
+              setEditorTexts([]);
+            } else if (activeQuickFeature === "arrows") {
+              setEditorInitialTool("arrows");
               setEditorTexts([]);
             } else if (activeQuickFeature === "resizer") {
               setEditorInitialTool("size");
@@ -725,9 +736,13 @@ export default function App() {
     }
   };
 
-  const handleFeaturedClick = (feature: "draw" | "blur" | "watermark" | "pdf" | "resizer") => {
+  const handleFeaturedClick = (feature: "draw" | "blur" | "watermark" | "pdf" | "resizer" | "arrows" | "converter" | "text") => {
     setActiveQuickFeature(feature);
-    fileInputRef.current?.click();
+    if (feature === "text") {
+      setIsTextModalOpen(true);
+    } else {
+      fileInputRef.current?.click();
+    }
   };
 
   return (
@@ -827,6 +842,16 @@ export default function App() {
                   Draw
                 </button>
                 <button
+                  onClick={() => handleFeaturedClick("arrows")}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                    isDarkMode
+                      ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
+                      : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
+                  }`}
+                >
+                  Arrows & Shapes
+                </button>
+                <button
                   onClick={() => handleFeaturedClick("blur")}
                   className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
@@ -847,16 +872,6 @@ export default function App() {
                   add watermark
                 </button>
                 <button
-                  onClick={() => handleFeaturedClick("pdf")}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
-                    isDarkMode
-                      ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
-                      : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
-                  }`}
-                >
-                  photo into pdf
-                </button>
-                <button
                   onClick={() => handleFeaturedClick("resizer")}
                   className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
@@ -865,6 +880,26 @@ export default function App() {
                   }`}
                 >
                   image resizer
+                </button>
+                <button
+                  onClick={() => handleFeaturedClick("converter")}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                    isDarkMode
+                      ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
+                      : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
+                  }`}
+                >
+                  image converter
+                </button>
+                <button
+                  onClick={() => handleFeaturedClick("text")}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                    isDarkMode
+                      ? "bg-slate-700 hover:bg-slate-650 text-purple-400 border border-slate-600/50"
+                      : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
+                  }`}
+                >
+                  text converter
                 </button>
               </div>
             </div>
@@ -1450,6 +1485,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               onClick={() => setShowPremiumModal(false)}
               className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+              style={{ paddingTop: (!isPremium && isNative) ? 'calc(env(safe-area-inset-top) + 60px)' : undefined }}
             >
               <motion.div
                 key="premium-modal"
@@ -1712,6 +1748,7 @@ export default function App() {
                 }
               }}
               className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+              style={{ paddingTop: (!isPremium && isNative) ? 'calc(env(safe-area-inset-top) + 60px)' : undefined }}
             >
               <motion.div
                 key="pdf-modal"
@@ -1886,6 +1923,31 @@ export default function App() {
           </>
         )}
       </AnimatePresence>
+
+      <ConverterModal
+        isOpen={isConverterModalOpen}
+        onClose={() => {
+          setIsConverterModalOpen(false);
+          if (activeQuickFeature) {
+            setActiveQuickFeature(null);
+          }
+        }}
+        imageData={originalImage}
+        isDarkMode={isDarkMode}
+        isPremium={isPremium}
+      />
+
+      <TextConverterModal
+        isOpen={isTextModalOpen}
+        onClose={() => {
+          setIsTextModalOpen(false);
+          if (activeQuickFeature === "text") {
+            setActiveQuickFeature(null);
+          }
+        }}
+        isDarkMode={isDarkMode}
+        isPremium={isPremium}
+      />
     </div>
   );
 }

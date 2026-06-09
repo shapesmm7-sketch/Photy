@@ -70,6 +70,55 @@ async function startServer() {
     }
   });
 
+  app.post("/api/convert", async (req, res) => {
+    try {
+      const { base64, format, quality } = req.body;
+      if (!base64 || !format) {
+        return res.status(400).json({ error: "Missing base64 or format" });
+      }
+
+      // Remove data URL prefix if present
+      const base64Data = base64.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, "base64");
+
+      const sharpInstance = (await import("sharp")).default(buffer);
+
+      let outputBuffer: Buffer;
+      const q = quality || 80;
+
+      switch (format) {
+        case "jpg":
+        case "jpeg":
+          outputBuffer = await sharpInstance.jpeg({ quality: q }).toBuffer();
+          break;
+        case "png":
+          outputBuffer = await sharpInstance.png().toBuffer();
+          break;
+        case "webp":
+          outputBuffer = await sharpInstance.webp({ quality: q }).toBuffer();
+          break;
+        case "avif":
+          outputBuffer = await sharpInstance.avif({ quality: q }).toBuffer();
+          break;
+        case "gif":
+          outputBuffer = await sharpInstance.gif().toBuffer();
+          break;
+        default:
+          return res.status(400).json({ error: `Unsupported format: ${format}` });
+      }
+
+      const mimeType = format === "jpg" ? "image/jpeg" : `image/${format}`;
+      res.json({
+        base64: `data:${mimeType};base64,${outputBuffer.toString("base64")}`,
+        format,
+        mimeType
+      });
+    } catch (e: any) {
+      console.error("Sharp Conversion Error:", e);
+      res.status(500).json({ error: e.message || "Conversion failed" });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

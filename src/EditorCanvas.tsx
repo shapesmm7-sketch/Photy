@@ -32,6 +32,8 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
+  Square,
+  Circle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { removeBackground } from "@imgly/background-removal";
@@ -40,7 +42,7 @@ import { PHONE_FRAMES } from "./lib/phoneFrames";
 import { translations, LanguageKey } from "./i18n";
 import { admobManager, isNative } from "./lib/admob";
 
-type Tool = "none" | "crop" | "draw" | "blur" | "text" | "sticker" | "adjust" | "size" | "removebg";
+type Tool = "none" | "crop" | "draw" | "blur" | "text" | "sticker" | "adjust" | "size" | "removebg" | "arrows";
 
 interface TextItem {
   text: string;
@@ -137,6 +139,7 @@ interface DrawingPath {
   color: string;
   width: number;
   isBlur: boolean;
+  shapeType?: "arrow" | "tapered_arrow" | "double_arrow" | "rect" | "circle" | "line";
 }
 
 interface EditorCanvasProps {
@@ -167,6 +170,218 @@ interface EditorCanvasProps {
   isPremium?: boolean;
   initialTool?: Tool;
   isWatermarkMode?: boolean;
+}
+
+function getDistanceToSegment(pt: { x: number; y: number }, p1: { x: number; y: number }, p2: { x: number; y: number }) {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) {
+    return Math.hypot(pt.x - p1.x, pt.y - p1.y);
+  }
+  let t = ((pt.x - p1.x) * dx + (pt.y - p1.y) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(pt.x - (p1.x + t * dx), pt.y - (p1.y + t * dy));
+}
+
+function isPointNearPath(pt: { x: number; y: number }, p: DrawingPath): boolean {
+  const threshold = Math.max(p.width + 12, 24); // Generous hit area for easy selection
+  
+  if (p.shapeType) {
+    if (p.points.length < 2) return false;
+    const start = p.points[0];
+    const end = p.points[p.points.length - 1];
+    
+    if (p.shapeType === "rect") {
+      const x1 = Math.min(start.x, end.x);
+      const x2 = Math.max(start.x, end.x);
+      const y1 = Math.min(start.y, end.y);
+      const y2 = Math.max(start.y, end.y);
+      
+      // Inside check
+      if (pt.x >= x1 && pt.x <= x2 && pt.y >= y1 && pt.y <= y2) {
+        return true;
+      }
+      
+      // Boundary segments check
+      const d1 = getDistanceToSegment(pt, { x: x1, y: y1 }, { x: x2, y: y1 });
+      const d2 = getDistanceToSegment(pt, { x: x2, y: y1 }, { x: x2, y: y2 });
+      const d3 = getDistanceToSegment(pt, { x: x2, y: y2 }, { x: x1, y: y2 });
+      const d4 = getDistanceToSegment(pt, { x: x1, y: y2 }, { x: x1, y: y1 });
+      
+      return Math.min(d1, d2, d3, d4) < threshold;
+    }
+    
+    if (p.shapeType === "circle") {
+      const rx = Math.abs(end.x - start.x) / 2;
+      const ry = Math.abs(end.y - start.y) / 2;
+      const cx = start.x + (end.x - start.x) / 2;
+      const cy = start.y + (end.y - start.y) / 2;
+      
+      const dx = pt.x - cx;
+      const dy = pt.y - cy;
+      
+      // Inside ellipse check
+      if ((dx * dx) / (rx * rx || 1) + (dy * dy) / (ry * ry || 1) <= 1.0) {
+        return true;
+      }
+      
+      // Boundary check
+      const theta = Math.atan2(dy, dx);
+      const px = cx + rx * Math.cos(theta);
+      const py = cy + ry * Math.sin(theta);
+      return Math.hypot(pt.x - px, pt.y - py) < threshold;
+    }
+    
+    // Default shapes: line, arrow, tapered_arrow, double_arrow
+    return getDistanceToSegment(pt, start, end) < threshold;
+  }
+  
+  // Standard freeform drawing
+  return p.points.some(
+    (ppp) =>
+      Math.sqrt(Math.pow(ppp.x - pt.x, 2) + Math.pow(ppp.y - pt.y, 2)) < threshold
+  );
+}
+
+function drawShape(
+  ctx: CanvasRenderingContext2D,
+  shapeType: "arrow" | "tapered_arrow" | "double_arrow" | "rect" | "circle" | "line",
+  points: { x: number; y: number }[],
+  color: string,
+  width: number
+) {
+  if (points.length < 2) return;
+  const start = points[0];
+  const end = points[points.length - 1];
+
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  if (shapeType === "line") {
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+  } else if (shapeType === "rect") {
+    ctx.beginPath();
+    ctx.rect(start.x, start.y, end.x - start.x, end.y - start.y);
+    ctx.stroke();
+  } else if (shapeType === "circle") {
+    ctx.beginPath();
+    const rx = Math.abs(end.x - start.x) / 2;
+    const ry = Math.abs(end.y - start.y) / 2;
+    const cx = start.x + (end.x - start.x) / 2;
+    const cy = start.y + (end.y - start.y) / 2;
+    // fallback if ellipse is not supported
+    if (ctx.ellipse) {
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+    } else {
+      ctx.arc(cx, cy, Math.max(rx, ry), 0, 2 * Math.PI);
+    }
+    ctx.stroke();
+  } else if (shapeType === "arrow") {
+    // Draw line
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+
+    // Draw arrow head at the end pointing towards end coordinates
+    const angle = Math.atan2(end.y - start.y, end.x - start.x);
+    const arrowLength = Math.max(15, width * 2.5);
+
+    ctx.beginPath();
+    ctx.moveTo(end.x, end.y);
+    ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle - Math.PI / 6),
+      end.y - arrowLength * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle + Math.PI / 6),
+      end.y - arrowLength * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
+  } else if (shapeType === "tapered_arrow") {
+    const angle = Math.atan2(end.y - start.y, end.x - start.x);
+    const anglePerp = angle + Math.PI / 2;
+    const arrowLength = Math.max(15, width * 2.5);
+    
+    // Base is where the arrowhead begins
+    const base = {
+      x: end.x - arrowLength * Math.cos(angle),
+      y: end.y - arrowLength * Math.sin(angle),
+    };
+
+    // 1. Draw the tapered stem
+    ctx.beginPath();
+    const startLeft = { x: start.x - 1 * Math.cos(anglePerp), y: start.y - 1 * Math.sin(anglePerp) };
+    const startRight = { x: start.x + 1 * Math.cos(anglePerp), y: start.y + 1 * Math.sin(anglePerp) };
+    const baseLeft = { x: base.x - (width / 2) * Math.cos(anglePerp), y: base.y - (width / 2) * Math.sin(anglePerp) };
+    const baseRight = { x: base.x + (width / 2) * Math.cos(anglePerp), y: base.y + (width / 2) * Math.sin(anglePerp) };
+    
+    ctx.moveTo(startLeft.x, startLeft.y);
+    ctx.lineTo(baseLeft.x, baseLeft.y);
+    ctx.lineTo(baseRight.x, baseRight.y);
+    ctx.lineTo(startRight.x, startRight.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // 2. Draw the arrowhead at the end
+    ctx.beginPath();
+    ctx.moveTo(end.x, end.y);
+    ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle - Math.PI / 6),
+      end.y - arrowLength * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle + Math.PI / 6),
+      end.y - arrowLength * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
+  } else if (shapeType === "double_arrow") {
+    // Draw line
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+
+    const angle = Math.atan2(end.y - start.y, end.x - start.x);
+    const arrowLength = Math.max(15, width * 2.5);
+
+    // End Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(end.x, end.y);
+    ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle - Math.PI / 6),
+      end.y - arrowLength * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle + Math.PI / 6),
+      end.y - arrowLength * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    // Start Arrowhead pointing backward
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(
+      start.x + arrowLength * Math.cos(angle - Math.PI / 6),
+      start.y + arrowLength * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      start.x + arrowLength * Math.cos(angle + Math.PI / 6),
+      start.y + arrowLength * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
+  }
 }
 
 export default function EditorCanvas({
@@ -362,6 +577,10 @@ export default function EditorCanvas({
   const textInitialPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const editorLastTapRef = useRef<number>(0);
+
+  const isDraggingPathRef = useRef<boolean>(false);
+  const pathDragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const lastPathPointsRef = useRef<{ x: number; y: number }[]>([]);
 
   // Drawing state
   const [paths, setPaths] = useState<DrawingPath[]>(() => {
@@ -569,6 +788,8 @@ export default function EditorCanvas({
   const [selectedBlurColor, setSelectedBlurColor] =
     useState<string>("transparent");
   const [brushSize, setBrushSize] = useState<number>(45);
+  const [selectedShapeTool, setSelectedShapeTool] = useState<"arrow" | "tapered_arrow" | "double_arrow" | "rect" | "circle" | "line" >("arrow");
+  const [arrowSubTab, setArrowSubTab] = useState<"shape" | "color" | "thickness">("shape");
   const [isRemovingBackground, setIsRemovingBackground] = useState(false);
   const [isDetectingSensitive, setIsDetectingSensitive] = useState(false);
   const [removalProgress, setRemovalProgress] = useState(0);
@@ -669,7 +890,7 @@ export default function EditorCanvas({
         if (initialCropRect) {
           setCropRect(initialCropRect);
         } else {
-          const isQuickFeatureMode = activeTool === "size" || activeTool === "draw" || activeTool === "blur" || activeTool === "text";
+          const isQuickFeatureMode = activeTool === "size" || activeTool === "draw" || activeTool === "blur" || activeTool === "text" || activeTool === "arrows";
           const topH = isQuickFeatureMode ? 0 : Math.round(img.height * 0.04);
           const bottomH = isQuickFeatureMode ? 0 : Math.round(img.height * 0.05);
           const defaultCrop = {
@@ -1313,13 +1534,94 @@ export default function EditorCanvas({
       ctx.lineJoin = "round";
 
       const pathsToDraw = explicitPaths || paths;
-      pathsToDraw.forEach((p) => {
+      pathsToDraw.forEach((p, idx) => {
         if (p.isBlur) {
           drawBlurredPath(ctx, p.path2d, p.width, p.color, topPad);
+        } else if (p.shapeType) {
+          drawShape(ctx, p.shapeType, p.points, p.color, p.width);
         } else {
           ctx.strokeStyle = p.color;
           ctx.lineWidth = p.width;
           ctx.stroke(p.path2d);
+        }
+
+        // Draw selected highlight outline indicator if it's currently selected
+        const isEditingThisPath = !hideSelectionBoxes && editingPathIndex === idx;
+        if (isEditingThisPath && p.points.length > 0) {
+          ctx.save();
+
+          // Calculate bounding box bounds
+          let minX = p.points[0].x;
+          let maxX = p.points[0].x;
+          let minY = p.points[0].y;
+          let maxY = p.points[0].y;
+          p.points.forEach((pt) => {
+            if (pt.x < minX) minX = pt.x;
+            if (pt.x > maxX) maxX = pt.x;
+            if (pt.y < minY) minY = pt.y;
+            if (pt.y > maxY) maxY = pt.y;
+          });
+
+          const pad = 8;
+          const rx = minX - pad;
+          const ry = minY - pad;
+          const rw = Math.max(16, (maxX - minX) + pad * 2);
+          const rh = Math.max(16, (maxY - minY) + pad * 2);
+
+          // Draw a soft translucent dark shadow for maximum contrast on any image background
+          ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+          ctx.lineWidth = 3;
+          ctx.setLineDash([]);
+          ctx.strokeRect(rx, ry, rw, rh);
+
+          // Draw the neon blue dashed boundary outline
+          ctx.strokeStyle = "#3B82F6";
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([6, 4]);
+          ctx.strokeRect(rx, ry, rw, rh);
+
+          // Draw professional design circular node handles at the bounding box corners
+          const corners = [
+            { x: rx, y: ry },
+            { x: rx + rw, y: ry },
+            { x: rx, y: ry + rh },
+            { x: rx + rw, y: ry + rh }
+          ];
+
+          corners.forEach(corner => {
+            // White highlight halo
+            ctx.beginPath();
+            ctx.arc(corner.x, corner.y, 4.5, 0, 2 * Math.PI);
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fill();
+            // Blue inner accent core
+            ctx.beginPath();
+            ctx.arc(corner.x, corner.y, 2.5, 0, 2 * Math.PI);
+            ctx.fillStyle = "#3B82F6";
+            ctx.fill();
+          });
+
+          // Draw special green and red start/end endpoints for arrows / lines to trace vector paths
+          if (p.shapeType && p.points.length >= 2) {
+            const start = p.points[0];
+            const end = p.points[p.points.length - 1];
+            [
+              { pt: start, color: "#10B981" }, // Green for tail
+              { pt: end, color: "#EF4444" }    // Red for pointer tip
+            ].forEach((node) => {
+              ctx.beginPath();
+              ctx.arc(node.pt.x, node.pt.y, 5, 0, 2 * Math.PI);
+              ctx.fillStyle = "#FFFFFF";
+              ctx.fill();
+              
+              ctx.beginPath();
+              ctx.arc(node.pt.x, node.pt.y, 3.5, 0, 2 * Math.PI);
+              ctx.fillStyle = node.color;
+              ctx.fill();
+            });
+          }
+
+          ctx.restore();
         }
       });
 
@@ -1702,6 +2004,8 @@ export default function EditorCanvas({
         ctx.strokeStyle = selectedDrawColor;
         ctx.lineWidth = brushSize;
         ctx.stroke(currentPathRef.current);
+      } else if (activeTool === "arrows" && drawingPointsRef.current.length >= 2) {
+        drawShape(ctx, selectedShapeTool, drawingPointsRef.current, selectedDrawColor, brushSize);
       }
     }
   };
@@ -1709,11 +2013,11 @@ export default function EditorCanvas({
   // Trigger redraw when state changes for live preview
   useEffect(() => {
     redraw();
-  }, [currentText, currentTextFont, currentTextColor, currentTextBgColor, currentTextShadow, currentTextShadowColor, currentTextRotation, textPositionMode, texts, showTextModal, activeTool, selectedTextIndex]);
+  }, [currentText, currentTextFont, currentTextColor, currentTextBgColor, currentTextShadow, currentTextShadowColor, currentTextRotation, textPositionMode, texts, showTextModal, activeTool, selectedTextIndex, selectedShapeTool]);
 
   useEffect(() => {
     redraw();
-  }, [paths, brushSize, selectedDrawColor, selectedBlurColor, brightness]);
+  }, [paths, brushSize, selectedDrawColor, selectedBlurColor, brightness, selectedShapeTool, editingPathIndex]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -1906,6 +2210,7 @@ export default function EditorCanvas({
     });
 
     if (clickedTextIndex >= 0) {
+      setEditingPathIndex(-1);
       setSelectedTextIndex(clickedTextIndex);
       textDragModeRef.current = "drag";
       setDraggingTextIndex(clickedTextIndex);
@@ -1969,18 +2274,15 @@ export default function EditorCanvas({
       }
     }
 
-    // Hit test for paths (Draw/Blur)
-    const clickedPathIndex = paths.findIndex((p) => {
-      return p.points.some(
-        (ppp) =>
-          Math.sqrt(Math.pow(ppp.x - pt.x, 2) + Math.pow(ppp.y - pt.y, 2)) <
-          p.width + 10,
-      );
-    });
+    // Hit test for paths (Draw/Blur/Arrows)
+    const clickedPathIndex = paths.findIndex((p) => isPointNearPath(pt, p));
 
     if (clickedPathIndex >= 0) {
+      setSelectedTextIndex(null);
       setEditingPathIndex(clickedPathIndex);
-      // Give feedback by resetting tool? Or just allow deletion
+      isDraggingPathRef.current = true;
+      pathDragStartRef.current = { x: pt.x, y: pt.y };
+      lastPathPointsRef.current = [...paths[clickedPathIndex].points];
       return;
     } else {
       setEditingPathIndex(-1);
@@ -2160,6 +2462,38 @@ export default function EditorCanvas({
 
     const pt = getCanvasPoint(e);
 
+    if (isDraggingPathRef.current && editingPathIndex >= 0 && editingPathIndex < paths.length) {
+      e.preventDefault();
+      const dx = pt.x - pathDragStartRef.current.x;
+      const dy = pt.y - pathDragStartRef.current.y;
+      
+      const newPaths = [...paths];
+      const p = newPaths[editingPathIndex];
+      const originalPoints = lastPathPointsRef.current;
+      const movedPoints = originalPoints.map(point => ({
+        x: point.x + dx,
+        y: point.y + dy
+      }));
+      
+      const newPath2D = new Path2D();
+      if (movedPoints.length > 0) {
+        newPath2D.moveTo(movedPoints[0].x, movedPoints[0].y);
+        for (let i = 1; i < movedPoints.length; i++) {
+          newPath2D.lineTo(movedPoints[i].x, movedPoints[i].y);
+        }
+      }
+      
+      newPaths[editingPathIndex] = {
+        ...p,
+        points: movedPoints,
+        path2d: newPath2D
+      };
+      
+      setPaths(newPaths);
+      redraw(undefined, newPaths);
+      return;
+    }
+
     if (textDragModeRef.current === ("image_pan" as any)) {
       e.preventDefault();
       setManualImageOffset({
@@ -2269,8 +2603,12 @@ export default function EditorCanvas({
         tempCropRectRef.current = newRect;
       }
     } else if (currentPathRef.current) {
-      currentPathRef.current.lineTo(pt.x, pt.y);
-      drawingPointsRef.current.push(pt);
+      if (activeTool === "arrows") {
+        drawingPointsRef.current = [drawingPointsRef.current[0], pt];
+      } else {
+        currentPathRef.current.lineTo(pt.x, pt.y);
+        drawingPointsRef.current.push(pt);
+      }
     }
     redraw();
   };
@@ -2309,6 +2647,13 @@ export default function EditorCanvas({
     }
 
     if (isPinchZoomingRef.current) {
+      return;
+    }
+
+    if (isDraggingPathRef.current) {
+      isDraggingPathRef.current = false;
+      setShouldCommit(true);
+      redraw();
       return;
     }
 
@@ -2428,9 +2773,27 @@ export default function EditorCanvas({
       tempCropRectRef.current = null;
       cropDragModeRef.current = "none";
     } else if (currentPathRef.current && canvasRef.current) {
+      const isArrowTool = activeTool === "arrows";
       const color =
-        activeTool === "draw" ? selectedDrawColor : selectedBlurColor;
+        (activeTool === "draw" || isArrowTool) ? selectedDrawColor : selectedBlurColor;
       const width = brushSize;
+
+      // Only add paths that have substantive movement to avoid "junk" dots when tapping to deselect
+      const points = drawingPointsRef.current;
+      let isSubstantive = false;
+      if (points.length >= 2) {
+        const dx = points[points.length - 1].x - points[0].x;
+        const dy = points[points.length - 1].y - points[0].y;
+        if (Math.hypot(dx, dy) > 6 || points.length > 5) {
+          isSubstantive = true;
+        }
+      }
+
+      if (!isSubstantive) {
+        currentPathRef.current = null;
+        redraw();
+        return;
+      }
 
       const newPaths = [
         ...paths,
@@ -2440,6 +2803,7 @@ export default function EditorCanvas({
           color,
           width: width,
           isBlur: activeTool === "blur",
+          shapeType: isArrowTool ? selectedShapeTool : undefined,
         },
       ];
       setPaths(newPaths);
@@ -2937,7 +3301,7 @@ export default function EditorCanvas({
   return (
     <div 
       className="flex flex-col h-full bg-black text-white absolute inset-0 z-50"
-      style={{ paddingTop: (!isPremium && isNative) ? '60px' : undefined }}
+      style={{ paddingTop: (!isPremium && isNative) ? 'calc(env(safe-area-inset-top) + 60px)' : undefined }}
     >
       <canvas ref={blurCanvasRef} className="hidden" />
 
@@ -3099,7 +3463,7 @@ export default function EditorCanvas({
 
         {/* Path Deletion Prompt */}
         {editingPathIndex >= 0 && (
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30">
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2">
             <button
               onClick={() => {
                 const newPaths = [...paths];
@@ -3109,9 +3473,18 @@ export default function EditorCanvas({
                 setShouldCommit(true);
                 redraw(undefined, newPaths);
               }}
-              className="bg-red-600 text-white px-6 py-2 rounded-full font-bold shadow-xl border border-white/20 flex items-center gap-2"
+              className="bg-red-600 hover:bg-red-500 text-white px-4 py-1.5 rounded-full font-bold text-xs shadow-xl border border-white/20 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
             >
-              <X className="w-4 h-4" /> Delete Drawing
+              <Trash2 className="w-3.5 h-3.5" /> Delete
+            </button>
+            <button
+              onClick={() => {
+                setEditingPathIndex(-1);
+                redraw();
+              }}
+              className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-1.5 rounded-full font-bold text-xs shadow-xl border border-white/10 flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+            >
+              Deselect
             </button>
           </div>
         )}
@@ -3424,6 +3797,12 @@ export default function EditorCanvas({
             label="Draw"
           />
           <ToolButton
+            active={activeTool === "arrows"}
+            onClick={() => setActiveTool(activeTool === "arrows" ? "none" : "arrows")}
+            icon={<ArrowRight />}
+            label="Arrows"
+          />
+          <ToolButton
             active={activeTool === "blur"}
             onClick={() => setActiveTool(activeTool === "blur" ? "none" : "blur")}
             icon={<Droplets />}
@@ -3550,112 +3929,286 @@ export default function EditorCanvas({
 
       {/* Floating Color Selector for Draw and Blur */}
       <AnimatePresence>
-        {(activeTool === "draw" || activeTool === "blur") && (
+        {(activeTool === "draw" || activeTool === "blur" || activeTool === "arrows") && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="px-4 py-3 bg-[#111111] border-t border-white/5 flex flex-col gap-2.5 shrink-0 z-20 overflow-hidden"
+            className="px-4 py-2 bg-[#111111] border-t border-white/5 flex flex-col gap-2 shrink-0 z-20 overflow-hidden"
           >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold tracking-widest text-gray-400 uppercase">
-                {activeTool === "draw" ? "DRAW COLOR" : "BLUR TINT OVERLAY"}
-              </span>
-              {activeTool === "blur" && selectedBlurColor !== "transparent" && (
+            {activeTool === "arrows" && (
+              <div className="flex items-center justify-between border-b border-white/5 pb-1.5 mb-1.5 w-full gap-1.5">
                 <button
-                  onClick={() => {
-                    setSelectedBlurColor("transparent");
-                    setTimeout(() => redraw(), 0);
-                  }}
-                  className="text-[10px] text-blue-400 font-extrabold tracking-wider uppercase hover:underline"
+                  type="button"
+                  onClick={() => setArrowSubTab("shape")}
+                  className={`flex-1 py-1 px-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                    arrowSubTab === "shape"
+                      ? "bg-blue-600/25 border border-blue-500/30 text-blue-400"
+                      : "bg-black/20 border border-white/5 text-gray-400 hover:text-white"
+                  }`}
                 >
-                  Clear Tint
+                  <span className="w-1 h-1 rounded-full bg-blue-500" />
+                  Shapes
                 </button>
-              )}
-            </div>
-            <div className="flex gap-2.5 overflow-x-auto py-1 no-scrollbar scroll-smooth">
-              {activeTool === "draw" ? (
-                textColors.map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => {
-                      setSelectedDrawColor(color);
-                      setTimeout(() => redraw(), 0);
-                    }}
-                    className={`w-7 h-7 shrink-0 rounded-full border-2 transition-all relative flex items-center justify-center ${
-                      selectedDrawColor === color
-                        ? "border-blue-500 scale-110 shadow-lg ring-2 ring-blue-500/20"
-                        : "border-transparent opacity-80 hover:opacity-100 hover:scale-105"
-                    }`}
-                    style={{ backgroundColor: color }}
-                  >
-                    {selectedDrawColor === color && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-black invert select-none" />
-                    )}
-                  </button>
-                ))
-              ) : (
-                // Blur tint options: first one is transparent (No Tint), followed by standard colors
-                ["transparent", ...textColors].map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => {
-                      setSelectedBlurColor(color);
-                      setTimeout(() => redraw(), 0);
-                    }}
-                    className={`w-7 h-7 shrink-0 rounded-full border-2 transition-all relative flex items-center justify-center ${
-                      selectedBlurColor === color
-                        ? "border-blue-500 scale-110 shadow-lg ring-2 ring-blue-500/20"
-                        : "border-transparent opacity-80 hover:opacity-100 hover:scale-105"
-                    }`}
-                    style={
-                      color === "transparent"
-                        ? {
-                            background:
-                              "linear-gradient(45deg, #3f3f46 25%, transparent 25%), linear-gradient(-45deg, #3f3f46 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #3f3f46 75%), linear-gradient(-45deg, transparent 75%, #3f3f46 75%)",
-                            backgroundSize: "6px 6px",
-                            backgroundPosition: "0 0, 0 3px, 3px -3px, -3px 0",
-                            backgroundColor: "#1c1c1e",
-                          }
-                        : { backgroundColor: color }
-                    }
-                    title={color === "transparent" ? "No Tint" : color}
-                  >
-                    {color === "transparent" ? (
-                      <span className="text-[10px] font-extrabold text-white/50 select-none">
-                        Ø
-                      </span>
-                    ) : (
-                      selectedBlurColor === color && (
-                        <div className="w-1.5 h-1.5 rounded-full bg-black invert select-none" />
-                      )
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-
-            {/* Premium Brush Size Control Slider */}
-            <div className="flex items-center justify-between gap-4 mt-2 bg-white/5 px-3.5 py-2.5 rounded-2xl border border-white/5">
-              <span className="text-[10px] font-extrabold tracking-widest text-gray-300 uppercase shrink-0">
-                BRUSH SIZE: {brushSize}px
-              </span>
-              <div className="flex-1 flex items-center gap-3">
-                <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">Min</span>
-                <input
-                  type="range"
-                  min="12"
-                  max="140"
-                  value={brushSize}
-                  onChange={(e) => {
-                    setBrushSize(Number(e.target.value));
-                    setTimeout(() => redraw(), 0);
-                  }}
-                  className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-                <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">Max</span>
+                <button
+                  type="button"
+                  onClick={() => setArrowSubTab("color")}
+                  className={`flex-1 py-1 px-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    arrowSubTab === "color"
+                      ? "bg-blue-600/25 border border-blue-500/30 text-blue-400"
+                      : "bg-black/20 border border-white/5 text-gray-300 hover:text-white"
+                  }`}
+                >
+                  <div className="w-2 h-2 rounded-full border border-white/30 shrink-0 shadow-sm animate-pulse" style={{ backgroundColor: selectedDrawColor }} />
+                  Color
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setArrowSubTab("thickness")}
+                  className={`flex-1 py-1 px-1.5 rounded-lg text-[9px] font-extrabold uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer ${
+                    arrowSubTab === "thickness"
+                      ? "bg-blue-600/25 border border-blue-500/30 text-blue-400"
+                      : "bg-black/20 border border-white/5 text-gray-400 hover:text-white"
+                  }`}
+                >
+                  <span className="text-[8px] text-[#60a5fa] font-extrabold select-none shrink-0 bg-blue-500/10 px-1 rounded">{brushSize}px</span>
+                  Size
+                </button>
               </div>
-            </div>
+            )}
+
+            {activeTool === "arrows" && arrowSubTab === "shape" && (
+              <div className="flex flex-col gap-1 w-full animate-fadeIn">
+                <div className="grid grid-cols-6 gap-1 w-full bg-transparent p-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedShapeTool === "arrow") {
+                        setActiveTool("none");
+                      } else {
+                        setSelectedShapeTool("arrow");
+                      }
+                    }}
+                    className={`flex flex-col items-center justify-center gap-1 py-1 rounded-lg transition-all cursor-pointer ${
+                      selectedShapeTool === "arrow"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-black/15 text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    <ArrowRight className="w-4 h-4 flex-shrink-0" />
+                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">Arrow</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedShapeTool === "tapered_arrow") {
+                        setActiveTool("none");
+                      } else {
+                        setSelectedShapeTool("tapered_arrow");
+                      }
+                    }}
+                    className={`flex flex-col items-center justify-center gap-1 py-1 rounded-lg transition-all cursor-pointer ${
+                      selectedShapeTool === "tapered_arrow"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-black/15 text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    <svg className="w-4 h-4 flex items-center justify-center flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M4.5,19.5 C4.5,19.5 12,12 15,9 C12,12 4.5,19.5 4.5,19.5 Z" />
+                      <polygon points="12,7 20,4 17,12 14,9" />
+                    </svg>
+                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">Tapered</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedShapeTool === "double_arrow") {
+                        setActiveTool("none");
+                      } else {
+                        setSelectedShapeTool("double_arrow");
+                      }
+                    }}
+                    className={`flex flex-col items-center justify-center gap-1 py-1 rounded-lg transition-all cursor-pointer ${
+                      selectedShapeTool === "double_arrow"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-black/15 text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    <svg className="w-4 h-4 flex items-center justify-center flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="19" x2="19" y2="5" />
+                      <polyline points="14,5 19,5 19,10" />
+                      <polyline points="10,19 5,19 5,14" />
+                    </svg>
+                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">Double End</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedShapeTool === "line") {
+                        setActiveTool("none");
+                      } else {
+                        setSelectedShapeTool("line");
+                      }
+                    }}
+                    className={`flex flex-col items-center justify-center gap-1 py-1 rounded-lg transition-all cursor-pointer ${
+                      selectedShapeTool === "line"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-black/15 text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    <div className="w-4 h-0.5 bg-current my-1.5 flex-shrink-0" />
+                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">Line</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedShapeTool === "rect") {
+                        setActiveTool("none");
+                      } else {
+                        setSelectedShapeTool("rect");
+                      }
+                    }}
+                    className={`flex flex-col items-center justify-center gap-1 py-1 rounded-lg transition-all cursor-pointer ${
+                      selectedShapeTool === "rect"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-black/15 text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    <Square className="w-4 h-4 p-0.5 flex-shrink-0" />
+                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">Rectangle</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedShapeTool === "circle") {
+                        setActiveTool("none");
+                      } else {
+                        setSelectedShapeTool("circle");
+                      }
+                    }}
+                    className={`flex flex-col items-center justify-center gap-1 py-1 rounded-lg transition-all cursor-pointer ${
+                      selectedShapeTool === "circle"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "bg-black/15 text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    <Circle className="w-4 h-4 p-0.5 flex-shrink-0" />
+                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">Circle</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {((activeTool === "draw" || activeTool === "blur") || (activeTool === "arrows" && arrowSubTab === "color")) && (
+              <div className="flex flex-col gap-1 w-full animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-extrabold tracking-widest text-[#60a5fa] uppercase">
+                    {activeTool === "draw" ? "DRAW COLOR" : activeTool === "arrows" ? "ARROW & SHAPE COLOR" : "BLUR TINT OVERLAY"}
+                  </span>
+                  {activeTool === "blur" && selectedBlurColor !== "transparent" && (
+                    <button
+                      onClick={() => {
+                        setSelectedBlurColor("transparent");
+                        setTimeout(() => redraw(), 0);
+                      }}
+                      className="text-[10px] text-blue-400 font-extrabold tracking-wider uppercase hover:underline"
+                    >
+                      Clear Tint
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-2 text-center items-center overflow-x-auto py-1.5 no-scrollbar scroll-smooth">
+                  {(activeTool === "draw" || activeTool === "arrows") ? (
+                    textColors.map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => {
+                          setSelectedDrawColor(color);
+                          setTimeout(() => redraw(), 0);
+                        }}
+                        className={`w-7 h-7 shrink-0 rounded-full border-2 transition-all relative flex items-center justify-center ${
+                          selectedDrawColor === color
+                            ? "border-blue-500 scale-110 shadow-lg ring-2 ring-blue-500/20"
+                            : "border-transparent opacity-80 hover:opacity-100 hover:scale-105"
+                        }`}
+                        style={{ backgroundColor: color }}
+                      >
+                        {selectedDrawColor === color && (
+                          <div className="w-1.5 h-1.5 rounded-full bg-black invert select-none" />
+                        )}
+                      </button>
+                    ))
+                  ) : (
+                    // Blur tint options: first one is transparent (No Tint), followed by standard colors
+                    ["transparent", ...textColors].map((color) => (
+                      <button
+                        key={color}
+                        onClick={() => {
+                          setSelectedBlurColor(color);
+                          setTimeout(() => redraw(), 0);
+                        }}
+                        className={`w-7 h-7 shrink-0 rounded-full border-2 transition-all relative flex items-center justify-center ${
+                          selectedBlurColor === color
+                            ? "border-blue-500 scale-110 shadow-lg ring-2 ring-blue-500/20"
+                            : "border-transparent opacity-80 hover:opacity-100 hover:scale-105"
+                        }`}
+                        style={
+                          color === "transparent"
+                            ? {
+                                background:
+                                  "linear-gradient(45deg, #3f3f46 25%, transparent 25%), linear-gradient(-45deg, #3f3f46 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #3f3f46 75%), linear-gradient(-45deg, transparent 75%, #3f3f46 75%)",
+                                backgroundSize: "6px 6px",
+                                backgroundPosition: "0 0, 0 3px, 3px -3px, -3px 0",
+                                backgroundColor: "#1c1c1e",
+                              }
+                            : { backgroundColor: color }
+                        }
+                        title={color === "transparent" ? "No Tint" : color}
+                      >
+                        {color === "transparent" ? (
+                          <span className="text-[10px] font-extrabold text-white/50 select-none">
+                            Ø
+                          </span>
+                        ) : (
+                          selectedBlurColor === color && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-black invert select-none" />
+                          )
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {((activeTool === "draw" || activeTool === "blur") || (activeTool === "arrows" && arrowSubTab === "thickness")) && (
+              /* Premium Brush Size Control Slider */
+              <div className="flex items-center justify-between gap-4 mt-1 w-full bg-transparent p-0 animate-fadeIn">
+                <span className="text-[10px] font-extrabold tracking-widest text-[#60a5fa] uppercase shrink-0">
+                  {activeTool === "arrows" ? "THICKNESS" : "BRUSH SIZE"}: {brushSize}px
+                </span>
+                <div className="flex-1 flex items-center gap-3">
+                  <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">Min</span>
+                  <input
+                    type="range"
+                    min="12"
+                    max="140"
+                    value={brushSize}
+                    onChange={(e) => {
+                      setBrushSize(Number(e.target.value));
+                      setTimeout(() => redraw(), 0);
+                    }}
+                    className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                  <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">Max</span>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
