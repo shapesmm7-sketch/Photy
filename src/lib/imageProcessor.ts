@@ -1170,13 +1170,13 @@ export async function applyStyle(
 
           if (layout.name === "None" && !customCanvasSize) {
             ctx.fillText(
-              "Edited with Shot Clean",
+              "Edited with Photy",
               padding + croppedWidth - canvas.width * 0.015,
               padding + croppedHeight - canvas.height * 0.015,
             );
           } else {
             ctx.fillText(
-              "Edited with Shot Clean",
+              "Edited with Photy",
               canvas.width - canvas.width * 0.03,
               canvas.height - canvas.height * 0.03,
             );

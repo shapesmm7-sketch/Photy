@@ -1,6 +1,6 @@
 workflows:
   native-android:
-    name: Shot Clean Android Build
+    name: Photy Android Build
     max_build_duration: 60
     environment:
       groups:

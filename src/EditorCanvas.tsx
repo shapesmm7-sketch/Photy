@@ -36,13 +36,12 @@ import {
   Circle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { removeBackground } from "@imgly/background-removal";
 import { Styles, PhoneLayouts, applyStyle } from "./lib/imageProcessor";
 import { PHONE_FRAMES } from "./lib/phoneFrames";
 import { translations, LanguageKey } from "./i18n";
 import { admobManager, isNative } from "./lib/admob";
 
-type Tool = "none" | "crop" | "draw" | "blur" | "text" | "sticker" | "adjust" | "size" | "removebg" | "arrows";
+type Tool = "none" | "crop" | "draw" | "blur" | "text" | "sticker" | "adjust" | "size" | "arrows";
 
 interface TextItem {
   text: string;
@@ -579,6 +578,7 @@ export default function EditorCanvas({
   const editorLastTapRef = useRef<number>(0);
 
   const isDraggingPathRef = useRef<boolean>(false);
+  const pathDragEndpointRef = useRef<"move" | "start" | "end">("move");
   const pathDragStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastPathPointsRef = useRef<{ x: number; y: number }[]>([]);
 
@@ -790,11 +790,7 @@ export default function EditorCanvas({
   const [brushSize, setBrushSize] = useState<number>(45);
   const [selectedShapeTool, setSelectedShapeTool] = useState<"arrow" | "tapered_arrow" | "double_arrow" | "rect" | "circle" | "line" >("arrow");
   const [arrowSubTab, setArrowSubTab] = useState<"shape" | "color" | "thickness">("shape");
-  const [isRemovingBackground, setIsRemovingBackground] = useState(false);
   const [isDetectingSensitive, setIsDetectingSensitive] = useState(false);
-  const [removalProgress, setRemovalProgress] = useState(0);
-  const [removalStatus, setRemovalStatus] = useState("");
-  const [preBgRemovalImageSrc, setPreBgRemovalImageSrc] = useState<string | null>(null);
 
   // Size tool states
   const [canvasWidthInput, setCanvasWidthInput] = useState<string>("");
@@ -2274,6 +2270,31 @@ export default function EditorCanvas({
       }
     }
 
+    // Check if we hit the resize handles of the currently selected path first
+    if (editingPathIndex >= 0 && editingPathIndex < paths.length) {
+      const p = paths[editingPathIndex];
+      if (p.shapeType) { // Allow modifying all shape types by endpoints
+        if (p.points.length >= 2) {
+          const start = p.points[0];
+          const end = p.points[p.points.length - 1];
+          const threshold = 30; // generous hit area
+          if (Math.hypot(pt.x - start.x, pt.y - start.y) < threshold) {
+            isDraggingPathRef.current = true;
+            pathDragEndpointRef.current = "start";
+            pathDragStartRef.current = { x: pt.x, y: pt.y };
+            lastPathPointsRef.current = [...p.points];
+            return;
+          } else if (Math.hypot(pt.x - end.x, pt.y - end.y) < threshold) {
+            isDraggingPathRef.current = true;
+            pathDragEndpointRef.current = "end";
+            pathDragStartRef.current = { x: pt.x, y: pt.y };
+            lastPathPointsRef.current = [...p.points];
+            return;
+          }
+        }
+      }
+    }
+
     // Hit test for paths (Draw/Blur/Arrows)
     const clickedPathIndex = paths.findIndex((p) => isPointNearPath(pt, p));
 
@@ -2281,6 +2302,7 @@ export default function EditorCanvas({
       setSelectedTextIndex(null);
       setEditingPathIndex(clickedPathIndex);
       isDraggingPathRef.current = true;
+      pathDragEndpointRef.current = "move";
       pathDragStartRef.current = { x: pt.x, y: pt.y };
       lastPathPointsRef.current = [...paths[clickedPathIndex].points];
       return;
@@ -2470,10 +2492,22 @@ export default function EditorCanvas({
       const newPaths = [...paths];
       const p = newPaths[editingPathIndex];
       const originalPoints = lastPathPointsRef.current;
-      const movedPoints = originalPoints.map(point => ({
-        x: point.x + dx,
-        y: point.y + dy
-      }));
+      
+      let movedPoints = originalPoints;
+      const mode = pathDragEndpointRef.current || "move";
+
+      if (mode === "start" && originalPoints.length >= 2) {
+         movedPoints = [...originalPoints];
+         movedPoints[0] = { x: originalPoints[0].x + dx, y: originalPoints[0].y + dy };
+      } else if (mode === "end" && originalPoints.length >= 2) {
+         movedPoints = [...originalPoints];
+         movedPoints[movedPoints.length - 1] = { x: originalPoints[movedPoints.length - 1].x + dx, y: originalPoints[movedPoints.length - 1].y + dy };
+      } else {
+         movedPoints = originalPoints.map(point => ({
+           x: point.x + dx,
+           y: point.y + dy
+         }));
+      }
       
       const newPath2D = new Path2D();
       if (movedPoints.length > 0) {
@@ -3058,102 +3092,6 @@ export default function EditorCanvas({
       };
       setTexts(nextTexts);
       redraw(undefined, undefined, nextTexts);
-    }
-  };
-
-  const handleRemoveBackground = async () => {
-    if (isRemovingBackground) return;
-    
-    setIsRemovingBackground(true);
-    setRemovalProgress(0);
-    setRemovalStatus("Initializing model...");
-    
-    try {
-      // Scale down image before background removal to prevent memory crashes
-      const img = new Image();
-      img.src = imageSrc;
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-      });
-
-      const MAX_DIMENSION = 1000;
-      let width = img.width;
-      let height = img.height;
-      if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
-        const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
-        width = Math.round(width * ratio);
-        height = Math.round(height * ratio);
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0, width, height);
-      }
-      const blob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.9);
-      });
-
-      const resultBlob = await removeBackground(blob, {
-        publicPath: "https://static.imgly.com/@imgly/background-removal-data/1.7.0/dist/",
-        debug: true,
-        progress: (key, current, total) => {
-          console.log(`BGremo progress: ${key} ${current}/${total}`);
-          setRemovalStatus(key.replace("fetch:", "Downloading ").replace("compute:", "Processing "));
-          if (total > 0) {
-            setRemovalProgress(Math.round((current / total) * 100));
-          }
-        }
-      });
-      
-      setRemovalStatus("Finalizing...");
-      setRemovalProgress(100);
-      
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        const img = new Image();
-        img.onload = () => {
-          setPreBgRemovalImageSrc(imageSrc);
-          styledImageRef.current = img;
-          originalImageRef.current = img;
-          onSave(base64, base64, paths, texts, cropRect, manualCanvasSize, workingOriginalSrc, manualImageOffset, manualImageScale);
-          setIsRemovingBackground(false);
-          setRemovalStatus("");
-          setRemovalProgress(0);
-          setActiveTool("none");
-        };
-        img.onerror = () => {
-          console.error("Failed to load processing result");
-          setIsRemovingBackground(false);
-          setRemovalStatus("Error loading result");
-        };
-        img.src = base64;
-      };
-      reader.readAsDataURL(resultBlob);
-    } catch (error) {
-      console.error("Failed to remove background:", error);
-      setIsRemovingBackground(false);
-      setRemovalStatus("");
-      setRemovalProgress(0);
-      alert("Background removal failed. This can happen on low-memory devices or slow connections.");
-    }
-  };
-
-  const handleUndoRemoveBackground = () => {
-    if (preBgRemovalImageSrc) {
-      const img = new Image();
-      img.onload = () => {
-        styledImageRef.current = img;
-        originalImageRef.current = img;
-        onSave(preBgRemovalImageSrc, preBgRemovalImageSrc, paths, texts, cropRect, manualCanvasSize, workingOriginalSrc, manualImageOffset, manualImageScale);
-        setPreBgRemovalImageSrc(null);
-        setActiveTool("none");
-      };
-      img.src = preBgRemovalImageSrc;
     }
   };
 

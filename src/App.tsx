@@ -604,7 +604,7 @@ export default function App() {
 
   const executeDownload = async () => {
     if (!processedImage) return;
-    await triggerDownloadOfBase64(processedImage, "shot_clean_edited.png");
+    await triggerDownloadOfBase64(processedImage, "photy_edited.png");
   };
 
   const downloadImage = () => {
@@ -652,7 +652,7 @@ export default function App() {
         // Fallback to simple link/text share if file share is restricted
         await navigator.share({
           title: "Edited Screenshot",
-          text: "Check out my screenshot edited with Shot Clean!",
+          text: "Check out my screenshot edited with Photy!",
           url: window.location.origin,
         });
       } else {

@@ -136,7 +136,7 @@ class NativeMediaPlugin : Plugin() {
     }
 
     private fun saveImageToGallery(androidContext: Context, bitmap: Bitmap): Uri? {
-        val filename = "shot_clean_" + System.currentTimeMillis() + ".png"
+        val filename = "photy_" + System.currentTimeMillis() + ".png"
         var imageUri: Uri? = null
 
         try {

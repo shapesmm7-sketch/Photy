@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.shotclean.myapp',
-  appName: 'Shot Clean',
+  appName: 'Photy',
   webDir: 'dist',
   server: {
     androidScheme: 'https'

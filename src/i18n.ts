@@ -1,6 +1,6 @@
 export const translations = {
   en: {
-    appName: "Shot Clean",
+    appName: "Photy",
     subtitle: "Auto screenshots/photo editor, phone layouts, blur, crop, Play Store screenshots, Birthday & Party Stickers, emojis, background colors",
     uploadBtn: "Upload Photo/Screenshot",
     viralStylesTitle: "Viral Styles",
@@ -16,8 +16,8 @@ export const translations = {
     shareApp: "Share App",
     rateUs: "Rate Us",
     rateUsSubtitle: "Rate us on Play Store",
-    rateUsAlert: "Thank you for trying Shot Clean! Support us by leaving a review on the app store.",
-    shareText: "Check out Shot Clean! I use it to transform my screenshots into viral posts.",
+    rateUsAlert: "Thank you for trying Photy! Support us by leaving a review on the app store.",
+    shareText: "Check out Photy! I use it to transform my screenshots into viral posts.",
     shareError: "Web Share is not supported on this browser.",
     language: "Language",
     styles: "Styles",
@@ -45,7 +45,7 @@ export const translations = {
     mobileClose: "Close"
   },
   es: {
-    appName: "Shot Clean",
+    appName: "Photy",
     subtitle: "Capturas virales a un toque. Estilos profesionales y memes.",
     uploadBtn: "Subir Captura",
     viralStylesTitle: "Estilos Virales",
@@ -61,8 +61,8 @@ export const translations = {
     shareApp: "Compartir App",
     rateUs: "Califícanos",
     rateUsSubtitle: "Califícanos en Play Store",
-    rateUsAlert: "¡Gracias por probar Shot Clean! Apóyanos dejando una reseña en la tienda de aplicaciones.",
-    shareText: "¡Mira Shot Clean! Lo uso para transformar mis capturas en posts virales.",
+    rateUsAlert: "¡Gracias por probar Photy! Apóyanos dejando una reseña en la tienda de aplicaciones.",
+    shareText: "¡Mira Photy! Lo uso para transformar mis capturas en posts virales.",
     shareError: "Compartir web no es compatible con este navegador.",
     language: "Idioma",
     styles: "Estilos",
@@ -90,7 +90,7 @@ export const translations = {
     mobileClose: "Cerrar"
   },
   fr: {
-    appName: "Shot Clean",
+    appName: "Photy",
     subtitle: "Captures virales en un clic. Styles pros et mèmes.",
     uploadBtn: "Téléverser",
     viralStylesTitle: "Styles Viraux",
@@ -106,8 +106,8 @@ export const translations = {
     shareApp: "Partager l'App",
     rateUs: "Évaluez-nous",
     rateUsSubtitle: "Évaluez-nous sur Play Store",
-    rateUsAlert: "Merci d'avoir essayé Shot Clean ! Soutenez-nous en laissant un avis sur le store.",
-    shareText: "Regardez Shot Clean ! Je l'utilise pour mes captures d'écran.",
+    rateUsAlert: "Merci d'avoir essayé Photy ! Soutenez-nous en laissant un avis sur le store.",
+    shareText: "Regardez Photy ! Je l'utilise pour mes captures d'écran.",
     shareError: "Le partage web n'est pas supporté.",
     language: "Langue",
     styles: "Styles",
@@ -135,7 +135,7 @@ export const translations = {
     mobileClose: "Fermer"
   },
   de: {
-    appName: "Shot Clean",
+    appName: "Photy",
     subtitle: "Virale Screenshots mit einem Tippen.",
     uploadBtn: "Screenshot hochladen",
     viralStylesTitle: "Virale Stile",
@@ -151,8 +151,8 @@ export const translations = {
     shareApp: "App teilen",
     rateUs: "Bewerten Sie uns",
     rateUsSubtitle: "Bewerten Sie uns im Play Store",
-    rateUsAlert: "Danke, dass Sie Shot Clean ausprobieren! Unterstützen Sie uns mit einer Bewertung im App Store.",
-    shareText: "Schau dir Shot Clean an!",
+    rateUsAlert: "Danke, dass Sie Photy ausprobieren! Unterstützen Sie uns mit einer Bewertung im App Store.",
+    shareText: "Schau dir Photy an!",
     shareError: "Web Share wird nicht unterstützt.",
     language: "Sprache",
     styles: "Stile",
@@ -180,7 +180,7 @@ export const translations = {
     mobileClose: "Schließen"
   },
   hi: {
-    appName: "Shot Clean",
+    appName: "Photy",
     subtitle: "वायरल स्क्रीनशॉट, बस एक टैप दूर।",
     uploadBtn: "अपलोड करें",
     viralStylesTitle: "वायरल स्टाइल्स",
@@ -196,8 +196,8 @@ export const translations = {
     shareApp: "ऐप शेयर करें",
     rateUs: "हमें रेट करें",
     rateUsSubtitle: "प्ले स्टोर पर हमें रेट करें",
-    rateUsAlert: "Shot Clean आज़माने के लिए धन्यवाद! ऐप स्टोर पर रिव्यू देकर हमारा समर्थन करें।",
-    shareText: "Shot Clean देखें! मैं इसका उपयोग वायरल पोस्ट के लिए करता हूँ।",
+    rateUsAlert: "Photy आज़माने के लिए धन्यवाद! ऐप स्टोर पर रिव्यू देकर हमारा समर्थन करें।",
+    shareText: "Photy देखें! मैं इसका उपयोग वायरल पोस्ट के लिए करता हूँ।",
     shareError: "वेब शेयर समर्थित नहीं है।",
     language: "भाषा",
     styles: "स्टाइल्स",
@@ -225,7 +225,7 @@ export const translations = {
     mobileClose: "बंद करें"
   },
   zh: {
-    appName: "Shot Clean",
+    appName: "Photy",
     subtitle: "一键生成病毒式传播的截图。专业风格与梗图。",
     uploadBtn: "上传截图",
     viralStylesTitle: "热门风格",
@@ -241,8 +241,8 @@ export const translations = {
     shareApp: "分享应用",
     rateUs: "评价我们",
     rateUsSubtitle: "在 Play 商店评价我们",
-    rateUsAlert: "感谢试用 Shot Clean！请在应用商店留下您的评价以支持我们。",
-    shareText: "看看Shot Clean！我用它来美化截图。",
+    rateUsAlert: "感谢试用 Photy！请在应用商店留下您的评价以支持我们。",
+    shareText: "看看Photy！我用它来美化截图。",
     shareError: "该浏览器不支持网络分享。",
     language: "语言",
     styles: "风格",
