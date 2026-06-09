@@ -384,7 +384,7 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({ isOpen, 
                   Text Graphics
                 </h2>
                 <p className="text-white/80 font-medium text-[9px] sm:text-[10px] px-2 mt-0.5">
-                  Design and export high-quality text assets instantly.
+                  Convert any text into PDF, PNG, JPG and more. Design and export high-quality text assets instantly.
                 </p>
               </div>
 

@@ -151,7 +151,7 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({ isOpen, onClose,
                   Image Converter
                 </h2>
                 <p className="text-white/80 font-medium text-[9px] sm:text-[10px] px-2 mt-0.5">
-                  High-speed multi-format transformation.
+                  Convert images to PDF, JPG, PNG and more. High-speed multi-format transformation.
                 </p>
               </div>
 
