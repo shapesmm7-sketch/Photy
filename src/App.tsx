@@ -445,6 +445,7 @@ export default function App() {
     e.target.value = "";
 
     setActiveTab("layouts");
+    setSelectedLayout("None");
 
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -738,6 +739,7 @@ export default function App() {
 
   const handleFeaturedClick = (feature: "draw" | "blur" | "watermark" | "pdf" | "resizer" | "arrows" | "converter" | "text") => {
     setActiveQuickFeature(feature);
+    setSelectedLayout("None");
     if (feature === "text") {
       setIsTextModalOpen(true);
     } else {
