@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Type, Download, Check, Palette, Type as FontIcon, Layout, ChevronDown, Share2 } from 'lucide-react';
 import jsPDF from 'jspdf';
 
-import { isNative } from '../lib/admob';
+import { isNative, playRewardedAds } from '../lib/admob';
 
 interface TextConverterModalProps {
   isOpen: boolean;
@@ -192,7 +192,7 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({ isOpen, 
     }
   };
 
-  const handleSave = async () => {
+  const performSave = async () => {
     setIsConverting(true);
     try {
       if (selectedFormat === 'pdf') {
@@ -343,6 +343,14 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({ isOpen, 
       alert('Save failed: ' + e.message);
     } finally {
       setIsConverting(false);
+    }
+  };
+
+  const handleSave = () => {
+    if (!isPremium) {
+      playRewardedAds(performSave);
+    } else {
+      performSave();
     }
   };
 

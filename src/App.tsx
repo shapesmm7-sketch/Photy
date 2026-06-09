@@ -1687,10 +1687,18 @@ export default function App() {
                 newImageScale
               ) => {
                 if (activeQuickFeature) {
-                  await triggerDownloadOfBase64(newImgDataUrl, `${activeQuickFeature}_edited.png`);
-                  setShowEditor(false);
-                  setEditorInitialTool("none");
-                  setActiveQuickFeature(null);
+                  const performSave = async () => {
+                    await triggerDownloadOfBase64(newImgDataUrl, `${activeQuickFeature}_edited.png`);
+                    setShowEditor(false);
+                    setEditorInitialTool("none");
+                    setActiveQuickFeature(null);
+                  };
+
+                  if (!isPremium) {
+                    playRewardedAds(performSave);
+                  } else {
+                    await performSave();
+                  }
                   return;
                 }
 

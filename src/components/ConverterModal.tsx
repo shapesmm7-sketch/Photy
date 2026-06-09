@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Image as ImageIcon, FileText, Download, Check } from 'lucide-react';
 import jsPDF from 'jspdf';
 
-import { isNative } from '../lib/admob';
+import { isNative, playRewardedAds } from '../lib/admob';
 
 interface ConverterModalProps {
   isOpen: boolean;
@@ -29,14 +29,13 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({ isOpen, onClose,
     { id: 'pdf', label: 'PDF', mime: 'application/pdf', color: 'bg-red-500' },
   ];
 
-  const handleConvert = async () => {
-    if (!imageData) return;
+  const performConvert = async () => {
     setIsConverting(true);
 
     try {
       if (selectedFormat === 'pdf') {
         const img = new Image();
-        img.src = imageData;
+        img.src = imageData!;
         await new Promise((resolve) => (img.onload = resolve));
 
         const pdf = new jsPDF({
@@ -45,12 +44,12 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({ isOpen, onClose,
           format: [img.width, img.height],
         });
 
-        pdf.addImage(imageData, 'PNG', 0, 0, img.width, img.height);
+        pdf.addImage(imageData!, 'PNG', 0, 0, img.width, img.height);
         pdf.save('converted_image.pdf');
       } else {
         // Try Client-side first for speed
         const img = new Image();
-        img.src = imageData;
+        img.src = imageData!;
         await new Promise((resolve) => (img.onload = resolve));
 
         const canvas = document.createElement('canvas');
@@ -109,6 +108,15 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({ isOpen, onClose,
       alert(`Conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsConverting(false);
+    }
+  };
+
+  const handleConvert = () => {
+    if (!imageData) return;
+    if (!isPremium) {
+      playRewardedAds(performConvert);
+    } else {
+      performConvert();
     }
   };
 
