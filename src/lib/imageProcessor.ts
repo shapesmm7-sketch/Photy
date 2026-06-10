@@ -798,7 +798,7 @@ function drawDevice(
 }
 
 export async function applyStyle(
-  originalSrc: string,
+  originalSrc: string | HTMLImageElement,
   styleName: string = "Minimal",
   layoutName: string = "None",
   sensitiveAreas: SensitiveArea[] = [],
@@ -807,13 +807,61 @@ export async function applyStyle(
   customCropRect: { x: number; y: number; w: number; h: number } | null = null,
   customCanvasSize: { width: number; height: number } | null = null,
   customImageOffset: { x: number; y: number } = { x: 0, y: 0 },
-  customImageScale: number = 1
+  customImageScale: number = 1,
+  highQuality: boolean = false
 ): Promise<string> {
   try {
     const img = await getCachedImage(originalSrc);
     return new Promise((resolve, reject) => {
       const config = Styles[styleName] || Styles["Minimal"];
       const layout = PhoneLayouts[layoutName] || PhoneLayouts["None"];
+
+      let workingImg: HTMLCanvasElement | HTMLImageElement = img;
+      let scaleRatio = 1;
+
+      // Limit high-res image previews for instant layout/style reactivity
+      if (!highQuality && Math.max(img.width, img.height) > 600) {
+        scaleRatio = 600 / Math.max(img.width, img.height);
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = Math.round(img.width * scaleRatio);
+        tempCanvas.height = Math.round(img.height * scaleRatio);
+        const tempCtx = tempCanvas.getContext("2d");
+        if (tempCtx) {
+          tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
+          workingImg = tempCanvas;
+        }
+      }
+
+      const scaledSensitiveAreas = sensitiveAreas.map((area) => ({
+        ...area,
+        rect: {
+          x: area.rect.x * scaleRatio,
+          y: area.rect.y * scaleRatio,
+          width: area.rect.width * scaleRatio,
+          height: area.rect.height * scaleRatio,
+        },
+      }));
+
+      const scaledCropRect = customCropRect
+        ? {
+            x: customCropRect.x * scaleRatio,
+            y: customCropRect.y * scaleRatio,
+            w: customCropRect.w * scaleRatio,
+            h: customCropRect.h * scaleRatio,
+          }
+        : null;
+
+      const scaledCanvasSize = customCanvasSize
+        ? {
+            width: Math.round(customCanvasSize.width * scaleRatio),
+            height: Math.round(customCanvasSize.height * scaleRatio),
+          }
+        : null;
+
+      const scaledImageOffset = {
+        x: customImageOffset.x * scaleRatio,
+        y: customImageOffset.y * scaleRatio,
+      };
 
       const finishProcessing = (
         frameImgEle: HTMLImageElement | null = null,
@@ -826,16 +874,16 @@ export async function applyStyle(
         }
 
         // Base dimensions for the card content
-        const cropLeft = customCropRect ? customCropRect.x : 0;
-        const cropTop = customCropRect
-          ? customCropRect.y
-          : (customCropRect === null ? 0 : Math.round(img.height * 0.04));
-        const croppedWidth = customCropRect ? customCropRect.w : img.width;
-        const croppedHeight = customCropRect
-          ? customCropRect.h
-          : (customCropRect === null ? img.height : Math.max(
+        const cropLeft = scaledCropRect ? scaledCropRect.x : 0;
+        const cropTop = scaledCropRect
+          ? scaledCropRect.y
+          : (scaledCropRect === null ? 0 : Math.round(workingImg.height * 0.04));
+        const croppedWidth = scaledCropRect ? scaledCropRect.w : workingImg.width;
+        const croppedHeight = scaledCropRect
+          ? scaledCropRect.h
+          : (scaledCropRect === null ? workingImg.height : Math.max(
               1,
-              Math.round(img.height - img.height * 0.04 - img.height * 0.05),
+              Math.round(workingImg.height - workingImg.height * 0.04 - workingImg.height * 0.05),
             ));
 
         // Processing on source canvas
@@ -849,7 +897,7 @@ export async function applyStyle(
         }
 
         sCtx.drawImage(
-          img,
+          workingImg,
           cropLeft,
           cropTop,
           croppedWidth,
@@ -861,7 +909,7 @@ export async function applyStyle(
         );
 
         if (styleName === "Money") {
-          const moneyAreas = sensitiveAreas.filter((a) => a.type === "Amount");
+          const moneyAreas = scaledSensitiveAreas.filter((a) => a.type === "Amount");
           if (moneyAreas.length > 0) {
             const offCanvas = document.createElement("canvas");
             offCanvas.width = croppedWidth;
@@ -910,7 +958,7 @@ export async function applyStyle(
             sCtx.drawImage(offCanvas, cx, cy, cw, ch, cx, cy, cw, ch);
           }
         } else {
-          const areas = sensitiveAreas.filter((a) => a.isBlurred);
+          const areas = scaledSensitiveAreas.filter((a) => a.isBlurred);
           if (areas.length > 0) {
             const offCanvas = document.createElement("canvas");
             offCanvas.width = croppedWidth;
@@ -952,9 +1000,9 @@ export async function applyStyle(
         let contentW = croppedWidth + padding * 2;
         let contentH = croppedHeight + padding * 2;
 
-        if (customCanvasSize) {
-          canvas.width = customCanvasSize.width;
-          canvas.height = customCanvasSize.height;
+        if (scaledCanvasSize) {
+          canvas.width = scaledCanvasSize.width;
+          canvas.height = scaledCanvasSize.height;
         } else {
           canvas.width = contentW;
           canvas.height = contentH;
@@ -972,13 +1020,13 @@ export async function applyStyle(
         let contentX = 0;
         let contentY = 0;
 
-        if (customCanvasSize) {
+        if (scaledCanvasSize) {
           // Use Math.min instead of Math.max to fit the styled shot inside the custom dimensions, leaving background padding & shadow visible!
           contentScale = Math.min(canvas.width / contentW, canvas.height / contentH) * customImageScale * 0.9;
           const drawW = contentW * contentScale;
           const drawH = contentH * contentScale;
-          contentX = (canvas.width - drawW) / 2 + customImageOffset.x;
-          contentY = (canvas.height - drawH) / 2 + customImageOffset.y;
+          contentX = (canvas.width - drawW) / 2 + scaledImageOffset.x;
+          contentY = (canvas.height - drawH) / 2 + scaledImageOffset.y;
         }
 
         // Background drawing logic
@@ -1214,7 +1262,7 @@ export async function applyStyle(
           ctx.font = `${Math.max(12, referenceWidth * 0.024)}px sans-serif`;
           ctx.textAlign = "right";
 
-          if (layout.name === "None" && !customCanvasSize) {
+          if (layout.name === "None" && !scaledCanvasSize) {
             ctx.fillText(
               "Edited with Photy",
               padding + croppedWidth - canvas.width * 0.015,

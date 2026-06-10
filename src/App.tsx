@@ -126,6 +126,30 @@ export default function App() {
   const [cleanImage, setCleanImage] = useState<string | null>(null); // Clean version for editor (un-baked)
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [baseStyledImage, setBaseStyledImage] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const generateHighQualityImage = async (): Promise<string> => {
+    if (originalImage && loadedOriginalImage) {
+      const hdBase = await applyStyle(
+        loadedOriginalImage,
+        selectedStyle,
+        selectedLayout,
+        sensitiveAreas,
+        blurStrength,
+        customBgColor,
+        customCropRect,
+        customCanvasSize,
+        customImageOffset,
+        customImageScale,
+        true // highQuality = true
+      );
+      if (editorPaths.length > 0 || editorTexts.length > 0) {
+        return await burnEditsToImage(hdBase, editorPaths, editorTexts);
+      }
+      return hdBase;
+    }
+    return processedImage || "";
+  };
   const [customCropRect, setCustomCropRect] = useState<{
     x: number;
     y: number;
@@ -470,8 +494,19 @@ export default function App() {
     // Clear input value so selecting the same file works
     e.target.value = "";
 
-    setActiveTab("layouts");
+    // Reset style, layout, custom background and features to clean slate on new photo upload
+    setActiveTab("styles");
+    setSelectedStyle("Original");
     setSelectedLayout("None");
+    setCustomBgColor(null);
+    setBlurStrength(15);
+    setSensitiveAreas([]);
+    setMemeTopText("TOP TEXT");
+    setMemeBottomText("BOTTOM TEXT");
+    setCustomImageOffset({ x: 0, y: 0 });
+    setCustomImageScale(1);
+    setZoomScale(1);
+    setZoomOffset({ x: 0, y: 0 });
 
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -640,11 +675,23 @@ export default function App() {
   };
 
   const executeDownload = async () => {
-    if (!processedImage) return;
-    await triggerDownloadOfBase64(processedImage, "photy_edited.png");
+    setIsExporting(true);
+    try {
+      const hdImage = await generateHighQualityImage();
+      if (!hdImage) return;
+      await triggerDownloadOfBase64(hdImage, "photy_edited.png");
+    } catch (e) {
+      console.error("HD render failed, fallback to low-res preview:", e);
+      if (processedImage) {
+        await triggerDownloadOfBase64(processedImage, "photy_edited.png");
+      }
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const downloadImage = () => {
+    if (isExporting) return;
     if (!isPremium) {
       playRewardedAds(executeDownload);
       return;
@@ -653,71 +700,83 @@ export default function App() {
   };
 
   const executeShare = async () => {
-    if (!processedImage) return;
-
-    if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
-      try {
-        const NativeMedia = registerPlugin<any>("NativeMedia");
-        const cleanBase64 = processedImage.includes(",")
-          ? processedImage.split(",")[1]
-          : processedImage;
-        await NativeMedia.shareImage({ base64: cleanBase64 });
-        return;
-      } catch (nativeErr: any) {
-        console.error(
-          "Native share failed, trying Web share fallback:",
-          nativeErr,
-        );
-      }
-    }
-
+    setIsExporting(true);
     try {
-      const response = await fetch(processedImage);
-      const blob = await response.blob();
-      const file = new File([blob], "edited_screenshot.png", {
-        type: blob.type,
-      });
+      const hdImage = await generateHighQualityImage();
+      if (!hdImage) return;
 
-      // Attempt the full Web Share API for native file sharing
-      if (
-        navigator.share &&
-        navigator.canShare &&
-        navigator.canShare({ files: [file] })
-      ) {
-        await navigator.share({
-          files: [file],
-          title: "Edited Screenshot",
-        });
-      } else if (navigator.share) {
-        // Fallback to simple link/text share if file share is restricted
-        await navigator.share({
-          title: "Edited Screenshot",
-          text: "Check out my screenshot edited with Photy!",
-          url: window.location.origin,
-        });
-      } else {
-        // Ultimate fallback: save to clipboard + trigger direct download
-        if (navigator.clipboard && window.ClipboardItem) {
-          try {
-            await navigator.clipboard.write([
-              new ClipboardItem({
-                [blob.type]: blob,
-              }),
-            ]);
-            console.log("Screenshot copied to clipboard as share fallback.");
-          } catch (clipErr) {
-            console.warn("Clipboard share backup failed:", clipErr);
-          }
+      if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
+        try {
+          const NativeMedia = registerPlugin<any>("NativeMedia");
+          const cleanBase64 = hdImage.includes(",")
+            ? hdImage.split(",")[1]
+            : hdImage;
+          await NativeMedia.shareImage({ base64: cleanBase64 });
+          return;
+        } catch (nativeErr: any) {
+          console.error(
+            "Native share failed, trying Web share fallback:",
+            nativeErr,
+          );
         }
-        executeDownload();
       }
-    } catch (err) {
-      console.error("Web Share failed, downloading file instead", err);
-      executeDownload();
+
+      try {
+        const response = await fetch(hdImage);
+        const blob = await response.blob();
+        const file = new File([blob], "edited_screenshot.png", {
+          type: blob.type,
+        });
+
+        // Attempt the full Web Share API for native file sharing
+        if (
+          navigator.share &&
+          navigator.canShare &&
+          navigator.canShare({ files: [file] })
+        ) {
+          await navigator.share({
+            files: [file],
+            title: "Edited Screenshot",
+          });
+        } else if (navigator.share) {
+          // Fallback to simple link/text share if file share is restricted
+          await navigator.share({
+            title: "Edited Screenshot",
+            text: "Check out my screenshot edited with Photy!",
+            url: window.location.origin,
+          });
+        } else {
+          // Ultimate fallback: save to clipboard + trigger direct download
+          if (navigator.clipboard && window.ClipboardItem) {
+            try {
+              await navigator.clipboard.write([
+                new ClipboardItem({
+                  [blob.type]: blob,
+                }),
+              ]);
+              console.log("Screenshot copied to clipboard as share fallback.");
+            } catch (clipErr) {
+              console.warn("Clipboard share backup failed:", clipErr);
+            }
+          }
+          await triggerDownloadOfBase64(hdImage, "photy_edited.png");
+        }
+      } catch (err) {
+        console.error("Web Share failed, downloading file instead", err);
+        await triggerDownloadOfBase64(hdImage, "photy_edited.png");
+      }
+    } catch (e) {
+      console.error("HD share render failed, fallback to low-res preview:", e);
+      if (processedImage) {
+        await triggerDownloadOfBase64(processedImage, "photy_edited.png");
+      }
+    } finally {
+      setIsExporting(false);
     }
   };
 
   const shareImage = () => {
+    if (isExporting) return;
     if (!isPremium) {
       playRewardedAds(executeShare);
       return;
@@ -1011,7 +1070,22 @@ export default function App() {
             <div className="h-[74%] max-h-[74%] bg-[#F1F5F9] p-3 flex items-center justify-center overflow-hidden relative select-none shrink-0 border-b border-gray-100">
               {/* Absolute Close/Reset Button inside the Preview Area */}
               <button
-                onClick={() => setAppState("upload")}
+                onClick={() => {
+                  setAppState("upload");
+                  setSelectedStyle("Original");
+                  setSelectedLayout("None");
+                  setCustomBgColor(null);
+                  setBlurStrength(15);
+                  setSensitiveAreas([]);
+                  setMemeTopText("TOP TEXT");
+                  setMemeBottomText("BOTTOM TEXT");
+                  setCustomImageOffset({ x: 0, y: 0 });
+                  setCustomImageScale(1);
+                  setZoomScale(1);
+                  setZoomOffset({ x: 0, y: 0 });
+                  setEditorPaths([]);
+                  setEditorTexts([]);
+                }}
                 className="absolute bottom-3.5 left-3.5 z-30 p-2 bg-white/95 hover:bg-white text-gray-700 hover:text-gray-900 backdrop-blur rounded-full shadow border border-gray-200/50 transition-all active:scale-95 cursor-pointer"
                 title={t("startOverBtn")}
               >
@@ -1999,8 +2073,9 @@ export default function App() {
                       onClick={async () => {
                         setIsGeneratingPdf(true);
                         try {
+                          const hdImage = await generateHighQualityImage();
                           await convertPhotoToPdf(
-                            processedImage || cleanImage || originalImage!,
+                            hdImage || cleanImage || originalImage!,
                             {
                               pageSize: pdfPageSize,
                               orientation: pdfOrientation,
