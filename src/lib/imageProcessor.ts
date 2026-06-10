@@ -668,21 +668,14 @@ function drawDevice(
 
       ctx.save();
       ctx.translate(screenX + screenW / 2, screenY + screenH / 2);
-
-      let drawW = screenW;
-      let drawH = screenW / imgRatio;
-      if (drawH < screenH) {
-        drawH = screenH;
-        drawW = screenH * imgRatio;
-      }
       
       // Draw foreground
       ctx.filter = "none";
       if (shouldRotate) {
         ctx.rotate(-Math.PI / 2);
-        ctx.drawImage(img, -drawH / 2, -drawW / 2, drawH, drawW);
+        ctx.drawImage(img, -screenH / 2, -screenW / 2, screenH, screenW);
       } else {
-        ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+        ctx.drawImage(img, -screenW / 2, -screenH / 2, screenW, screenH);
       }
       ctx.restore();
       ctx.restore();
@@ -759,21 +752,13 @@ function drawDevice(
   const screenRatio = screenW / screenH;
 
   ctx.save();
-  // Cover fit for foreground
-  let drawW = screenW;
-  let drawH = screenW / imgRatio;
-  if (drawH < screenH) {
-    drawH = screenH;
-    drawW = screenH * imgRatio;
-  }
-
   // Draw foreground
   ctx.filter = "none";
   if (shouldRotate) {
     ctx.rotate(-Math.PI / 2);
-    ctx.drawImage(img, -drawH / 2, -drawW / 2, drawH, drawW);
+    ctx.drawImage(img, -screenH / 2, -screenW / 2, screenH, screenW);
   } else {
-    ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+    ctx.drawImage(img, -screenW / 2, -screenH / 2, screenW, screenH);
   }
   ctx.restore();
 

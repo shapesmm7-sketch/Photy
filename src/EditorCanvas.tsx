@@ -525,14 +525,7 @@ export default function EditorCanvas({
       const imgRatio = virtualImgW / virtualImgH;
       const screenRatio = screenW / screenH;
 
-      let drawW = screenW;
-      let drawH = screenW / imgRatio;
-      if (drawH > screenH) {
-        drawH = screenH;
-        drawW = screenH * imgRatio;
-      }
-
-      const scale = drawW / rect.w;
+      const scale = screenW / rect.w;
 
       return {
         centerX: devX + screenCenterX,
