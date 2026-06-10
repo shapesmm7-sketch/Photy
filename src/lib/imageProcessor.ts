@@ -808,7 +808,9 @@ export async function applyStyle(
   customCanvasSize: { width: number; height: number } | null = null,
   customImageOffset: { x: number; y: number } = { x: 0, y: 0 },
   customImageScale: number = 1,
-  highQuality: boolean = false
+  highQuality: boolean = false,
+  resizeMode: "cover" | "fit_no_border" | "fit_border" | "stretch" = "stretch",
+  resizerBg: string = "transparent"
 ): Promise<string> {
   try {
     const img = await getCachedImage(originalSrc);
@@ -818,19 +820,6 @@ export async function applyStyle(
 
       let workingImg: HTMLCanvasElement | HTMLImageElement = img;
       let scaleRatio = 1;
-
-      // Limit high-res image previews for instant layout/style reactivity
-      if (!highQuality && Math.max(img.width, img.height) > 600) {
-        scaleRatio = 600 / Math.max(img.width, img.height);
-        const tempCanvas = document.createElement("canvas");
-        tempCanvas.width = Math.round(img.width * scaleRatio);
-        tempCanvas.height = Math.round(img.height * scaleRatio);
-        const tempCtx = tempCanvas.getContext("2d");
-        if (tempCtx) {
-          tempCtx.drawImage(img, 0, 0, tempCanvas.width, tempCanvas.height);
-          workingImg = tempCanvas;
-        }
-      }
 
       const scaledSensitiveAreas = sensitiveAreas.map((area) => ({
         ...area,
@@ -1016,64 +1005,121 @@ export async function applyStyle(
           ctx.filter = "none";
         }
 
-        let contentScale = 1;
+        let contentScaleX = 1;
+        let contentScaleY = 1;
         let contentX = 0;
         let contentY = 0;
 
         if (scaledCanvasSize) {
-          // Use Math.min instead of Math.max to fit the styled shot inside the custom dimensions, leaving background padding & shadow visible!
-          contentScale = Math.min(canvas.width / contentW, canvas.height / contentH) * customImageScale * 0.9;
-          const drawW = contentW * contentScale;
-          const drawH = contentH * contentScale;
-          contentX = (canvas.width - drawW) / 2 + scaledImageOffset.x;
-          contentY = (canvas.height - drawH) / 2 + scaledImageOffset.y;
+          if (layoutName !== "None") {
+            // Map layout directly to the target canvas size to prevent letterboxing/pillarboxing.
+            // This ensures that the layout and the phone mockup scale perfectly and proportionally with the background!
+            contentW = canvas.width;
+            contentH = canvas.height;
+
+            contentScaleX = customImageScale;
+            contentScaleY = customImageScale;
+            contentX = (canvas.width - canvas.width * customImageScale) / 2 + scaledImageOffset.x;
+            contentY = (canvas.height - canvas.height * customImageScale) / 2 + scaledImageOffset.y;
+          } else {
+            // Original (None) screenshot layout
+            if (resizeMode === "stretch") {
+              contentScaleX = canvas.width / contentW;
+              contentScaleY = canvas.height / contentH;
+              contentX = scaledImageOffset.x;
+              contentY = scaledImageOffset.y;
+            } else {
+              const isFitBorder = resizeMode === "fit_border";
+              const scaleFunc = isFitBorder ? Math.min : Math.max;
+              const scale = scaleFunc(canvas.width / contentW, canvas.height / contentH) * customImageScale;
+              contentScaleX = scale;
+              contentScaleY = scale;
+              const drawW = contentW * scale;
+              const drawH = contentH * scale;
+              contentX = (canvas.width - drawW) / 2 + scaledImageOffset.x;
+              contentY = (canvas.height - drawH) / 2 + scaledImageOffset.y;
+            }
+          }
         }
 
         // Background drawing logic
-        if (customBg) {
-          if (customBg.includes(",")) {
-            const colors = customBg.split(",");
+        let drewResizerBg = false;
+        if (scaledCanvasSize && resizeMode === "fit_border" && resizerBg !== "transparent") {
+          if (resizerBg === "blur") {
+            const blurCanvas = document.createElement("canvas");
+            blurCanvas.width = canvas.width;
+            blurCanvas.height = canvas.height;
+            const bCtx = blurCanvas.getContext("2d");
+            if (bCtx) {
+              bCtx.drawImage(
+                workingImg,
+                cropLeft,
+                cropTop,
+                croppedWidth,
+                croppedHeight,
+                0,
+                0,
+                canvas.width,
+                canvas.height,
+              );
+              ctx.save();
+              ctx.filter = `blur(${Math.max(25, Math.round(Math.max(canvas.width, canvas.height) * 0.04))}px)`;
+              ctx.drawImage(blurCanvas, 0, 0);
+              ctx.restore();
+            }
+          } else {
+            ctx.fillStyle = resizerBg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+          drewResizerBg = true;
+        }
+
+        if (!drewResizerBg) {
+          if (customBg) {
+            if (customBg.includes(",")) {
+              const colors = customBg.split(",");
+              const grad = ctx.createLinearGradient(
+                0,
+                0,
+                canvas.width,
+                canvas.height,
+              );
+              colors.forEach((color, i, arr) => {
+                grad.addColorStop(i / (arr.length - 1), color.trim());
+              });
+              ctx.fillStyle = grad;
+            } else {
+              ctx.fillStyle = customBg;
+            }
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          } else if (styleName === "Original" && layout.name === "None") {
+            // No background filling necessary for plain image
+          } else if (layout.name !== "None" && styleName === "Original") {
+            ctx.fillStyle = layout.themeColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          } else if (config.bgGradient) {
             const grad = ctx.createLinearGradient(
               0,
               0,
               canvas.width,
               canvas.height,
             );
-            colors.forEach((color, i, arr) => {
-              grad.addColorStop(i / (arr.length - 1), color.trim());
+            config.bgGradient.forEach((color, i, arr) => {
+              grad.addColorStop(i / (arr.length - 1), color);
             });
             ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
           } else {
-            ctx.fillStyle = customBg;
+            ctx.fillStyle = config.bgColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
           }
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        } else if (styleName === "Original" && layout.name === "None") {
-          // No background filling necessary for plain image
-        } else if (layout.name !== "None" && styleName === "Original") {
-          ctx.fillStyle = layout.themeColor;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        } else if (config.bgGradient) {
-          const grad = ctx.createLinearGradient(
-            0,
-            0,
-            canvas.width,
-            canvas.height,
-          );
-          config.bgGradient.forEach((color, i, arr) => {
-            grad.addColorStop(i / (arr.length - 1), color);
-          });
-          ctx.fillStyle = grad;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        } else {
-          ctx.fillStyle = config.bgColor;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
         // Center content mapping
         ctx.save();
         if (customCanvasSize) {
           ctx.translate(contentX, contentY);
-          ctx.scale(contentScale, contentScale);
+          ctx.scale(contentScaleX, contentScaleY);
         }
 
         // Decorative lines for layouts removed per user request
@@ -1170,8 +1216,11 @@ export async function applyStyle(
           placements.forEach((p) => {
             const devX = contentW * p.x;
             const devY = contentH * p.y;
-            const maxWidth = contentW * p.scale;
-            const maxHeight = contentH * p.scale;
+            // When a custom canvas size is set, let the device frame render beautifully and professionally.
+            // A subtle boost (like 1.05x) makes it prominent without overflowing and covering the background entirely.
+            const finalScale = scaledCanvasSize ? Math.min(0.95, p.scale * 1.05) : p.scale;
+            const maxWidth = contentW * finalScale;
+            const maxHeight = contentH * finalScale;
             drawDevice(
               ctx,
               sourceCanvas,

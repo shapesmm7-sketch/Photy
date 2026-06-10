@@ -141,7 +141,9 @@ export default function App() {
         customCanvasSize,
         customImageOffset,
         customImageScale,
-        true // highQuality = true
+        true, // highQuality = true
+        customResizeMode,
+        customResizerBg
       );
       if (editorPaths.length > 0 || editorTexts.length > 0) {
         return await burnEditsToImage(hdBase, editorPaths, editorTexts);
@@ -165,6 +167,8 @@ export default function App() {
     y: number;
   }>({ x: 0, y: 0 });
   const [customImageScale, setCustomImageScale] = useState<number>(1);
+  const [customResizeMode, setCustomResizeMode] = useState<"cover" | "fit_no_border" | "fit_border" | "stretch">("stretch");
+  const [customResizerBg, setCustomResizerBg] = useState<string>("transparent");
   const [showEditor, setShowEditor] = useState(false);
 
   // Quick Landing Feature states
@@ -425,6 +429,9 @@ export default function App() {
         customCanvasSize,
         customImageOffset,
         customImageScale,
+        false, // highQuality = false
+        customResizeMode,
+        customResizerBg
       )
         .then((res) => {
           setBaseStyledImage(res);
@@ -479,6 +486,8 @@ export default function App() {
     customCanvasSize,
     customImageOffset,
     customImageScale,
+    customResizeMode,
+    customResizerBg,
     editorPaths,
     editorTexts,
     showEditor,
@@ -495,7 +504,7 @@ export default function App() {
     e.target.value = "";
 
     // Reset style, layout, custom background and features to clean slate on new photo upload
-    setActiveTab("styles");
+    setActiveTab("layouts");
     setSelectedStyle("Original");
     setSelectedLayout("None");
     setCustomBgColor(null);
@@ -1072,6 +1081,7 @@ export default function App() {
               <button
                 onClick={() => {
                   setAppState("upload");
+                  setActiveTab("layouts");
                   setSelectedStyle("Original");
                   setSelectedLayout("None");
                   setCustomBgColor(null);
@@ -1833,6 +1843,8 @@ export default function App() {
                 newOriginalSrc,
                 newImageOffset,
                 newImageScale,
+                newResizeMode,
+                newResizerBg,
               ) => {
                 if (activeQuickFeature) {
                   const performSave = async () => {
@@ -1865,6 +1877,12 @@ export default function App() {
                     setCustomCanvasSize(customSize);
                   } else if (customSize === null) {
                     setCustomCanvasSize(null);
+                  }
+                  if (newResizeMode) {
+                    setCustomResizeMode(newResizeMode);
+                  }
+                  if (newResizerBg) {
+                    setCustomResizerBg(newResizerBg);
                   }
                   if (newImageOffset) {
                     setCustomImageOffset(newImageOffset);

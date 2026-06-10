@@ -160,7 +160,9 @@ interface EditorCanvasProps {
     customSize?: { width: number; height: number } | null,
     newOriginalSrc?: string,
     manualImageOffset?: { x: number; y: number },
-    manualImageScale?: number
+    manualImageScale?: number,
+    customResizeMode?: "cover" | "fit_no_border" | "fit_border" | "stretch",
+    customResizerBg?: string
   ) => void;
   onCancel: () => void;
   styleName?: string;
@@ -1065,7 +1067,13 @@ export default function EditorCanvas({
           [],
           15,
           customBg,
-          finalCrop
+          finalCrop,
+          manualCanvasSize,
+          manualImageOffset,
+          manualImageScale,
+          false,
+          resizeMode,
+          resizerBg
         );
         const img = new Image();
         if (!newPreviewSrc.startsWith("data:")) {
@@ -1085,7 +1093,7 @@ export default function EditorCanvas({
     }, 10);
 
     return () => clearTimeout(timer);
-  }, [currentCleanSrc, workingOriginalSrc, cropRect, styleName, layoutName, customBg]);
+  }, [currentCleanSrc, workingOriginalSrc, cropRect, styleName, layoutName, customBg, manualCanvasSize, manualImageOffset, manualImageScale, resizeMode, resizerBg]);
 
   const handleAutoDetectSensitive = async () => {
     const rawImg = rawScreenshotRef.current || originalImageRef.current;
@@ -3239,7 +3247,13 @@ export default function EditorCanvas({
         [],
         15,
         customBg || null,
-        cropRect
+        cropRect,
+        manualCanvasSize,
+        manualImageOffset,
+        manualImageScale,
+        false,
+        resizeMode,
+        resizerBg
       );
 
       // 3. Load these images into refs so the editor instantly switches to the new styled mockup base
@@ -3268,7 +3282,9 @@ export default function EditorCanvas({
           manualCanvasSize,
           workingOriginalSrc,
           manualImageOffset,
-          manualImageScale
+          manualImageScale,
+          resizeMode,
+          resizerBg
         );
 
         // Force a redraw with the new image loaded. Since we now set the styled image,
@@ -3333,7 +3349,9 @@ export default function EditorCanvas({
           manualCanvasSize,
           workingOriginalSrc,
           manualImageOffset,
-          manualImageScale
+          manualImageScale,
+          resizeMode,
+          resizerBg
         );
       }
     }
