@@ -67,13 +67,8 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, size, size);
 
-      // Calculate aspect ratio to fit image into center
-      const scale = Math.max(size / img.width, size / img.height);
-      const gw = img.width * scale;
-      const gh = img.height * scale;
-
-      // Draw centered
-      ctx.drawImage(img, (size - gw) / 2, (size - gh) / 2, gw, gh);
+      // Stretch to fit the square icon exactly so no parts are cut off
+      ctx.drawImage(img, 0, 0, size, size);
 
       resolve(canvas.toDataURL("image/png").split(",")[1]);
     });

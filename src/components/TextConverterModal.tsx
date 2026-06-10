@@ -38,14 +38,31 @@ const FONTS = [
 const COLORS = [
   "#000000",
   "#ffffff",
-  "#ef4444",
-  "#f97316",
-  "#f59e0b",
-  "#10b981",
-  "#3b82f6",
-  "#6366f1",
-  "#a855f7",
-  "#ec4899",
+  "#ef4444", // red-500
+  "#f97316", // orange-500
+  "#f59e0b", // amber-500
+  "#10b981", // emerald-500
+  "#3b82f6", // blue-500
+  "#6366f1", // indigo-500
+  "#a855f7", // purple-500
+  "#ec4899", // pink-500
+  // Muted / dark / less shining colors
+  "#f8fafc", // slate-50
+  "#94a3b8", // slate-400
+  "#475569", // slate-600
+  "#1e293b", // slate-800
+  "#0f172a", // slate-900
+  "#7f1d1d", // red-900
+  "#7c2d12", // orange-900
+  "#064e3b", // emerald-900
+  "#1e3a8a", // blue-900
+  "#312e81", // indigo-900
+  "#581c87", // purple-900
+  "#831843", // pink-900
+  "#fafaf9", // stone-50
+  "#a8a29e", // stone-400
+  "#57534e", // stone-600
+  "#1c1917", // stone-900
 ];
 
 export const TextConverterModal: React.FC<TextConverterModalProps> = ({
@@ -641,12 +658,12 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
                               <label className="flex items-center gap-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
                                 <Palette className="w-3 h-3" /> Text Color
                               </label>
-                              <div className="flex flex-wrap gap-1.5">
+                              <div className="flex overflow-x-auto gap-2 py-1.5 px-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                                 {COLORS.map((c) => (
                                   <button
                                     key={c}
                                     onClick={() => setTextColor(c)}
-                                    className={`w-6 h-6 rounded-full border border-black/10 transition-transform active:scale-75 ${textColor === c ? "scale-110 ring-2 ring-purple-500" : ""}`}
+                                    className={`w-6 h-6 rounded-full border border-black/10 transition-transform active:scale-75 shrink-0 ${textColor === c ? "scale-110 ring-2 ring-purple-500" : ""}`}
                                     style={{ backgroundColor: c }}
                                   />
                                 ))}
@@ -656,12 +673,12 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
                               <label className="flex items-center gap-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
                                 <Layout className="w-3 h-3" /> Background
                               </label>
-                              <div className="flex flex-wrap gap-1.5">
+                              <div className="flex overflow-x-auto gap-2 py-1.5 px-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                                 {COLORS.map((c) => (
                                   <button
                                     key={c}
                                     onClick={() => setBgColor(c)}
-                                    className={`w-6 h-6 rounded-full border border-black/10 transition-transform active:scale-75 ${bgColor === c ? "scale-110 ring-2 ring-purple-500" : ""}`}
+                                    className={`w-6 h-6 rounded-full border border-black/10 transition-transform active:scale-75 shrink-0 ${bgColor === c ? "scale-110 ring-2 ring-purple-500" : ""}`}
                                     style={{ backgroundColor: c }}
                                   />
                                 ))}
@@ -673,10 +690,10 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
                             <label className="flex items-center gap-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
                               <Type className="w-3 h-3" /> Shadow Color
                             </label>
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className="flex overflow-x-auto gap-2 py-1.5 px-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                               <button
                                 onClick={() => setShadowColor("transparent")}
-                                className={`w-6 h-6 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center transition-transform active:scale-75 ${shadowColor === "transparent" ? "scale-110 ring-2 ring-purple-500" : ""}`}
+                                className={`w-6 h-6 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center transition-transform active:scale-75 shrink-0 ${shadowColor === "transparent" ? "scale-110 ring-2 ring-purple-500" : ""}`}
                               >
                                 <X className="w-3 h-3 text-slate-400" />
                               </button>
@@ -684,7 +701,7 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
                                 <button
                                   key={c}
                                   onClick={() => setShadowColor(c)}
-                                  className={`w-6 h-6 rounded-full border border-black/10 transition-transform active:scale-75 ${shadowColor === c ? "scale-110 ring-2 ring-purple-500" : ""}`}
+                                  className={`w-6 h-6 rounded-full border border-black/10 transition-transform active:scale-75 shrink-0 ${shadowColor === c ? "scale-110 ring-2 ring-purple-500" : ""}`}
                                   style={{ backgroundColor: c }}
                                 />
                               ))}
@@ -693,13 +710,12 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
 
                           <div className="space-y-2 pt-2 border-t border-slate-100">
                             <label className="flex items-center gap-2 text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
-                              <Layout className="w-3 h-3 rotate-45" /> Stroke
-                              Color
+                              <Layout className="w-3 h-3 rotate-45" /> Stroke Color
                             </label>
-                            <div className="flex flex-wrap gap-1.5">
+                            <div className="flex overflow-x-auto gap-2 py-1.5 px-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                               <button
                                 onClick={() => setStrokeColor("transparent")}
-                                className={`w-6 h-6 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center transition-transform active:scale-75 ${strokeColor === "transparent" ? "scale-110 ring-2 ring-purple-500" : ""}`}
+                                className={`w-6 h-6 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center transition-transform active:scale-75 shrink-0 ${strokeColor === "transparent" ? "scale-110 ring-2 ring-purple-500" : ""}`}
                               >
                                 <X className="w-3 h-3 text-slate-400" />
                               </button>
@@ -707,7 +723,7 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
                                 <button
                                   key={c}
                                   onClick={() => setStrokeColor(c)}
-                                  className={`w-6 h-6 rounded-full border border-black/10 transition-transform active:scale-75 ${strokeColor === c ? "scale-110 ring-2 ring-purple-500" : ""}`}
+                                  className={`w-6 h-6 rounded-full border border-black/10 transition-transform active:scale-75 shrink-0 ${strokeColor === c ? "scale-110 ring-2 ring-purple-500" : ""}`}
                                   style={{ backgroundColor: c }}
                                 />
                               ))}
