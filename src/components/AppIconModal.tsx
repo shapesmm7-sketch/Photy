@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Layers, Download, Check } from "lucide-react";
 import JSZip from "jszip";
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import saveAs from "file-saver";
@@ -241,29 +241,15 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
       if (Capacitor.isNativePlatform()) {
         try {
           const fileName = `AppIcons_${new Date().getTime()}.zip`;
-
-          await Filesystem.writeFile({
-            path: fileName,
-            data: zipBase64,
-            directory: Directory.Cache,
-          });
-
-          const uriResult = await Filesystem.getUri({
-            directory: Directory.Cache,
-            path: fileName,
-          });
-
-          await Share.share({
-            title: "App Icons Zip",
-            url: uriResult.uri,
-          });
-
+          const NativeMedia = registerPlugin<any>("NativeMedia");
+          await NativeMedia.saveZip({ base64: zipBase64, filename: fileName });
+          
           setGenerateSuccess(true);
           setTimeout(() => setGenerateSuccess(false), 2000);
           return;
         } catch (nativeErr) {
-          console.error("Native zip share failed", nativeErr);
-          alert("Native File Share Failed: " + (nativeErr as Error).message);
+          console.error("Native zip save failed", nativeErr);
+          alert("Native File Save Failed: " + (nativeErr as Error).message);
         }
       }
 

@@ -61,8 +61,9 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({
 
         if (Capacitor.isNativePlatform()) {
           const NativeMedia = registerPlugin<any>("NativeMedia");
-          const cleanBase64 = imageData!.includes(",") ? imageData!.split(",")[1] : imageData!;
-          await NativeMedia.saveImage({ base64: cleanBase64 });
+          const pdfDataUri = pdf.output("datauristring");
+          const cleanBase64 = pdfDataUri.includes(",") ? pdfDataUri.split(",")[1] : pdfDataUri;
+          await NativeMedia.savePdf({ base64: cleanBase64, filename: "converted_" + Date.now() + ".pdf" });
         } else {
           pdf.save("converted_image.pdf");
         }

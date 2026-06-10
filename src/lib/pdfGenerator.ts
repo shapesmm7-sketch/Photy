@@ -100,10 +100,9 @@ export function convertPhotoToPdf(
 
         if (Capacitor.isNativePlatform()) {
           const NativeMedia = registerPlugin<any>("NativeMedia");
-          // Just save the image source natively if we are on android since
-          // PDF browser download fails in webview
-          const cleanBase64 = imgSrc.includes(",") ? imgSrc.split(",")[1] : imgSrc;
-          NativeMedia.saveImage({ base64: cleanBase64 })
+          const pdfDataUri = doc.output("datauristring");
+          const cleanBase64 = pdfDataUri.includes(",") ? pdfDataUri.split(",")[1] : pdfDataUri;
+          NativeMedia.savePdf({ base64: cleanBase64, filename: filename })
             .then(() => resolve())
             .catch((e: any) => reject(e));
         } else {

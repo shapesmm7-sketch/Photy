@@ -342,12 +342,10 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
         addPageToPdf();
 
         if (Capacitor.isNativePlatform()) {
-          // Fallback to saving highest quality PNG since
-          // NativeMedia only accepts images.
-          const imageData = canvas.toDataURL("image/png", 1.0);
           const NativeMedia = registerPlugin<any>("NativeMedia");
-          const cleanBase64 = imageData.includes(",") ? imageData.split(",")[1] : imageData;
-          await NativeMedia.saveImage({ base64: cleanBase64 });
+          const pdfDataUri = pdf.output("datauristring");
+          const cleanBase64 = pdfDataUri.includes(",") ? pdfDataUri.split(",")[1] : pdfDataUri;
+          await NativeMedia.savePdf({ base64: cleanBase64, filename: "text_document_" + Date.now() + ".pdf" });
         } else {
           pdf.save("text_document.pdf");
         }

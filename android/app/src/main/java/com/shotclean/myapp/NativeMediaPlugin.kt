@@ -91,6 +91,216 @@ class NativeMediaPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun saveZip(call: PluginCall) {
+        val base64Data: String? = call.getString("base64")
+        val filename: String = call.getString("filename", "Archive_" + System.currentTimeMillis() + ".zip") ?: ("Archive_" + System.currentTimeMillis() + ".zip")
+        
+        if (base64Data == null) {
+            call.reject("Base64 string is missing")
+            return
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            if (getPermissionState("storage") != PermissionState.GRANTED) {
+                requestPermissionForAlias("storage", call, "saveZipPermissionCallback")
+                return
+            }
+        }
+
+        executeSaveZipAndResolve(call, base64Data, filename)
+    }
+
+    @PermissionCallback
+    fun saveZipPermissionCallback(call: PluginCall) {
+        if (getPermissionState("storage") == PermissionState.GRANTED) {
+            val base64Data: String = call.getString("base64") ?: ""
+            val filename: String = call.getString("filename", "Archive_" + System.currentTimeMillis() + ".zip") ?: ("Archive_" + System.currentTimeMillis() + ".zip")
+            if (base64Data.isNotEmpty()) {
+                executeSaveZipAndResolve(call, base64Data, filename)
+            } else {
+                call.reject("Missing base64 data after permission approval")
+            }
+        } else {
+            call.reject("Write external storage permission was denied")
+        }
+    }
+
+    private fun executeSaveZipAndResolve(call: PluginCall, base64Str: String, filename: String) {
+        val ctx: Context? = getContext()
+        if (ctx == null) {
+            call.reject("Android Context is unavailable")
+            return
+        }
+        val uri: Uri? = saveZipToDownloads(ctx, base64Str, filename)
+        if (uri != null) {
+            val response = JSObject()
+            response.put("uri", uri.toString())
+            call.resolve(response)
+        } else {
+            call.reject("Failed to save zip natively")
+        }
+    }
+
+    private fun saveZipToDownloads(androidContext: Context, base64Str: String, filename: String): Uri? {
+        var fileUri: Uri? = null
+        try {
+            val cleanBase64 = if (base64Str.contains(",")) {
+                base64Str.substring(base64Str.indexOf(",") + 1)
+            } else {
+                base64Str
+            }
+            val decodedBytes = Base64.decode(cleanBase64, Base64.DEFAULT)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = androidContext.contentResolver
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "application/zip")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/MyApp")
+                }
+                
+                fileUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                if (fileUri != null) {
+                    val fos: OutputStream? = resolver.openOutputStream(fileUri!!)
+                    if (fos != null) {
+                        fos.write(decodedBytes)
+                        fos.flush()
+                        fos.close()
+                    }
+                }
+            } else {
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val myAppDir = File(downloadsDir, "MyApp")
+                if (!myAppDir.exists()) {
+                    myAppDir.mkdirs()
+                }
+                val zipFile = File(myAppDir, filename)
+                fileUri = Uri.fromFile(zipFile)
+                val fos = FileOutputStream(zipFile)
+                fos.write(decodedBytes)
+                fos.flush()
+                fos.close()
+
+                MediaScannerConnection.scanFile(
+                    androidContext,
+                    arrayOf(zipFile.absolutePath),
+                    arrayOf("application/zip"),
+                    null
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null
+        }
+        return fileUri
+    }
+
+    @PluginMethod
+    fun savePdf(call: PluginCall) {
+        val base64Data: String? = call.getString("base64")
+        val filename: String = call.getString("filename", "document_" + System.currentTimeMillis() + ".pdf") ?: ("document_" + System.currentTimeMillis() + ".pdf")
+        
+        if (base64Data == null) {
+            call.reject("Base64 string is missing")
+            return
+        }
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            if (getPermissionState("storage") != PermissionState.GRANTED) {
+                requestPermissionForAlias("storage", call, "savePdfPermissionCallback")
+                return
+            }
+        }
+
+        executeSavePdfAndResolve(call, base64Data, filename)
+    }
+
+    @PermissionCallback
+    fun savePdfPermissionCallback(call: PluginCall) {
+        if (getPermissionState("storage") == PermissionState.GRANTED) {
+            val base64Data: String = call.getString("base64") ?: ""
+            val filename: String = call.getString("filename", "document_" + System.currentTimeMillis() + ".pdf") ?: ("document_" + System.currentTimeMillis() + ".pdf")
+            if (base64Data.isNotEmpty()) {
+                executeSavePdfAndResolve(call, base64Data, filename)
+            } else {
+                call.reject("Missing base64 data after permission approval")
+            }
+        } else {
+            call.reject("Write external storage permission was denied")
+        }
+    }
+
+    private fun executeSavePdfAndResolve(call: PluginCall, base64Str: String, filename: String) {
+        val ctx: Context? = getContext()
+        if (ctx == null) {
+            call.reject("Android Context is unavailable")
+            return
+        }
+        val uri: Uri? = savePdfToDownloads(ctx, base64Str, filename)
+        if (uri != null) {
+            val response = JSObject()
+            response.put("uri", uri.toString())
+            call.resolve(response)
+        } else {
+            call.reject("Failed to save pdf natively")
+        }
+    }
+
+    private fun savePdfToDownloads(androidContext: Context, base64Str: String, filename: String): Uri? {
+        var fileUri: Uri? = null
+        try {
+            val cleanBase64 = if (base64Str.contains(",")) {
+                base64Str.substring(base64Str.indexOf(",") + 1)
+            } else {
+                base64Str
+            }
+            val decodedBytes = Base64.decode(cleanBase64, Base64.DEFAULT)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = androidContext.contentResolver
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/MyApp")
+                }
+                
+                fileUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                if (fileUri != null) {
+                    val fos: OutputStream? = resolver.openOutputStream(fileUri!!)
+                    if (fos != null) {
+                        fos.write(decodedBytes)
+                        fos.flush()
+                        fos.close()
+                    }
+                }
+            } else {
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                val myAppDir = File(downloadsDir, "MyApp")
+                if (!myAppDir.exists()) {
+                    myAppDir.mkdirs()
+                }
+                val pdfFile = File(myAppDir, filename)
+                fileUri = Uri.fromFile(pdfFile)
+                val fos = FileOutputStream(pdfFile)
+                fos.write(decodedBytes)
+                fos.flush()
+                fos.close()
+
+                MediaScannerConnection.scanFile(
+                    androidContext,
+                    arrayOf(pdfFile.absolutePath),
+                    arrayOf("application/pdf"),
+                    null
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null
+        }
+        return fileUri
+    }
+
+    @PluginMethod
     fun shareImage(call: PluginCall) {
         val base64Data: String? = call.getString("base64")
         if (base64Data == null) {
