@@ -37,6 +37,7 @@ import {
 import EditorCanvas from "./EditorCanvas";
 import { convertPhotoToPdf } from "./lib/pdfGenerator";
 import { ConverterModal } from "./components/ConverterModal";
+import { AppIconModal } from "./components/AppIconModal";
 import { TextConverterModal } from "./components/TextConverterModal";
 import { translations, LanguageKey } from "./i18n";
 import { Capacitor, registerPlugin } from "@capacitor/core";
@@ -120,7 +121,8 @@ const EXTENDED_PALETTE = [
 export default function App() {
   const [appState, setAppState] = useState<AppState>("upload");
   const [originalImage, setOriginalImage] = useState<string | null>(null); // Baked version for style
-  const [loadedOriginalImage, setLoadedOriginalImage] = useState<HTMLImageElement | null>(null);
+  const [loadedOriginalImage, setLoadedOriginalImage] =
+    useState<HTMLImageElement | null>(null);
   const [cleanImage, setCleanImage] = useState<string | null>(null); // Clean version for editor (un-baked)
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [baseStyledImage, setBaseStyledImage] = useState<string | null>(null);
@@ -134,21 +136,42 @@ export default function App() {
     width: number;
     height: number;
   } | null>(null);
-  const [customImageOffset, setCustomImageOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [customImageOffset, setCustomImageOffset] = useState<{
+    x: number;
+    y: number;
+  }>({ x: 0, y: 0 });
   const [customImageScale, setCustomImageScale] = useState<number>(1);
   const [showEditor, setShowEditor] = useState(false);
 
   // Quick Landing Feature states
-  const [activeQuickFeature, setActiveQuickFeature] = useState<"draw" | "blur" | "watermark" | "pdf" | "resizer" | "arrows" | "converter" | "text" | null>(null);
+  const [activeQuickFeature, setActiveQuickFeature] = useState<
+    | "draw"
+    | "blur"
+    | "watermark"
+    | "pdf"
+    | "resizer"
+    | "arrows"
+    | "converter"
+    | "text"
+    | "appicons"
+    | null
+  >(null);
   const [editorInitialTool, setEditorInitialTool] = useState<any>("none");
 
   // PDF Export settings
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [isConverterModalOpen, setIsConverterModalOpen] = useState(false);
   const [isTextModalOpen, setIsTextModalOpen] = useState(false);
-  const [pdfPageSize, setPdfPageSize] = useState<"A4" | "Letter" | "Original">("A4");
-  const [pdfOrientation, setPdfOrientation] = useState<"portrait" | "landscape" | "auto">("auto");
-  const [pdfMargin, setPdfMargin] = useState<"none" | "thin" | "normal">("none");
+  const [isAppIconModalOpen, setIsAppIconModalOpen] = useState(false);
+  const [pdfPageSize, setPdfPageSize] = useState<"A4" | "Letter" | "Original">(
+    "A4",
+  );
+  const [pdfOrientation, setPdfOrientation] = useState<
+    "portrait" | "landscape" | "auto"
+  >("auto");
+  const [pdfMargin, setPdfMargin] = useState<"none" | "thin" | "normal">(
+    "none",
+  );
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   // NEW STATES
@@ -363,7 +386,7 @@ export default function App() {
   // Sync processed image when any parameter changes
   React.useEffect(() => {
     if (showEditor) return;
-    
+
     if (originalImage && loadedOriginalImage) {
       setZoomScale(1);
       setZoomOffset({ x: 0, y: 0 });
@@ -377,7 +400,7 @@ export default function App() {
         customCropRect,
         customCanvasSize,
         customImageOffset,
-        customImageScale
+        customImageScale,
       )
         .then((res) => {
           setBaseStyledImage(res);
@@ -443,7 +466,7 @@ export default function App() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     // Clear input value so selecting the same file works
     e.target.value = "";
 
@@ -455,7 +478,9 @@ export default function App() {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const isMobile = Capacitor.isNativePlatform() || (typeof window !== "undefined" && window.innerWidth < 768);
+        const isMobile =
+          Capacitor.isNativePlatform() ||
+          (typeof window !== "undefined" && window.innerWidth < 768);
         const MAX_WIDTH = isMobile ? 1000 : 1400;
         const MAX_HEIGHT = isMobile ? 1000 : 1400;
         let width = img.width;
@@ -500,13 +525,15 @@ export default function App() {
           setEditorPaths([]);
           setCustomCanvasSize(null);
           setCustomCropRect(null); // Full size canvas, no custom template wrapper
-          
+
           if (activeQuickFeature === "pdf") {
             setIsPdfModalOpen(true);
           } else if (activeQuickFeature === "converter") {
             setIsConverterModalOpen(true);
           } else if (activeQuickFeature === "text") {
             setIsTextModalOpen(true);
+          } else if (activeQuickFeature === "appicons") {
+            setIsAppIconModalOpen(true);
           } else {
             if (activeQuickFeature === "draw") {
               setEditorInitialTool("draw");
@@ -534,8 +561,8 @@ export default function App() {
                   fontName: "Space Grotesk",
                   hasShadow: true,
                   shadowColor: "rgba(0, 0, 0, 0.4)",
-                  bgColor: "rgba(0, 0, 0, 0.25)"
-                }
+                  bgColor: "rgba(0, 0, 0, 0.25)",
+                },
               ]);
             }
             setShowEditor(true);
@@ -549,13 +576,18 @@ export default function App() {
 
   const currentDisplayImage = showEditor ? null : processedImage;
 
-  const triggerDownloadOfBase64 = async (base64String: string, defaultFilename: string = "edited_screenshot.png") => {
+  const triggerDownloadOfBase64 = async (
+    base64String: string,
+    defaultFilename: string = "edited_screenshot.png",
+  ) => {
     if (!base64String) return;
 
     if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
       try {
         const NativeMedia = registerPlugin<any>("NativeMedia");
-        const cleanBase64 = base64String.includes(",") ? base64String.split(",")[1] : base64String;
+        const cleanBase64 = base64String.includes(",")
+          ? base64String.split(",")[1]
+          : base64String;
         await NativeMedia.saveImage({ base64: cleanBase64 });
         alert(
           "Image saved directly to your phone gallery under 'Pictures/MyApp'!",
@@ -626,7 +658,9 @@ export default function App() {
     if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
       try {
         const NativeMedia = registerPlugin<any>("NativeMedia");
-        const cleanBase64 = processedImage.includes(",") ? processedImage.split(",")[1] : processedImage;
+        const cleanBase64 = processedImage.includes(",")
+          ? processedImage.split(",")[1]
+          : processedImage;
         await NativeMedia.shareImage({ base64: cleanBase64 });
         return;
       } catch (nativeErr: any) {
@@ -742,7 +776,18 @@ export default function App() {
     }
   };
 
-  const handleFeaturedClick = (feature: "draw" | "blur" | "watermark" | "pdf" | "resizer" | "arrows" | "converter" | "text") => {
+  const handleFeaturedClick = (
+    feature:
+      | "draw"
+      | "blur"
+      | "watermark"
+      | "pdf"
+      | "resizer"
+      | "arrows"
+      | "converter"
+      | "text"
+      | "appicons",
+  ) => {
     setActiveQuickFeature(feature);
     setSelectedLayout("None");
     if (feature === "text") {
@@ -755,7 +800,12 @@ export default function App() {
   return (
     <div
       className={`h-[100dvh] w-full font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col pt-safe ${isDarkMode ? "bg-slate-900 text-white" : "bg-blue-600 text-gray-900"}`}
-      style={{ paddingTop: (!isPremium && isNative) ? 'calc(env(safe-area-inset-top) + 60px)' : undefined }}
+      style={{
+        paddingTop:
+          !isPremium && isNative
+            ? "calc(env(safe-area-inset-top) + 60px)"
+            : undefined,
+      }}
     >
       {/* Banner Ads on top of landing page, main page, and edit page */}
       {!isPremium && <AdMobBanner className="shrink-0 z-[60]" />}
@@ -833,8 +883,12 @@ export default function App() {
             </div>
 
             {/* Quick Actions / Featured Badges */}
-            <div className={`w-full border-t pt-4 ${isDarkMode ? "border-slate-700/60" : "border-white/10"}`}>
-              <p className={`text-[10px] font-extrabold uppercase tracking-widest mb-3 ${isDarkMode ? "text-slate-450" : "text-blue-100/90"}`}>
+            <div
+              className={`w-full border-t pt-4 ${isDarkMode ? "border-slate-700/60" : "border-white/10"}`}
+            >
+              <p
+                className={`text-[10px] font-extrabold uppercase tracking-widest mb-3 ${isDarkMode ? "text-slate-450" : "text-blue-100/90"}`}
+              >
                 Quick Actions
               </p>
               <div className="flex flex-wrap justify-center gap-2">
@@ -907,6 +961,16 @@ export default function App() {
                   }`}
                 >
                   text converter
+                </button>
+                <button
+                  onClick={() => handleFeaturedClick("appicons")}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                    isDarkMode
+                      ? "bg-slate-700 hover:bg-slate-650 text-yellow-400 border border-slate-600/50"
+                      : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
+                  }`}
+                >
+                  app icons
                 </button>
               </div>
             </div>
@@ -1492,7 +1556,12 @@ export default function App() {
               exit={{ opacity: 0 }}
               onClick={() => setShowPremiumModal(false)}
               className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-              style={{ paddingTop: (!isPremium && isNative) ? 'calc(env(safe-area-inset-top) + 60px)' : undefined }}
+              style={{
+                paddingTop:
+                  !isPremium && isNative
+                    ? "calc(env(safe-area-inset-top) + 60px)"
+                    : undefined,
+              }}
             >
               <motion.div
                 key="premium-modal"
@@ -1689,11 +1758,14 @@ export default function App() {
                 customSize,
                 newOriginalSrc,
                 newImageOffset,
-                newImageScale
+                newImageScale,
               ) => {
                 if (activeQuickFeature) {
                   const performSave = async () => {
-                    await triggerDownloadOfBase64(newImgDataUrl, `${activeQuickFeature}_edited.png`);
+                    await triggerDownloadOfBase64(
+                      newImgDataUrl,
+                      `${activeQuickFeature}_edited.png`,
+                    );
                     setShowEditor(false);
                     setEditorInitialTool("none");
                     setActiveQuickFeature(null);
@@ -1709,7 +1781,7 @@ export default function App() {
 
                 const performFullSave = () => {
                   if (newOriginalSrc) {
-                     setOriginalImage(newOriginalSrc);
+                    setOriginalImage(newOriginalSrc);
                   }
                   setProcessedImage(newImgDataUrl);
                   setCleanImage(finalCleanSrc);
@@ -1771,7 +1843,12 @@ export default function App() {
                 }
               }}
               className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
-              style={{ paddingTop: (!isPremium && isNative) ? 'calc(env(safe-area-inset-top) + 60px)' : undefined }}
+              style={{
+                paddingTop:
+                  !isPremium && isNative
+                    ? "calc(env(safe-area-inset-top) + 60px)"
+                    : undefined,
+              }}
             >
               <motion.div
                 key="pdf-modal"
@@ -1803,7 +1880,8 @@ export default function App() {
                     Convert Photo into PDF
                   </h2>
                   <p className="text-white/90 font-medium text-xs px-2 mt-1">
-                    Export your custom screenshot or photo into a highly polished PDF document of your choice.
+                    Export your custom screenshot or photo into a highly
+                    polished PDF document of your choice.
                   </p>
                 </div>
 
@@ -1823,8 +1901,8 @@ export default function App() {
                             pdfPageSize === size
                               ? "bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/10"
                               : isDarkMode
-                              ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-                              : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                                ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                                : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
                           }`}
                         >
                           {size}
@@ -1840,7 +1918,12 @@ export default function App() {
                     </label>
                     <div className="grid grid-cols-3 gap-2">
                       {["Portrait", "Landscape", "Auto Detect"].map((mode) => {
-                        const val = mode === "Portrait" ? "portrait" : mode === "Landscape" ? "landscape" : "auto";
+                        const val =
+                          mode === "Portrait"
+                            ? "portrait"
+                            : mode === "Landscape"
+                              ? "landscape"
+                              : "auto";
                         return (
                           <button
                             key={mode}
@@ -1849,8 +1932,8 @@ export default function App() {
                               pdfOrientation === val
                                 ? "bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/10"
                                 : isDarkMode
-                                ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-                                : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                                  ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                                  : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
                             }`}
                           >
                             {mode}
@@ -1866,24 +1949,30 @@ export default function App() {
                       Border Margins
                     </label>
                     <div className="grid grid-cols-3 gap-2">
-                      {["None (0pt)", "Thin (18pt)", "Normal (36pt)"].map((mode) => {
-                        const val = mode.startsWith("None") ? "none" : mode.startsWith("Thin") ? "thin" : "normal";
-                        return (
-                          <button
-                            key={mode}
-                            onClick={() => setPdfMargin(val as any)}
-                            className={`py-2 px-1 rounded-xl text-[10.5px] font-bold border transition-all active:scale-[0.97] cursor-pointer ${
-                              pdfMargin === val
-                                ? "bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/10"
-                                : isDarkMode
-                                ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-                                : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                            }`}
-                          >
-                            {mode.split(" ")[0]}
-                          </button>
-                        );
-                      })}
+                      {["None (0pt)", "Thin (18pt)", "Normal (36pt)"].map(
+                        (mode) => {
+                          const val = mode.startsWith("None")
+                            ? "none"
+                            : mode.startsWith("Thin")
+                              ? "thin"
+                              : "normal";
+                          return (
+                            <button
+                              key={mode}
+                              onClick={() => setPdfMargin(val as any)}
+                              className={`py-2 px-1 rounded-xl text-[10.5px] font-bold border transition-all active:scale-[0.97] cursor-pointer ${
+                                pdfMargin === val
+                                  ? "bg-indigo-600 border-indigo-500 text-white shadow-md shadow-indigo-600/10"
+                                  : isDarkMode
+                                    ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                                    : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
+                              }`}
+                            >
+                              {mode.split(" ")[0]}
+                            </button>
+                          );
+                        },
+                      )}
                     </div>
                   </div>
 
@@ -1910,11 +1999,14 @@ export default function App() {
                       onClick={async () => {
                         setIsGeneratingPdf(true);
                         try {
-                          await convertPhotoToPdf(processedImage || cleanImage || originalImage!, {
-                            pageSize: pdfPageSize,
-                            orientation: pdfOrientation,
-                            margin: pdfMargin,
-                          });
+                          await convertPhotoToPdf(
+                            processedImage || cleanImage || originalImage!,
+                            {
+                              pageSize: pdfPageSize,
+                              orientation: pdfOrientation,
+                              margin: pdfMargin,
+                            },
+                          );
                           setIsPdfModalOpen(false);
                           if (activeQuickFeature) {
                             setActiveQuickFeature(null);
@@ -1968,6 +2060,19 @@ export default function App() {
             setActiveQuickFeature(null);
           }
         }}
+        isDarkMode={isDarkMode}
+        isPremium={isPremium}
+      />
+
+      <AppIconModal
+        isOpen={isAppIconModalOpen}
+        onClose={() => {
+          setIsAppIconModalOpen(false);
+          if (activeQuickFeature === "appicons") {
+            setActiveQuickFeature(null);
+          }
+        }}
+        imageData={originalImage}
         isDarkMode={isDarkMode}
         isPremium={isPremium}
       />
