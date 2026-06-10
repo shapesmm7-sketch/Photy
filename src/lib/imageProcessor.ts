@@ -961,8 +961,8 @@ export async function applyStyle(
           baseShadowAlpha = 0;
         }
 
-        // Remove padding when custom canvas size is set to prevent white borders
-        const padding = customCanvasSize ? 0 : Math.max(croppedWidth, croppedHeight) * basePaddingFactor;
+        // Keep padding even when custom canvas size is set to let backgrounds show beautifully
+        const padding = Math.max(croppedWidth, croppedHeight) * basePaddingFactor;
 
         let contentW = croppedWidth + padding * 2;
         let contentH = croppedHeight + padding * 2;
@@ -988,7 +988,8 @@ export async function applyStyle(
         let contentY = 0;
 
         if (customCanvasSize) {
-          contentScale = Math.max(canvas.width / contentW, canvas.height / contentH) * customImageScale;
+          // Use Math.min instead of Math.max to fit the styled shot inside the custom dimensions, leaving background padding & shadow visible!
+          contentScale = Math.min(canvas.width / contentW, canvas.height / contentH) * customImageScale * 0.9;
           const drawW = contentW * contentScale;
           const drawH = contentH * contentScale;
           contentX = (canvas.width - drawW) / 2 + customImageOffset.x;
@@ -1157,15 +1158,75 @@ export async function applyStyle(
 
         // Watermark
         if (styleName !== "Original" || layout.name !== "None") {
-          const isDarkBg =
-            styleName.includes("Dark") ||
-            (layout.name !== "None" && layout.themeColor !== "#f3f4f6");
+          // Robustly check if a color is dark
+          const isColorDark = (color: string): boolean => {
+            if (!color) return false;
+            const bg = color.toLowerCase().trim();
+            if (bg.includes("white") || bg === "#ffffff" || bg === "#fff" || bg === "transparent") return false;
+            if (bg.includes("black") || bg === "#000000" || bg === "#000") return true;
+            if (bg.startsWith("#")) {
+              const hex = bg.slice(1);
+              let r = 0, g = 0, b = 0;
+              if (hex.length === 3) {
+                r = parseInt(hex[0] + hex[0], 16);
+                g = parseInt(hex[1] + hex[1], 16);
+                b = parseInt(hex[2] + hex[2], 16);
+              } else if (hex.length === 6) {
+                r = parseInt(hex.slice(0, 2), 16);
+                g = parseInt(hex.slice(2, 4), 16);
+                b = parseInt(hex.slice(4, 6), 16);
+              }
+              const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+              return brightness < 155;
+            }
+            if (
+              bg.includes("slate") ||
+              bg.includes("gray") ||
+              bg.includes("indigo") ||
+              bg.includes("blue") ||
+              bg.includes("purple") ||
+              bg.includes("dark")
+            ) {
+              return true;
+            }
+            return false;
+          };
+
+          // Robustly check if the background is dark to guarantee high contrast ratio for "Edited with Photy"
+          const isBgDark = () => {
+            if (customBg) {
+              if (customBg.includes(",")) {
+                const colors = customBg.split(",");
+                return isColorDark(colors[0]);
+              }
+              return isColorDark(customBg);
+            }
+            if (styleName === "Original") {
+              if (layout.name !== "None") {
+                return isColorDark(layout.themeColor);
+              }
+              return false;
+            }
+            if (styleName.includes("Dark") || styleName.includes("Cosmic") || styleName.includes("Navy") || styleName.includes("Steel")) {
+              return true;
+            }
+            if (config.bgGradient && config.bgGradient.length > 0) {
+              return isColorDark(config.bgGradient[0]);
+            }
+            if (config.bgColor) {
+              return isColorDark(config.bgColor);
+            }
+            return false;
+          };
+
+          const isDarkBg = isBgDark();
           ctx.fillStyle = isDarkBg
             ? "rgba(255, 255, 255, 0.45)"
             : "rgba(0, 0, 0, 0.35)";
+
           // Set font size based on final canvas width
           const referenceWidth = canvas.width;
-          ctx.font = `${referenceWidth * 0.024}px sans-serif`;
+          ctx.font = `${Math.max(12, referenceWidth * 0.024)}px sans-serif`;
           ctx.textAlign = "right";
 
           if (layout.name === "None" && !customCanvasSize) {
@@ -1175,10 +1236,11 @@ export async function applyStyle(
               padding + croppedHeight - canvas.height * 0.015,
             );
           } else {
+            // Use 4% margin instead of 3% to keep it safe from any CSS .rounded-xl border clippings on home screen/previews
             ctx.fillText(
               "Edited with Photy",
-              canvas.width - canvas.width * 0.03,
-              canvas.height - canvas.height * 0.03,
+              canvas.width - canvas.width * 0.04,
+              canvas.height - canvas.height * 0.04,
             );
           }
         }

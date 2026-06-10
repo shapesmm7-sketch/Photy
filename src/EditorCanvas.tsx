@@ -793,9 +793,23 @@ export default function EditorCanvas({
   const [isDetectingSensitive, setIsDetectingSensitive] = useState(false);
 
   // Size tool states
-  const [canvasWidthInput, setCanvasWidthInput] = useState<string>("");
-  const [canvasHeightInput, setCanvasHeightInput] = useState<string>("");
-  const [selectedPresetLabel, setSelectedPresetLabel] = useState<string | null>(null);
+  const [canvasWidthInput, setCanvasWidthInput] = useState<string>(
+    initialCustomSize ? initialCustomSize.width.toString() : ""
+  );
+  const [canvasHeightInput, setCanvasHeightInput] = useState<string>(
+    initialCustomSize ? initialCustomSize.height.toString() : ""
+  );
+  const [selectedPresetLabel, setSelectedPresetLabel] = useState<string | null>(() => {
+    if (!initialCustomSize) return null;
+    const presets = [
+      { label: "Insta Post", w: 1080, h: 1080 },
+      { label: "Insta Story", w: 1080, h: 1920 },
+      { label: "FB Post", w: 1080, h: 1080 },
+      { label: "Play Store", w: 1080, h: 1920 }
+    ];
+    const match = presets.find(p => p.w === initialCustomSize.width && p.h === initialCustomSize.height);
+    return match ? match.label : null;
+  });
   const [manualCanvasSize, setManualCanvasSize] = useState<{ width: number; height: number } | null>(initialCustomSize);
   const [manualImageOffset, setManualImageOffset] = useState<{ x: number; y: number }>(initialImageOffset);
   const [manualImageScale, setManualImageScale] = useState<number>(initialImageScale);
@@ -1915,6 +1929,102 @@ export default function EditorCanvas({
     }
 
     ctx.restore();
+
+    // Watermark drawing matching styleName and layoutName
+    const lName = layoutName || "None";
+    if (sName !== "Original" || lName !== "None") {
+      const isColorDarkObj = (color: string): boolean => {
+        if (!color) return false;
+        const bg = color.toLowerCase().trim();
+        if (bg.includes("white") || bg === "#ffffff" || bg === "#fff" || bg === "transparent") return false;
+        if (bg.includes("black") || bg === "#000000" || bg === "#000") return true;
+        if (bg.startsWith("#")) {
+          const hex = bg.slice(1);
+          let r = 0, g = 0, b = 0;
+          if (hex.length === 3) {
+            r = parseInt(hex[0] + hex[0], 16);
+            g = parseInt(hex[1] + hex[1], 16);
+            b = parseInt(hex[2] + hex[2], 16);
+          } else if (hex.length === 6) {
+            r = parseInt(hex.slice(0, 2), 16);
+            g = parseInt(hex.slice(2, 4), 16);
+            b = parseInt(hex.slice(4, 6), 16);
+          }
+          const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+          return brightness < 155;
+        }
+        if (
+          bg.includes("slate") ||
+          bg.includes("gray") ||
+          bg.includes("indigo") ||
+          bg.includes("blue") ||
+          bg.includes("purple") ||
+          bg.includes("dark")
+        ) {
+          return true;
+        }
+        return false;
+      };
+
+      const isBgDark = () => {
+        if (customBg) {
+          if (customBg.includes(",")) {
+            const colors = customBg.split(",");
+            return isColorDarkObj(colors[0]);
+          }
+          return isColorDarkObj(customBg);
+        }
+        if (sName === "Original") {
+          const lObj = PhoneLayouts[lName];
+          if (lObj && lObj.name !== "None") {
+            return isColorDarkObj(lObj.themeColor);
+          }
+          return false;
+        }
+        if (sName.includes("Dark") || sName.includes("Cosmic") || sName.includes("Navy") || sName.includes("Steel")) {
+          return true;
+        }
+        const styleConfig = Styles[sName];
+        if (styleConfig) {
+          if (styleConfig.bgGradient && styleConfig.bgGradient.length > 0) {
+            return isColorDarkObj(styleConfig.bgGradient[0]);
+          }
+          if (styleConfig.bgColor) {
+            return isColorDarkObj(styleConfig.bgColor);
+          }
+        }
+        return false;
+      };
+
+      const isDarkBg = isBgDark();
+      ctx.save();
+      ctx.fillStyle = isDarkBg
+        ? "rgba(255, 255, 255, 0.45)"
+        : "rgba(0, 0, 0, 0.35)";
+
+      // Set font size based on final canvas width
+      const referenceWidth = canvas.width;
+      ctx.font = `${Math.max(12, referenceWidth * 0.024)}px sans-serif`;
+      ctx.textAlign = "right";
+
+      if (lName === "None" && !manualCanvasSize) {
+        const styleConfig = Styles[sName];
+        const paddingVal = Math.max(img.width, img.height) * (styleConfig ? styleConfig.paddingFactor : 0);
+        ctx.fillText(
+          "Edited with Photy",
+          paddingVal + img.width - canvas.width * 0.015,
+          paddingVal + img.height - canvas.height * 0.015,
+        );
+      } else {
+        // Use 4% margin
+        ctx.fillText(
+          "Edited with Photy",
+          canvas.width - canvas.width * 0.04,
+          canvas.height - canvas.height * 0.04,
+        );
+      }
+      ctx.restore();
+    }
 
     if (activeTool === "crop") {
       // Draw crop overlay (darken outside the crop region)

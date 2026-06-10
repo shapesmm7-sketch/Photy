@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { X, Image as ImageIcon, FileText, Download, Check } from 'lucide-react';
-import jsPDF from 'jspdf';
+import React, { useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { X, Image as ImageIcon, FileText, Download, Check } from "lucide-react";
+import jsPDF from "jspdf";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 
-import { isNative, playRewardedAds } from '../lib/admob';
+import { isNative, playRewardedAds } from "../lib/admob";
 
 interface ConverterModalProps {
   isOpen: boolean;
@@ -13,60 +14,99 @@ interface ConverterModalProps {
   isPremium?: boolean;
 }
 
-type Format = 'jpg' | 'png' | 'webp' | 'avif' | 'gif' | 'pdf';
+type Format = "jpg" | "png" | "webp" | "avif" | "gif" | "pdf";
 
-export const ConverterModal: React.FC<ConverterModalProps> = ({ isOpen, onClose, imageData, isDarkMode, isPremium = false }) => {
-  const [selectedFormat, setSelectedFormat] = useState<Format>('png');
+export const ConverterModal: React.FC<ConverterModalProps> = ({
+  isOpen,
+  onClose,
+  imageData,
+  isDarkMode,
+  isPremium = false,
+}) => {
+  const [selectedFormat, setSelectedFormat] = useState<Format>("png");
   const [isConverting, setIsConverting] = useState(false);
   const [convertSuccess, setConvertSuccess] = useState(false);
 
-  const formats: { id: Format; label: string; mime: string; color: string }[] = [
-    { id: 'png', label: 'PNG', mime: 'image/png', color: 'bg-blue-500' },
-    { id: 'jpg', label: 'JPG', mime: 'image/jpeg', color: 'bg-orange-500' },
-    { id: 'webp', label: 'WebP', mime: 'image/webp', color: 'bg-emerald-500' },
-    { id: 'avif', label: 'AVIF', mime: 'image/avif', color: 'bg-indigo-500' },
-    { id: 'gif', label: 'GIF', mime: 'image/gif', color: 'bg-purple-500' },
-    { id: 'pdf', label: 'PDF', mime: 'application/pdf', color: 'bg-red-500' },
-  ];
+  const formats: { id: Format; label: string; mime: string; color: string }[] =
+    [
+      { id: "png", label: "PNG", mime: "image/png", color: "bg-blue-500" },
+      { id: "jpg", label: "JPG", mime: "image/jpeg", color: "bg-orange-500" },
+      {
+        id: "webp",
+        label: "WebP",
+        mime: "image/webp",
+        color: "bg-emerald-500",
+      },
+      { id: "avif", label: "AVIF", mime: "image/avif", color: "bg-indigo-500" },
+      { id: "gif", label: "GIF", mime: "image/gif", color: "bg-purple-500" },
+      { id: "pdf", label: "PDF", mime: "application/pdf", color: "bg-red-500" },
+    ];
 
   const performConvert = async () => {
     setIsConverting(true);
 
     try {
-      if (selectedFormat === 'pdf') {
+      if (selectedFormat === "pdf") {
         const img = new Image();
         img.src = imageData!;
         await new Promise((resolve) => (img.onload = resolve));
 
         const pdf = new jsPDF({
-          orientation: img.width > img.height ? 'landscape' : 'portrait',
-          unit: 'px',
+          orientation: img.width > img.height ? "landscape" : "portrait",
+          unit: "px",
           format: [img.width, img.height],
         });
 
-        pdf.addImage(imageData!, 'PNG', 0, 0, img.width, img.height);
-        pdf.save('converted_image.pdf');
+        pdf.addImage(imageData!, "PNG", 0, 0, img.width, img.height);
+
+        if (Capacitor.isNativePlatform()) {
+          const NativeMedia = registerPlugin<any>("NativeMedia");
+          const cleanBase64 = imageData!.includes(",") ? imageData!.split(",")[1] : imageData!;
+          await NativeMedia.saveImage({ base64: cleanBase64 });
+        } else {
+          pdf.save("converted_image.pdf");
+        }
       } else {
         // Try Client-side first for speed
         const img = new Image();
         img.src = imageData!;
         await new Promise((resolve) => (img.onload = resolve));
 
-        const canvas = document.createElement('canvas');
+        const canvas = document.createElement("canvas");
         canvas.width = img.width;
         canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        
+        const ctx = canvas.getContext("2d");
+
         if (ctx) {
           ctx.drawImage(img, 0, 0);
-          const mimeType = formats.find(f => f.id === selectedFormat)?.mime || 'image/png';
-          const quality = (selectedFormat === 'jpg' || selectedFormat === 'webp' || selectedFormat === 'avif') ? 0.9 : undefined;
-          
+          const mimeType =
+            formats.find((f) => f.id === selectedFormat)?.mime || "image/png";
+          const quality =
+            selectedFormat === "jpg" ||
+            selectedFormat === "webp" ||
+            selectedFormat === "avif"
+              ? 0.9
+              : undefined;
+
           const dataUrl = canvas.toDataURL(mimeType, quality);
-          
+
+          if (Capacitor.isNativePlatform()) {
+            try {
+              const NativeMedia = registerPlugin<any>("NativeMedia");
+              const cleanBase64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+              await NativeMedia.saveImage({ base64: cleanBase64 });
+              setConvertSuccess(true);
+              setTimeout(() => setConvertSuccess(false), 2000);
+              return;
+            } catch (nativeErr) {
+              console.error("Native save failed", nativeErr);
+              alert("Native Save Failed: " + (nativeErr as Error).message);
+            }
+          }
+
           // If the browser successfully created the requested format (native support)
           if (dataUrl.startsWith(`data:${mimeType}`)) {
-            const link = document.createElement('a');
+            const link = document.createElement("a");
             link.href = dataUrl;
             link.download = `converted_image.${selectedFormat}`;
             document.body.appendChild(link);
@@ -74,24 +114,24 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({ isOpen, onClose,
             document.body.removeChild(link);
           } else {
             // Fallback to server for advanced formats (AVIF/GIF) or unsupported browsers
-            const response = await fetch('/api/convert', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+            const response = await fetch("/api/convert", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 base64: imageData,
                 format: selectedFormat,
-                quality: 90
-              })
+                quality: 90,
+              }),
             });
 
             if (!response.ok) {
               const err = await response.json();
-              throw new Error(err.error || 'Conversion failed');
+              throw new Error(err.error || "Conversion failed");
             }
 
             const result = await response.json();
-            
-            const link = document.createElement('a');
+
+            const link = document.createElement("a");
             link.href = result.base64;
             link.download = `converted_image.${selectedFormat}`;
             document.body.appendChild(link);
@@ -104,8 +144,10 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({ isOpen, onClose,
       setConvertSuccess(true);
       setTimeout(() => setConvertSuccess(false), 2000);
     } catch (error) {
-      console.error('Conversion failed:', error);
-      alert(`Conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error("Conversion failed:", error);
+      alert(
+        `Conversion failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     } finally {
       setIsConverting(false);
     }
@@ -123,9 +165,14 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({ isOpen, onClose,
   return (
     <AnimatePresence>
       {isOpen && (
-        <div 
-           className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4"
-           style={{ paddingTop: (!isPremium && isNative) ? 'calc(env(safe-area-inset-top) + 60px)' : undefined }}
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4"
+          style={{
+            paddingTop:
+              !isPremium && isNative
+                ? "calc(env(safe-area-inset-top) + 60px)"
+                : undefined,
+          }}
         >
           <motion.div
             initial={{ opacity: 0 }}
@@ -134,13 +181,15 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({ isOpen, onClose,
             onClick={onClose}
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           />
-          
+
           <motion.div
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
             className={`relative w-full max-w-md rounded-[28px] overflow-hidden shadow-2xl flex flex-col max-h-[92vh] ${
-              isDarkMode ? "bg-slate-900 border border-slate-700 text-white" : "bg-white text-slate-800"
+              isDarkMode
+                ? "bg-slate-900 border border-slate-700 text-white"
+                : "bg-white text-slate-800"
             }`}
           >
             <button
@@ -159,7 +208,8 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({ isOpen, onClose,
                   Image Converter
                 </h2>
                 <p className="text-white/80 font-medium text-[9px] sm:text-[10px] px-2 mt-0.5">
-                  Convert images to PDF, JPG, PNG and more. High-speed multi-format transformation.
+                  Convert images to PDF, JPG, PNG and more. High-speed
+                  multi-format transformation.
                 </p>
               </div>
 
@@ -178,12 +228,14 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({ isOpen, onClose,
                           selectedFormat === format.id
                             ? "border-emerald-500 bg-emerald-50/10"
                             : isDarkMode
-                            ? "border-slate-800 bg-slate-800/50 hover:border-slate-700"
-                            : "border-slate-100 bg-slate-50 hover:border-slate-200"
+                              ? "border-slate-800 bg-slate-800/50 hover:border-slate-700"
+                              : "border-slate-100 bg-slate-50 hover:border-slate-200"
                         }`}
                       >
-                        <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg ${format.color} flex items-center justify-center mb-1 shadow-sm`}>
-                          {format.id === 'pdf' ? (
+                        <div
+                          className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg ${format.color} flex items-center justify-center mb-1 shadow-sm`}
+                        >
+                          {format.id === "pdf" ? (
                             <FileText className="w-3 sm:w-3.5 text-white" />
                           ) : (
                             <ImageIcon className="w-3 sm:w-3.5 text-white" />
@@ -204,14 +256,20 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({ isOpen, onClose,
 
                 {/* Preview Area - Flexible height to preserve space for buttons */}
                 <div className="space-y-1.5 flex-1 min-h-[80px] sm:min-h-[120px] max-h-[180px] flex flex-col">
-                   <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500 pl-1">
+                  <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500 pl-1">
                     Preview
                   </label>
-                  <div className={`w-full flex-1 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden bg-slate-100/10 ${
-                    isDarkMode ? "border-slate-700" : "border-slate-200"
-                  }`}>
+                  <div
+                    className={`w-full flex-1 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden bg-slate-100/10 ${
+                      isDarkMode ? "border-slate-700" : "border-slate-200"
+                    }`}
+                  >
                     {imageData ? (
-                      <img src={imageData} alt="Preview" className="w-full h-full object-contain" />
+                      <img
+                        src={imageData}
+                        alt="Preview"
+                        className="w-full h-full object-contain"
+                      />
                     ) : (
                       <ImageIcon className="w-5 h-5 text-slate-400 opacity-30" />
                     )}

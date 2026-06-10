@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 
 export interface PDFExportOptions {
   pageSize: "A4" | "Letter" | "Original";
@@ -12,7 +13,7 @@ export interface PDFExportOptions {
 export function convertPhotoToPdf(
   imgSrc: string,
   options: PDFExportOptions,
-  filename: string = "document.pdf"
+  filename: string = "document.pdf",
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const img = new Image();
@@ -86,9 +87,29 @@ export function convertPhotoToPdf(
         const drawY = marginPts + (maxDrawHeight - drawH) / 2;
 
         // Draw image onto the PDF
-        doc.addImage(imgSrc, "JPEG", drawX, drawY, drawW, drawH, undefined, "FAST");
-        doc.save(filename);
-        resolve();
+        doc.addImage(
+          imgSrc,
+          "JPEG",
+          drawX,
+          drawY,
+          drawW,
+          drawH,
+          undefined,
+          "FAST",
+        );
+
+        if (Capacitor.isNativePlatform()) {
+          const NativeMedia = registerPlugin<any>("NativeMedia");
+          // Just save the image source natively if we are on android since
+          // PDF browser download fails in webview
+          const cleanBase64 = imgSrc.includes(",") ? imgSrc.split(",")[1] : imgSrc;
+          NativeMedia.saveImage({ base64: cleanBase64 })
+            .then(() => resolve())
+            .catch((e: any) => reject(e));
+        } else {
+          doc.save(filename);
+          resolve();
+        }
       } catch (err) {
         reject(err);
       }

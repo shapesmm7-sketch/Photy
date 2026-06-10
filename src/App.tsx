@@ -362,6 +362,8 @@ export default function App() {
 
   // Sync processed image when any parameter changes
   React.useEffect(() => {
+    if (showEditor) return;
+    
     if (originalImage && loadedOriginalImage) {
       setZoomScale(1);
       setZoomOffset({ x: 0, y: 0 });
@@ -432,6 +434,7 @@ export default function App() {
     customImageScale,
     editorPaths,
     editorTexts,
+    showEditor,
   ]);
 
   // Deselect custom color if style or layout changes, EXCEPT when changing the custom color itself
@@ -552,7 +555,8 @@ export default function App() {
     if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
       try {
         const NativeMedia = registerPlugin<any>("NativeMedia");
-        await NativeMedia.saveImage({ base64: base64String });
+        const cleanBase64 = base64String.includes(",") ? base64String.split(",")[1] : base64String;
+        await NativeMedia.saveImage({ base64: cleanBase64 });
         alert(
           "Image saved directly to your phone gallery under 'Pictures/MyApp'!",
         );
@@ -622,7 +626,8 @@ export default function App() {
     if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
       try {
         const NativeMedia = registerPlugin<any>("NativeMedia");
-        await NativeMedia.shareImage({ base64: processedImage });
+        const cleanBase64 = processedImage.includes(",") ? processedImage.split(",")[1] : processedImage;
+        await NativeMedia.shareImage({ base64: cleanBase64 });
         return;
       } catch (nativeErr: any) {
         console.error(
@@ -1702,39 +1707,47 @@ export default function App() {
                   return;
                 }
 
-                if (newOriginalSrc) {
-                   setOriginalImage(newOriginalSrc);
+                const performFullSave = () => {
+                  if (newOriginalSrc) {
+                     setOriginalImage(newOriginalSrc);
+                  }
+                  setProcessedImage(newImgDataUrl);
+                  setCleanImage(finalCleanSrc);
+                  setEditorPaths(finalPaths);
+                  setEditorTexts(finalTexts);
+                  if (customSize) {
+                    setCustomCanvasSize(customSize);
+                  } else if (customSize === null) {
+                    setCustomCanvasSize(null);
+                  }
+                  if (newImageOffset) {
+                    setCustomImageOffset(newImageOffset);
+                  }
+                  if (newImageScale !== undefined) {
+                    setCustomImageScale(newImageScale);
+                  }
+                  if (customCrop) {
+                    setCustomCropRect((prev) => {
+                      if (
+                        prev &&
+                        prev.x === customCrop.x &&
+                        prev.y === customCrop.y &&
+                        prev.w === customCrop.w &&
+                        prev.h === customCrop.h
+                      ) {
+                        return prev;
+                      }
+                      return customCrop;
+                    });
+                  }
+                  setShowEditor(false);
+                };
+
+                if (!isPremium) {
+                  playRewardedAds(performFullSave);
+                } else {
+                  performFullSave();
                 }
-                setProcessedImage(newImgDataUrl);
-                setCleanImage(finalCleanSrc);
-                setEditorPaths(finalPaths);
-                setEditorTexts(finalTexts);
-                if (customSize) {
-                  setCustomCanvasSize(customSize);
-                } else if (customSize === null) {
-                  setCustomCanvasSize(null);
-                }
-                if (newImageOffset) {
-                  setCustomImageOffset(newImageOffset);
-                }
-                if (newImageScale !== undefined) {
-                  setCustomImageScale(newImageScale);
-                }
-                if (customCrop) {
-                  setCustomCropRect((prev) => {
-                    if (
-                      prev &&
-                      prev.x === customCrop.x &&
-                      prev.y === customCrop.y &&
-                      prev.w === customCrop.w &&
-                      prev.h === customCrop.h
-                    ) {
-                      return prev;
-                    }
-                    return customCrop;
-                  });
-                }
-                setShowEditor(false);
               }}
             />
           </motion.div>

@@ -268,7 +268,12 @@ class AdMobManager {
     if (this.currentOnClose) {
       const cb = this.currentOnClose;
       this.currentOnClose = null;
-      cb();
+      // Delay callback execution to allow Capacitor Activity to fully resume.
+      // Calling native Capacitor plugins immediately after ad dismissal can fail
+      // because the main Activity might not be fully active yet.
+      setTimeout(() => {
+        cb();
+      }, 750);
     }
     this.listeners.forEach((l) => l(false));
 
