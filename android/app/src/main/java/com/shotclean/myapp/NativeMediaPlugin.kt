@@ -38,14 +38,11 @@ class NativeMediaPlugin : Plugin() {
     @PluginMethod
     fun saveImage(call: PluginCall) {
         val base64Data: String? = call.getString("base64")
+        val filename: String = call.getString("filename", "photy_" + System.currentTimeMillis() + ".png") ?: ("photy_" + System.currentTimeMillis() + ".png")
+        val mimeType: String = call.getString("mimeType", "image/png") ?: "image/png"
+        
         if (base64Data == null) {
             call.reject("Base64 string is missing")
-            return
-        }
-
-        val bitmap: Bitmap? = base64ToBitmap(base64Data)
-        if (bitmap == null) {
-            call.reject("Failed to decode base64 to bitmap")
             return
         }
 
@@ -56,31 +53,32 @@ class NativeMediaPlugin : Plugin() {
             }
         }
 
-        executeSaveAndResolve(call, bitmap)
+        executeSaveImageAndResolve(call, base64Data, filename, mimeType)
     }
 
     @PermissionCallback
     fun savePermissionCallback(call: PluginCall) {
         if (getPermissionState("storage") == PermissionState.GRANTED) {
             val base64Data: String = call.getString("base64") ?: ""
-            val bitmap: Bitmap? = base64ToBitmap(base64Data)
-            if (bitmap != null) {
-                executeSaveAndResolve(call, bitmap)
+            val filename: String = call.getString("filename", "photy_" + System.currentTimeMillis() + ".png") ?: ("photy_" + System.currentTimeMillis() + ".png")
+            val mimeType: String = call.getString("mimeType", "image/png") ?: "image/png"
+            if (base64Data.isNotEmpty()) {
+                executeSaveImageAndResolve(call, base64Data, filename, mimeType)
             } else {
-                call.reject("Failed to decode base64 after permission approval")
+                call.reject("Failed to get base64 data after permission approval")
             }
         } else {
             call.reject("Write external storage permission was denied")
         }
     }
 
-    private fun executeSaveAndResolve(call: PluginCall, bitmap: Bitmap) {
+    private fun executeSaveImageAndResolve(call: PluginCall, base64Str: String, filename: String, mimeType: String) {
         val ctx: Context? = getContext()
         if (ctx == null) {
             call.reject("Android Context is unavailable")
             return
         }
-        val uri: Uri? = saveImageToGallery(ctx, bitmap)
+        val uri: Uri? = saveFileToGalleryBytes(ctx, base64Str, filename, mimeType)
         if (uri != null) {
             val response = JSObject()
             response.put("uri", uri.toString())
@@ -343,6 +341,61 @@ class NativeMediaPlugin : Plugin() {
         } catch (e: Exception) {
             call.reject("Exception in sharing operation: " + e.message)
         }
+    }
+
+    private fun saveFileToGalleryBytes(androidContext: Context, base64Str: String, filename: String, mimeType: String): Uri? {
+        var fileUri: Uri? = null
+        try {
+            val cleanBase64 = if (base64Str.contains(",")) {
+                base64Str.substring(base64Str.indexOf(",") + 1)
+            } else {
+                base64Str
+            }
+            val decodedBytes = Base64.decode(cleanBase64, Base64.DEFAULT)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val resolver = androidContext.contentResolver
+                val contentValues = ContentValues().apply {
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                    put(MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Photy")
+                }
+                
+                // Use Images Media collection for images
+                fileUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+                if (fileUri != null) {
+                    val fos: OutputStream? = resolver.openOutputStream(fileUri!!)
+                    if (fos != null) {
+                        fos.write(decodedBytes)
+                        fos.flush()
+                        fos.close()
+                    }
+                }
+            } else {
+                val imagesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                val myAppDir = File(imagesDir, "Photy")
+                if (!myAppDir.exists()) {
+                    myAppDir.mkdirs()
+                }
+                val imageFile = File(myAppDir, filename)
+                fileUri = Uri.fromFile(imageFile)
+                val fos = FileOutputStream(imageFile)
+                fos.write(decodedBytes)
+                fos.flush()
+                fos.close()
+
+                MediaScannerConnection.scanFile(
+                    androidContext,
+                    arrayOf(imageFile.absolutePath),
+                    arrayOf(mimeType),
+                    null
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null
+        }
+        return fileUri
     }
 
     private fun saveImageToGallery(androidContext: Context, bitmap: Bitmap): Uri? {

@@ -650,7 +650,7 @@ export default function App() {
         const cleanBase64 = base64String.includes(",")
           ? base64String.split(",")[1]
           : base64String;
-        await NativeMedia.saveImage({ base64: cleanBase64 });
+        await NativeMedia.saveImage({ base64: cleanBase64, filename: defaultFilename, mimeType: "image/png" });
         alert(
           "Image saved directly to your phone gallery under 'Pictures/Photy'!",
         );

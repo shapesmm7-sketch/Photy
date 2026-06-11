@@ -376,29 +376,9 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
         if (!canvas) return;
 
         const dataUrl = canvas.toDataURL(mimeType, 0.9);
+        let finalBase64 = dataUrl;
 
-        if (Capacitor.isNativePlatform()) {
-          try {
-            const NativeMedia = registerPlugin<any>("NativeMedia");
-            const cleanBase64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
-            await NativeMedia.saveImage({ base64: cleanBase64 });
-            setConvertSuccess(true);
-            setTimeout(() => setConvertSuccess(false), 2000);
-            return;
-          } catch (nativeErr) {
-            console.error("Native save failed, falling back:", nativeErr);
-            alert("Native Save Failed: " + (nativeErr as Error).message);
-          }
-        }
-
-        if (dataUrl.startsWith(`data:${mimeType}`)) {
-          const link = document.createElement("a");
-          link.href = dataUrl;
-          link.download = `text_design.${selectedFormat}`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        } else {
+        if (!dataUrl.startsWith(`data:${mimeType}`)) {
           // Fallback to server for complex formats
           const response = await fetch("/api/convert", {
             method: "POST",
@@ -416,13 +396,29 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
           }
 
           const result = await response.json();
-          const link = document.createElement("a");
-          link.href = result.base64;
-          link.download = `text_design.${selectedFormat}`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+          finalBase64 = result.base64;
         }
+
+        if (Capacitor.isNativePlatform()) {
+          try {
+            const NativeMedia = registerPlugin<any>("NativeMedia");
+            const cleanBase64 = finalBase64.includes(",") ? finalBase64.split(",")[1] : finalBase64;
+            await NativeMedia.saveImage({ base64: cleanBase64, filename: "text_image_" + Date.now() + "." + selectedFormat, mimeType: mimeType });
+            setConvertSuccess(true);
+            setTimeout(() => setConvertSuccess(false), 2000);
+            return;
+          } catch (nativeErr) {
+            console.error("Native save failed, falling back:", nativeErr);
+            alert("Native Save Failed: " + (nativeErr as Error).message);
+          }
+        }
+
+        const link = document.createElement("a");
+        link.href = finalBase64;
+        link.download = `text_design.${selectedFormat}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       }
 
       setConvertSuccess(true);

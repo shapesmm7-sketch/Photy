@@ -90,31 +90,10 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({
               : undefined;
 
           const dataUrl = canvas.toDataURL(mimeType, quality);
+          let finalBase64 = dataUrl;
 
-          if (Capacitor.isNativePlatform()) {
-            try {
-              const NativeMedia = registerPlugin<any>("NativeMedia");
-              const cleanBase64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
-              await NativeMedia.saveImage({ base64: cleanBase64 });
-              setConvertSuccess(true);
-              setTimeout(() => setConvertSuccess(false), 2000);
-              return;
-            } catch (nativeErr) {
-              console.error("Native save failed", nativeErr);
-              alert("Native Save Failed: " + (nativeErr as Error).message);
-            }
-          }
-
-          // If the browser successfully created the requested format (native support)
-          if (dataUrl.startsWith(`data:${mimeType}`)) {
-            const link = document.createElement("a");
-            link.href = dataUrl;
-            link.download = `converted_image.${selectedFormat}`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          } else {
-            // Fallback to server for advanced formats (AVIF/GIF) or unsupported browsers
+          // If the browser did not successfully create the requested format, fallback to server
+          if (!dataUrl.startsWith(`data:${mimeType}`)) {
             const response = await fetch("/api/convert", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -129,16 +108,30 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({
               const err = await response.json();
               throw new Error(err.error || "Conversion failed");
             }
-
             const result = await response.json();
-
-            const link = document.createElement("a");
-            link.href = result.base64;
-            link.download = `converted_image.${selectedFormat}`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            finalBase64 = result.base64;
           }
+
+          if (Capacitor.isNativePlatform()) {
+            try {
+              const NativeMedia = registerPlugin<any>("NativeMedia");
+              const cleanBase64 = finalBase64.includes(",") ? finalBase64.split(",")[1] : finalBase64;
+              await NativeMedia.saveImage({ base64: cleanBase64, filename: "converted_" + Date.now() + "." + selectedFormat, mimeType: mimeType });
+              setConvertSuccess(true);
+              setTimeout(() => setConvertSuccess(false), 2000);
+              return;
+            } catch (nativeErr) {
+              console.error("Native save failed", nativeErr);
+              alert("Native Save Failed: " + (nativeErr as Error).message);
+            }
+          }
+
+          const link = document.createElement("a");
+          link.href = finalBase64;
+          link.download = `converted_image.${selectedFormat}`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
         }
       }
 
