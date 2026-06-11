@@ -866,7 +866,7 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
                       ) : convertSuccess ? (
                         <>
                           <Check className="w-4 h-4" />
-                          Saved!
+                          Saved to Downloads folder!
                         </>
                       ) : (
                         <>

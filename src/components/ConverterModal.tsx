@@ -293,7 +293,7 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({
                     ) : convertSuccess ? (
                       <>
                         <Check className="w-4 h-4" />
-                        Saved!
+                        Saved to Downloads folder!
                       </>
                     ) : (
                       <>

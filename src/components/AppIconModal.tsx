@@ -438,7 +438,7 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
                 ) : generateSuccess ? (
                   <>
                     <Check className="w-5 h-5" />
-                    <span>Saved!</span>
+                    <span>Saved to Downloads folder!</span>
                   </>
                 ) : (
                   <>

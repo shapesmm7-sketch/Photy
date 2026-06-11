@@ -156,7 +156,7 @@ class NativeMediaPlugin : Plugin() {
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
                     put(MediaStore.MediaColumns.MIME_TYPE, "application/zip")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/MyApp")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Photy")
                 }
                 
                 fileUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
@@ -170,7 +170,7 @@ class NativeMediaPlugin : Plugin() {
                 }
             } else {
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                val myAppDir = File(downloadsDir, "MyApp")
+                val myAppDir = File(downloadsDir, "Photy")
                 if (!myAppDir.exists()) {
                     myAppDir.mkdirs()
                 }
@@ -261,7 +261,7 @@ class NativeMediaPlugin : Plugin() {
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
                     put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/MyApp")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Photy")
                 }
                 
                 fileUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
@@ -275,7 +275,7 @@ class NativeMediaPlugin : Plugin() {
                 }
             } else {
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                val myAppDir = File(downloadsDir, "MyApp")
+                val myAppDir = File(downloadsDir, "Photy")
                 if (!myAppDir.exists()) {
                     myAppDir.mkdirs()
                 }
@@ -355,7 +355,7 @@ class NativeMediaPlugin : Plugin() {
                 val contentValues = ContentValues().apply {
                     put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
                     put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/MyApp")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, "Pictures/Photy")
                 }
                 
                 imageUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
@@ -369,7 +369,7 @@ class NativeMediaPlugin : Plugin() {
                 }
             } else {
                 val imagesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                val myAppDir = File(imagesDir, "MyApp")
+                val myAppDir = File(imagesDir, "Photy")
                 if (!myAppDir.exists()) {
                     myAppDir.mkdirs()
                 }

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Upload,
   Image as ImageIcon,
@@ -42,6 +42,12 @@ import { TextConverterModal } from "./components/TextConverterModal";
 import { translations, LanguageKey } from "./i18n";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Share } from "@capacitor/share";
+import {
+  initializePurchases,
+  checkPremiumStatus,
+  purchasePremium,
+  restorePurchases,
+} from "./lib/purchases";
 import {
   initializeAdMob,
   showBannerAd,
@@ -224,6 +230,18 @@ export default function App() {
     "monthly" | "6months" | "12months"
   >("12months");
   const [isPremium, setIsPremium] = useState(false);
+  const [isPurchasing, setIsPurchasing] = useState(false);
+
+  useEffect(() => {
+    const initBilling = async () => {
+      await initializePurchases();
+      const hasPremium = await checkPremiumStatus();
+      if (hasPremium) {
+        setIsPremium(true);
+      }
+    };
+    initBilling();
+  }, []);
 
   // Zoom & Pan states for the preview image
   const [zoomScale, setZoomScale] = useState(1);
@@ -634,7 +652,7 @@ export default function App() {
           : base64String;
         await NativeMedia.saveImage({ base64: cleanBase64 });
         alert(
-          "Image saved directly to your phone gallery under 'Pictures/MyApp'!",
+          "Image saved directly to your phone gallery under 'Pictures/Photy'!",
         );
         return;
       } catch (nativeErr: any) {
@@ -1777,18 +1795,54 @@ export default function App() {
                   </button>
 
                   <button
-                    onClick={() => {
-                      setIsPremium(true);
-                      alert(
-                        "Processing upgrade simulation via App Store / Play Store... Thanks for subscribing! You are now Premium and Ads are disabled.",
-                      );
-                      setShowPremiumModal(false);
+                    onClick={async () => {
+                      if (isPurchasing) return;
+                      setIsPurchasing(true);
+                      try {
+                        const success = await purchasePremium(selectedPremiumPlan);
+                        if (success) {
+                          setIsPremium(true);
+                          setShowPremiumModal(false);
+                          alert("Welcome to Premium! Ads have been disabled and watermarks removed.");
+                        } else {
+                          // Handled internally if native logic succeeds without explicit error 
+                          // Or user cancelled
+                        }
+                      } catch (e: any) {
+                        alert("Purchase failed: " + e.message);
+                      } finally {
+                        setIsPurchasing(false);
+                      }
                     }}
-                    className="w-full mt-6 py-4 bg-gray-900 text-white rounded-2xl font-black text-lg shadow-xl hover:bg-gray-800 hover:-translate-y-0.5 transition-all"
+                    disabled={isPurchasing}
+                    className={`w-full mt-6 py-4 rounded-2xl font-black text-lg shadow-xl transition-all ${
+                      isPurchasing 
+                        ? "bg-gray-400 text-gray-200 cursor-not-allowed"
+                        : "bg-gray-900 text-white hover:bg-gray-800 hover:-translate-y-0.5"
+                    }`}
                   >
-                    {t("subscribeBtn")}
+                    {isPurchasing ? "Processing..." : t("subscribeBtn")}
                   </button>
-                  <p className="text-center text-[10px] text-gray-400 mt-3 px-4 leading-tight">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const restored = await restorePurchases();
+                        if (restored) {
+                          setIsPremium(true);
+                          setShowPremiumModal(false);
+                          alert("Purchases restored successfully!");
+                        } else {
+                          alert("No active premium subscription found.");
+                        }
+                      } catch (e: any) {
+                        alert("Failed to restore purchases: " + e.message);
+                      }
+                    }}
+                    className="w-full mt-3 py-2 text-sm text-gray-500 font-semibold underline hover:text-gray-700 transition-colors"
+                  >
+                    Restore Purchases
+                  </button>
+                  <p className="text-center text-[10px] text-gray-400 mt-2 px-4 leading-tight">
                     Subscriptions auto-renew. Cancel anytime in your device
                     settings.
                   </p>
