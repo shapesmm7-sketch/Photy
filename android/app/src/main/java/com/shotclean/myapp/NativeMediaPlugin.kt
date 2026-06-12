@@ -400,71 +400,7 @@ class NativeMediaPlugin : Plugin() {
 
     @PluginMethod
     fun convertImage(call: PluginCall) {
-        val base64Data: String? = call.getString("base64")
-        val format: String = call.getString("format", "avif") ?: "avif"
-
-        if (base64Data == null) {
-            call.reject("Base64 string is missing")
-            return
-        }
-
-        val ctx: Context? = getContext()
-        if (ctx == null) {
-            call.reject("Context is null")
-            return
-        }
-
-        if (format != "avif" && format != "gif") {
-            call.reject("Unsupported format $format")
-            return
-        }
-
-        Thread {
-            try {
-                val cleanBase64 = if (base64Data.contains(",")) {
-                    base64Data.substring(base64Data.indexOf(",") + 1)
-                } else {
-                    base64Data
-                }
-                val decodedBytes = Base64.decode(cleanBase64, Base64.DEFAULT)
-                
-                val cacheDir = ctx.cacheDir
-                val inputFile = File(cacheDir, "input_${System.currentTimeMillis()}.png")
-                val fos = FileOutputStream(inputFile)
-                fos.write(decodedBytes)
-                fos.flush()
-                fos.close()
-
-                val outputFile = File(cacheDir, "output_${System.currentTimeMillis()}.$format")
-
-                val cmd = if (format == "avif") {
-                    "-i ${inputFile.absolutePath} -c:v libaom-av1 -crf 30 -b:v 0 ${outputFile.absolutePath}"
-                } else {
-                    "-loop 1 -i ${inputFile.absolutePath} -vf \"fps=10,scale=320:-1\" -t 3 ${outputFile.absolutePath}"
-                }
-
-                com.arthenica.ffmpegkit.FFmpegKit.executeAsync(cmd) { session ->
-                    val returnCode = session.getReturnCode()
-                    if (com.arthenica.ffmpegkit.ReturnCode.isSuccess(returnCode)) {
-                        try {
-                            val outBytes = outputFile.readBytes()
-                            val outBase64 = Base64.encodeToString(outBytes, Base64.NO_WRAP)
-                            val res = JSObject()
-                            res.put("base64", "data:image/$format;base64,$outBase64")
-                            call.resolve(res)
-                        } catch (e: Exception) {
-                            call.reject("Failed to read converted file")
-                        }
-                    } else {
-                        val state = session.getState()
-                        val failTrace = session.getFailStackTrace()
-                        call.reject("FFmpeg failed with state $state and rc $returnCode. $failTrace")
-                    }
-                }
-            } catch (e: Exception) {
-                call.reject("Conversion error", e)
-            }
-        }.start()
+        call.reject("Offline GIF/AVIF conversion is disabled because FFmpegKit is no longer available on Maven Central. Please use standard formats (PNG/JPEG/WEBP) or an API backend.")
     }
 
     private fun saveImageToGallery(androidContext: Context, bitmap: Bitmap): Uri? {

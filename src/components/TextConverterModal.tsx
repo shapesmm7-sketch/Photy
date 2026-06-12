@@ -87,20 +87,20 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
     "font" | "colors" | "format" | null
   >(null);
 
-  const formats: { id: Format; label: string; mime: string; color: string }[] =
-    [
-      { id: "png", label: "PNG", mime: "image/png", color: "bg-blue-500" },
-      { id: "jpg", label: "JPG", mime: "image/jpeg", color: "bg-orange-500" },
-      {
-        id: "webp",
-        label: "WebP",
-        mime: "image/webp",
-        color: "bg-emerald-500",
-      },
-      { id: "avif", label: "AVIF", mime: "image/avif", color: "bg-indigo-500" },
-      { id: "gif", label: "GIF", mime: "image/gif", color: "bg-purple-500" },
-      { id: "pdf", label: "PDF", mime: "application/pdf", color: "bg-red-500" },
-    ];
+  let availableFormats = [
+    { id: "png", label: "PNG", mime: "image/png", color: "bg-blue-500" },
+    { id: "jpg", label: "JPG", mime: "image/jpeg", color: "bg-orange-500" },
+    { id: "webp", label: "WebP", mime: "image/webp", color: "bg-emerald-500" },
+    { id: "avif", label: "AVIF", mime: "image/avif", color: "bg-indigo-500" },
+    { id: "gif", label: "GIF", mime: "image/gif", color: "bg-purple-500" },
+    { id: "pdf", label: "PDF", mime: "application/pdf", color: "bg-red-500" },
+  ];
+
+  if (Capacitor.isNativePlatform()) {
+    availableFormats = availableFormats.filter(f => f.id !== "avif" && f.id !== "gif");
+  }
+
+  const formats = availableFormats as { id: Format; label: string; mime: string; color: string }[];
 
   const toggleSection = (section: "font" | "colors" | "format") => {
     setActiveSection(activeSection === section ? null : section);
