@@ -55,9 +55,7 @@ workflows:
           rm -f gradle/wrapper/gradle-wrapper.jar
           gradle wrapper --gradle-version 8.10.2 --distribution-type bin
           chmod +x gradlew
-          # Run sync again to ensure everything is matched with root
-          npx cap sync android
-          ./gradlew clean assembleRelease bundleRelease --no-daemon --no-build-cache --stacktrace --info -Dorg.gradle.vfs.watch=false
+          ./gradlew clean assembleRelease bundleRelease --no-daemon --no-build-cache --stacktrace --warning-mode all -Dorg.gradle.vfs.watch=false
     artifacts:
       - android/app/build/outputs/apk/**/*.apk
       - android/app/build/outputs/bundle/**/*.aab
