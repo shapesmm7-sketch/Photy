@@ -42,8 +42,10 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
-    packagingOptions {
-        pickFirst '**/libc++_shared.so'
+    packaging {
+        jniLibs {
+            pickFirsts.add("**/libc++_shared.so")
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_21

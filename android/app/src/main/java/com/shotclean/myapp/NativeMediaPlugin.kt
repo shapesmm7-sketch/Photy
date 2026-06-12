@@ -413,7 +413,12 @@ class NativeMediaPlugin : Plugin() {
             call.reject("Context is null")
             return
         }
-        
+
+        if (format != "avif" && format != "gif") {
+            call.reject("Unsupported format $format")
+            return
+        }
+
         Thread {
             try {
                 val cleanBase64 = if (base64Data.contains(",")) {
@@ -432,22 +437,15 @@ class NativeMediaPlugin : Plugin() {
 
                 val outputFile = File(cacheDir, "output_${System.currentTimeMillis()}.$format")
 
-                var cmd = ""
-                if (format == "avif") {
-                    cmd = "-i ${inputFile.absolutePath} -c:v libaom-av1 -crf 30 -b:v 0 ${outputFile.absolutePath}"
-                } else if (format == "gif") {
-                    cmd = "-loop 1 -i ${inputFile.absolutePath} -vf \"fps=10,scale=320:-1\" -t 3 ${outputFile.absolutePath}"
+                val cmd = if (format == "avif") {
+                    "-i ${inputFile.absolutePath} -c:v libaom-av1 -crf 30 -b:v 0 ${outputFile.absolutePath}"
                 } else {
-                    call.reject("Unsupported format $format")
-                    return@Thread
+                    "-loop 1 -i ${inputFile.absolutePath} -vf \"fps=10,scale=320:-1\" -t 3 ${outputFile.absolutePath}"
                 }
 
                 com.arthenica.ffmpegkit.FFmpegKit.executeAsync(cmd) { session ->
-                    val returnCode = session.returnCode
+                    val returnCode = session.getReturnCode()
                     if (com.arthenica.ffmpegkit.ReturnCode.isSuccess(returnCode)) {
-                        // success, convert result back to base64 or save natively!
-                        // The user said: "Return the output file path after conversion", we can return a data URL so the frontend doesn't need much change, OR we can read it to base64.
-                        // Or we can save to gallery and return base64
                         try {
                             val outBytes = outputFile.readBytes()
                             val outBase64 = Base64.encodeToString(outBytes, Base64.NO_WRAP)
@@ -458,7 +456,9 @@ class NativeMediaPlugin : Plugin() {
                             call.reject("Failed to read converted file")
                         }
                     } else {
-                        call.reject("FFmpeg failed with state ${session.state} and rc ${returnCode}.${session.failStackTrace}")
+                        val state = session.getState()
+                        val failTrace = session.getFailStackTrace()
+                        call.reject("FFmpeg failed with state $state and rc $returnCode. $failTrace")
                     }
                 }
             } catch (e: Exception) {
