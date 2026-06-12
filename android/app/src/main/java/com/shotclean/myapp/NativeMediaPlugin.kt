@@ -398,6 +398,75 @@ class NativeMediaPlugin : Plugin() {
         return fileUri
     }
 
+    @PluginMethod
+    fun convertImage(call: PluginCall) {
+        val base64Data: String? = call.getString("base64")
+        val format: String = call.getString("format", "avif") ?: "avif"
+
+        if (base64Data == null) {
+            call.reject("Base64 string is missing")
+            return
+        }
+
+        val ctx: Context? = getContext()
+        if (ctx == null) {
+            call.reject("Context is null")
+            return
+        }
+        
+        Thread {
+            try {
+                val cleanBase64 = if (base64Data.contains(",")) {
+                    base64Data.substring(base64Data.indexOf(",") + 1)
+                } else {
+                    base64Data
+                }
+                val decodedBytes = Base64.decode(cleanBase64, Base64.DEFAULT)
+                
+                val cacheDir = ctx.cacheDir
+                val inputFile = File(cacheDir, "input_${System.currentTimeMillis()}.png")
+                val fos = FileOutputStream(inputFile)
+                fos.write(decodedBytes)
+                fos.flush()
+                fos.close()
+
+                val outputFile = File(cacheDir, "output_${System.currentTimeMillis()}.$format")
+
+                var cmd = ""
+                if (format == "avif") {
+                    cmd = "-i ${inputFile.absolutePath} -c:v libaom-av1 -crf 30 -b:v 0 ${outputFile.absolutePath}"
+                } else if (format == "gif") {
+                    cmd = "-loop 1 -i ${inputFile.absolutePath} -vf \"fps=10,scale=320:-1\" -t 3 ${outputFile.absolutePath}"
+                } else {
+                    call.reject("Unsupported format $format")
+                    return@Thread
+                }
+
+                com.arthenica.ffmpegkit.FFmpegKit.executeAsync(cmd) { session ->
+                    val returnCode = session.returnCode
+                    if (com.arthenica.ffmpegkit.ReturnCode.isSuccess(returnCode)) {
+                        // success, convert result back to base64 or save natively!
+                        // The user said: "Return the output file path after conversion", we can return a data URL so the frontend doesn't need much change, OR we can read it to base64.
+                        // Or we can save to gallery and return base64
+                        try {
+                            val outBytes = outputFile.readBytes()
+                            val outBase64 = Base64.encodeToString(outBytes, Base64.NO_WRAP)
+                            val res = JSObject()
+                            res.put("base64", "data:image/$format;base64,$outBase64")
+                            call.resolve(res)
+                        } catch (e: Exception) {
+                            call.reject("Failed to read converted file")
+                        }
+                    } else {
+                        call.reject("FFmpeg failed with state ${session.state} and rc ${returnCode}.${session.failStackTrace}")
+                    }
+                }
+            } catch (e: Exception) {
+                call.reject("Conversion error", e)
+            }
+        }.start()
+    }
+
     private fun saveImageToGallery(androidContext: Context, bitmap: Bitmap): Uri? {
         val filename = "photy_" + System.currentTimeMillis() + ".png"
         var imageUri: Uri? = null

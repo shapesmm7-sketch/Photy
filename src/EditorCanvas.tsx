@@ -1112,21 +1112,46 @@ export default function EditorCanvas({
       const base64 = dataUrl.split(",")[1];
       const mimeType = dataUrl.substring(dataUrl.indexOf(":")+1, dataUrl.indexOf(";"));
 
-      const res = await fetch("/api/detect-sensitive", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base64, mimeType })
+      const apiKey = process.env.GEMINI_API_KEY || "";
+      if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
+      
+      const { GoogleGenAI, Type } = await import("@google/genai");
+      const ai = new GoogleGenAI({ apiKey });
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3.1-pro-preview",
+        contents: [
+            {
+                inlineData: {
+                    mimeType: mimeType,
+                    data: base64
+                }
+            },
+            {
+                text: "Analyze this image and identify all bounding boxes for sensitive information like email addresses, phone numbers, full names, account numbers, or financial data. Be very precise with the bounding boxes. Ensure they cover the sensitive text. The coordinates x and y are the top left corner, w is width and h is height. Your output space is normalized 0-1000 so coordinates should be integers from 0 to 1000 where 1000 x 1000 covers the entire image."
+            }
+        ],
+        config: {
+             responseMimeType: "application/json",
+             responseSchema: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        x: { type: Type.NUMBER, description: "X coordinate of top-left corner (0-1000 space)" },
+                        y: { type: Type.NUMBER, description: "Y coordinate of top-left corner (0-1000 space)" },
+                        w: { type: Type.NUMBER, description: "Width (0-1000 space)" },
+                        h: { type: Type.NUMBER, description: "Height (0-1000 space)" },
+                        type: { type: Type.STRING, description: "Type of sensitive info detected, e.g. email, phone" }
+                    },
+                    required: ["x", "y", "w", "h", "type"]
+                }
+             }
+        }
       });
       
-      if (!res.ok) {
-        let errStr = await res.text();
-        try {
-           const parsed = JSON.parse(errStr);
-           if (parsed.error) errStr = parsed.error;
-        } catch (e) {}
-        throw new Error(errStr);
-      }
-      const boxes = await res.json();
+      const boxesStr = response.text || "[]";
+      const boxes = JSON.parse(boxesStr);
       
       if (boxes && boxes.length > 0) {
         const newPaths: DrawingPath[] = boxes.map((box: any) => {

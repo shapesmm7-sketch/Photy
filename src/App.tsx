@@ -58,6 +58,7 @@ import {
   admobManager,
   AdMobInterstitialContainer,
 } from "./lib/admob";
+import { saveRecentEdit, getRecentEdits, RecentEdit, deleteRecentEdit } from "./lib/storage";
 
 type AppState = "upload" | "processing" | "preview";
 
@@ -133,6 +134,36 @@ export default function App() {
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [baseStyledImage, setBaseStyledImage] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
+
+  useEffect(() => {
+    getRecentEdits().then(setRecentEdits);
+  }, []);
+
+  const generateThumbnail = (src: string, maxSize = 200): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        const scale = Math.min(maxSize / width, maxSize / height);
+        if (scale < 1) {
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        } else {
+          resolve(src);
+          return;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.src = src;
+    });
+  };
 
   const generateHighQualityImage = async (): Promise<string> => {
     if (originalImage && loadedOriginalImage) {
@@ -514,6 +545,32 @@ export default function App() {
   // Deselect custom color if style or layout changes, EXCEPT when changing the custom color itself
   // Actually, we don't necessarily want to unset it. Let's let the user keep it if they explicitly set it.
 
+  const handleDeleteRecent = async (id: string) => {
+    await deleteRecentEdit(id);
+    const updated = await getRecentEdits();
+    setRecentEdits(updated);
+  };
+
+  const handleLoadRecent = (originalSrc: string) => {
+    setActiveTab("layouts");
+    setSelectedStyle("Original");
+    setSelectedLayout("None");
+    setCustomBgColor(null);
+    setBlurStrength(15);
+    setSensitiveAreas([]);
+    setMemeTopText("TOP TEXT");
+    setMemeBottomText("BOTTOM TEXT");
+    setCustomImageOffset({ x: 0, y: 0 });
+    setCustomImageScale(1);
+    setZoomScale(1);
+    setZoomOffset({ x: 0, y: 0 });
+    setOriginalImage(originalSrc);
+    setCleanImage(originalSrc);
+    setProcessedImage(originalSrc);
+    setAppState("preview");
+    setShowSettings(false);
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -563,6 +620,12 @@ export default function App() {
         setOriginalImage(resizedResult);
         setCleanImage(resizedResult);
         setProcessedImage(resizedResult);
+
+        generateThumbnail(resizedResult).then((thumb) => {
+          saveRecentEdit({ originalImage: resizedResult, thumbnail: thumb }).then(() => {
+            getRecentEdits().then(setRecentEdits);
+          });
+        });
 
         if (!activeQuickFeature) {
           const topH = Math.round(height * 0.04);
@@ -1467,6 +1530,36 @@ export default function App() {
               </div>
 
               <div className="space-y-3">
+                {/* Recent Edits */}
+                <div className={`p-4 rounded-2xl ${isDarkMode ? "bg-slate-700" : "bg-gray-50"}`}>
+                  <h3 className={`text-[10px] font-extrabold uppercase tracking-wider mb-3 ${isDarkMode ? "text-slate-400" : "text-gray-500"}`}>
+                    Recent Edits
+                  </h3>
+                  <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                    {recentEdits.map((edit) => (
+                      <div key={edit.id} className="relative group shrink-0">
+                        <button
+                          onClick={() => handleLoadRecent(edit.originalImage)}
+                          className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all active:scale-95 ${isDarkMode ? "border-slate-600 hover:border-blue-500" : "border-gray-200 hover:border-blue-400"}`}
+                        >
+                          <img src={edit.thumbnail} alt="Recent" className="w-full h-full object-cover" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteRecent(edit.id); }}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-100 transition-opacity z-10 shadow-sm"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                    {recentEdits.length === 0 && (
+                      <div className={`w-full text-center p-3 rounded-lg text-xs font-semibold ${isDarkMode ? "bg-slate-800 text-slate-500" : "bg-white text-gray-400 border border-gray-100"}`}>
+                        No recent edits yet
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Language Selector */}
                 <div
                   className={`w-full flex items-center justify-between p-4 rounded-2xl transition-colors ${isDarkMode ? "bg-slate-700" : "bg-gray-50"}`}

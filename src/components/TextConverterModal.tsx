@@ -379,24 +379,21 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
         let finalBase64 = dataUrl;
 
         if (!dataUrl.startsWith(`data:${mimeType}`)) {
-          // Fallback to server for complex formats
-          const response = await fetch("/api/convert", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              base64: imageData,
-              format: selectedFormat,
-              quality: 90,
-            }),
-          });
-
-          if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error || "Conversion failed");
+          if (Capacitor.isNativePlatform()) {
+            const NativeMedia = registerPlugin<any>("NativeMedia");
+            try {
+              const response = await NativeMedia.convertImage({
+                base64: dataUrl,
+                format: selectedFormat
+              });
+              finalBase64 = response.base64;
+            } catch (nativeErr) {
+              console.error("Native conversion failed", nativeErr);
+              throw new Error("Native Conversion Failed: " + (nativeErr as Error).message);
+            }
+          } else {
+            throw new Error("Format conversion not supported in web version. Please use the mobile app.");
           }
-
-          const result = await response.json();
-          finalBase64 = result.base64;
         }
 
         if (Capacitor.isNativePlatform()) {
