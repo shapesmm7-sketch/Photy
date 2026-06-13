@@ -430,14 +430,7 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
                           className={`relative flex-1 aspect-[3/4] sm:aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all overflow-hidden ${pageImage ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-white'}`}
                         >
                           {pageImage ? (
-                            <>
-                              <img src={pageImage} className="absolute inset-0 w-full h-full object-cover" alt={`Page ${index + 1}`} />
-                              <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-1.5 transition-opacity">
-                                <button onClick={() => onEditPage(index, pageImage)} className="text-white text-[10px] sm:text-xs font-bold bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-full w-20 flex items-center justify-center gap-1 transition-all"><Sparkles className="w-3 h-3"/>Edit</button>
-                                <button onClick={() => handleCameraClick(index)} className="text-white text-[10px] sm:text-xs font-bold bg-black/60 hover:bg-black/80 px-3 py-1 rounded-full w-20 flex items-center justify-center gap-1 transition-all"><Camera className="w-3 h-3"/>Replace</button>
-                                <button onClick={() => handleUploadClick(index)} className="text-white text-[10px] sm:text-xs font-bold bg-black/60 hover:bg-black/80 px-3 py-1 rounded-full w-20 flex items-center justify-center gap-1 transition-all"><Upload className="w-3 h-3"/>Upload</button>
-                              </div>
-                            </>
+                            <img src={pageImage} className="absolute inset-0 w-full h-full object-cover" alt={`Page ${index + 1}`} />
                           ) : (
                             <div className="w-full h-full flex flex-col">
                               <button onClick={() => handleCameraClick(index)} className="flex-1 flex flex-col items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors border-b-2 border-dashed border-gray-100">
@@ -452,9 +445,38 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
                           )}
                         </div>
                         {pageImage && (
-                          <button onClick={() => removePage(index)} className="absolute top-8 right-2 p-1.5 bg-red-500 text-white rounded-full shadow-lg shadow-red-500/30 hover:bg-red-600 transform scale-75 md:scale-100 transition-all">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5">
+                            <button 
+                              onClick={() => onEditPage(index, pageImage)} 
+                              className="flex-[1_1_35%] py-1.5 px-2 bg-blue-50 active:bg-blue-105 text-blue-600 rounded-xl text-[10px] font-black flex items-center justify-center gap-1 transition-all"
+                              title="Edit"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                              <span>Edit</span>
+                            </button>
+                            <button 
+                              onClick={() => handleCameraClick(index)} 
+                              className="flex-[1_1_35%] py-1.5 px-2 bg-gray-50 active:bg-gray-105 text-gray-700 border border-gray-200 rounded-xl text-[10px] font-black flex items-center justify-center gap-1 transition-all"
+                              title="Retake"
+                            >
+                              <Camera className="w-3.5 h-3.5 text-gray-500" />
+                              <span>Retake</span>
+                            </button>
+                            <button 
+                              onClick={() => handleUploadClick(index)} 
+                              className="p-1.5 bg-gray-50 active:bg-gray-105 text-gray-700 border border-gray-200 rounded-xl transition-all flex items-center justify-center"
+                              title="Upload File"
+                            >
+                              <Upload className="w-3.5 h-3.5 text-gray-500" />
+                            </button>
+                            <button 
+                              onClick={() => removePage(index)} 
+                              className="p-1.5 bg-red-50 active:bg-red-105 text-red-600 border border-red-100 rounded-xl transition-all flex items-center justify-center"
+                              title="Delete Page"
+                            >
+                              <X className="w-3.5 h-3.5 text-red-500" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     );

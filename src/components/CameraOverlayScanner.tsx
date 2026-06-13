@@ -13,61 +13,11 @@ interface CameraOverlayScannerProps {
 export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, targetAspect = 1.588 }: CameraOverlayScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string>("");
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [isTorchOn, setIsTorchOn] = useState(false);
   const [isTorchSupported, setIsTorchSupported] = useState(false);
-
-  const drawOverlay = useCallback(() => {
-    const canvas = canvasRef.current;
-    const overlay = overlayRef.current;
-    if (!canvas || !overlay) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Set canvas dimensions to match displays precisely
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // 1. Draw solid dark overlay on full screen
-    ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // 2. Get the bounding box of the target frame
-    const cardRect = overlay.getBoundingClientRect();
-    const canvasRect = canvas.getBoundingClientRect();
-
-    const x = cardRect.left - canvasRect.left;
-    const y = cardRect.top - canvasRect.top;
-    const w = cardRect.width;
-    const h = cardRect.height;
-    const radius = 16; // border-radius of the guide box
-
-    // 3. Clear the center (transparent hole) utilizing equivalent CLEAR composite mode
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.beginPath();
-    if (ctx.roundRect) {
-      ctx.roundRect(x, y, w, h, radius);
-    } else {
-      ctx.moveTo(x + radius, y);
-      ctx.arcTo(x + w, y, x + w, y + h, radius);
-      ctx.arcTo(x + w, y + h, x, y + h, radius);
-      ctx.arcTo(x, y + h, x, y, radius);
-      ctx.arcTo(x, y, x + w, y, radius);
-      ctx.closePath();
-    }
-    ctx.fill();
-
-    // 4. Restore default state
-    ctx.globalCompositeOperation = "source-over";
-  }, []);
 
   const startCamera = useCallback(async () => {
     try {
@@ -75,6 +25,10 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
         const oldStream = videoRef.current.srcObject as MediaStream;
         oldStream.getTracks().forEach((track) => track.stop());
         videoRef.current.srcObject = null;
+      }
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        setStream(null);
       }
       
       // Request maximum possible resolution and disable user-agent scaling with resizeMode: "none"
@@ -154,21 +108,6 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
       setStream(null);
     };
   }, [isOpen, startCamera]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    // Trigger overlay drawing
-    const timer = setTimeout(() => {
-      drawOverlay();
-    }, 150);
-
-    window.addEventListener("resize", drawOverlay);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("resize", drawOverlay);
-    };
-  }, [isOpen, drawOverlay]);
 
   const toggleCamera = () => {
     setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
@@ -325,69 +264,97 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
                 playsInline
                 muted
                 className="absolute inset-0 w-full h-full object-cover bg-black"
+                style={{ opacity: 1.0 }}
               />
               
-              {/* Overlay with cutout */}
-              <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-                {/* Canvas acts as a physical destination-out mask, leaving 100% original camera feed inside */}
-                <canvas 
-                  ref={canvasRef} 
-                  className="absolute inset-0 w-full h-full pointer-events-none z-[11]" 
-                />
-                
-                {/* Visual alignment box - 100% transparent center */}
-                <div 
-                   ref={overlayRef}
-                   className={`${overlayWidthClass} border-4 border-white/90 rounded-2xl relative z-[12]`}
-                   style={{ aspectRatio: targetAspect.toString() }}
-                >
-                  <div className="absolute -top-[4px] -left-[4px] w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl" />
-                  <div className="absolute -top-[4px] -right-[4px] w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl" />
-                  <div className="absolute -bottom-[4px] -left-[4px] w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl" />
-                  <div className="absolute -bottom-[4px] -right-[4px] w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-2xl" />
-                  <p className="absolute -top-10 left-0 right-0 text-center text-white font-bold tracking-widest text-xs sm:text-sm drop-shadow-md">
+              {/* Separate Overlay layout darkening ONLY the outside area with NO covering layer on the ID frame clear area */}
+              <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
+                {/* TOP DARK AREA - background opacity is #99000000 equivalent (rgba(0,0,0,0.6)) */}
+                 <div className="flex-1 w-full bg-black/60 flex items-end justify-center pb-6">
+                  <p className="text-white font-bold tracking-widest text-xs sm:text-sm drop-shadow-md px-4 text-center">
                     Fit {docTitle} within the frame
                   </p>
                 </div>
+
+                {/* CENTER ROW */}
+                <div className="flex-none flex flex-row items-stretch w-full">
+                  {/* LEFT DARK */}
+                  <div className="flex-1 bg-black/60" />
+
+                  {/* ID FRAME (CLEAR AREA with 100% original, untouched camera feed) */}
+                  <div 
+                     ref={overlayRef}
+                     className={`${overlayWidthClass} relative border-3 border-[#00AEEF] rounded-xl bg-transparent flex-none`}
+                     style={{ aspectRatio: targetAspect.toString() }}
+                  >
+                    {/* Corners around cutout for precise visual guides */}
+                    <div className="absolute -top-[3px] -left-[3px] w-8 h-8 border-t-3 border-l-3 border-white rounded-tl-xl" />
+                    <div className="absolute -top-[3px] -right-[3px] w-8 h-8 border-t-3 border-r-3 border-white rounded-tr-xl" />
+                    <div className="absolute -bottom-[3px] -left-[3px] w-8 h-8 border-b-3 border-l-3 border-white rounded-bl-xl" />
+                    <div className="absolute -bottom-[3px] -right-[3px] w-8 h-8 border-b-3 border-r-3 border-white rounded-br-xl" />
+                  </div>
+
+                  {/* RIGHT DARK */}
+                  <div className="flex-1 bg-black/60" />
+                </div>
+
+                {/* BOTTOM DARK AREA */}
+                <div className="flex-1 w-full bg-black/60" />
               </div>
             </>
           )}
 
-          {/* Top Bar */}
-          <div className="absolute top-0 left-0 w-full p-4 flex justify-between items-start z-20 SafeAreaTop">
-            <button
-              onClick={onClose}
-              className="p-3 bg-black/40 backdrop-blur rounded-full text-white hover:bg-black/60 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-            <button
-              onClick={toggleCamera}
-              className="p-3 bg-black/40 backdrop-blur rounded-full text-white hover:bg-black/60 transition-colors"
-            >
-              <RefreshCcw className="w-6 h-6" />
-            </button>
-            {isTorchSupported && (
-              <button
-                onClick={toggleTorch}
-                className={`p-3 backdrop-blur rounded-full text-white transition-colors ${
-                  isTorchOn ? "bg-amber-500 hover:bg-amber-600" : "bg-black/40 hover:bg-black/60"
-                }`}
-              >
-                {isTorchOn ? <Flashlight className="w-6 h-6" /> : <FlashlightOff className="w-6 h-6" />}
-              </button>
-            )}
-          </div>
-
-          {/* Bottom Bar Controls */}
+          {/* Bottom Bar Controls - Relocated to the bottom, untouched by top banner ads */}
           {!error && (
-            <div className="absolute bottom-0 left-0 w-full p-8 flex justify-center items-center z-20 pb-safe pb-10">
-              <button
-                onClick={handleCapture}
-                className="w-20 h-20 rounded-full border-[6px] border-white/80 flex items-center justify-center bg-transparent active:scale-95 transition-transform"
-              >
-                <div className="w-16 h-16 bg-white rounded-full"></div>
-              </button>
+            <div className="absolute bottom-0 left-0 w-full p-6 flex flex-col items-center gap-4 z-20 bg-gradient-to-t from-black/90 via-black/75 to-transparent pb-safe pb-8">
+              {/* Floating Torch/Flashlight control */}
+              {isTorchSupported && (
+                <button
+                  onClick={toggleTorch}
+                  className={`p-3.5 backdrop-blur rounded-full text-white transition-all shadow-md active:scale-90 ${
+                    isTorchOn ? "bg-amber-500 hover:bg-amber-600 scale-105" : "bg-black/60 hover:bg-black/85"
+                  }`}
+                  aria-label="Toggle flashlight"
+                >
+                  {isTorchOn ? <Flashlight className="w-5 h-5 animate-pulse" /> : <FlashlightOff className="w-5 h-5 opacity-80" />}
+                </button>
+              )}
+
+              {/* Main controls row */}
+              <div className="w-full flex items-center justify-around max-w-xs sm:max-w-md">
+                {/* Cancel/Close Button */}
+                <button
+                  onClick={onClose}
+                  className="flex flex-col items-center gap-1 group focus:outline-none"
+                  aria-label="Cancel scanning"
+                >
+                  <div className="p-3.5 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-full transition-transform active:scale-90 shadow-lg">
+                    <X className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] text-white/80 font-bold uppercase tracking-widest leading-none mt-1">Cancel</span>
+                </button>
+
+                {/* Capture Button */}
+                <button
+                  onClick={handleCapture}
+                  className="w-20 h-20 rounded-full border-[6px] border-white flex items-center justify-center bg-transparent active:scale-95 transition-transform shadow-xl hover:scale-105"
+                  aria-label="Capture photo"
+                >
+                  <div className="w-14 h-14 bg-white active:bg-gray-100 rounded-full"></div>
+                </button>
+
+                {/* Switch Camera Button */}
+                <button
+                  onClick={toggleCamera}
+                  className="flex flex-col items-center gap-1 group focus:outline-none"
+                  aria-label="Switch camera"
+                >
+                  <div className="p-3.5 bg-black/60 active:bg-black/85 text-white border border-white/20 rounded-full transition-transform active:scale-90 shadow-lg">
+                    <RefreshCcw className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] text-white/80 font-bold uppercase tracking-widest leading-none mt-1">Flip</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
