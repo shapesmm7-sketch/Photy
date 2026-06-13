@@ -29,8 +29,9 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
       const newStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: { ideal: facingMode },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
+          width: { ideal: 4096 }, // Request 4K if available for sharper images
+          height: { ideal: 2160 },
+          advanced: [{ focusMode: "continuous" } as any]
         },
         audio: false,
       });
@@ -149,8 +150,6 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
         croppedCanvas.height = cropH;
         const croppedCtx = croppedCanvas.getContext("2d");
         if (croppedCtx) {
-          // Auto-enhance the captured document (brightness and contrast)
-          croppedCtx.filter = "brightness(1.2) contrast(1.15) saturate(1.1)";
           croppedCtx.drawImage(
             canvas,
             cropX, cropY, cropW, cropH,
@@ -193,7 +192,6 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
                 playsInline
                 muted
                 className="absolute inset-0 w-full h-full object-cover"
-                style={{ filter: "brightness(1.15) contrast(1.1) saturate(1.1)" }}
               />
               
               {/* Overlay with cutout */}

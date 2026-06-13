@@ -4,7 +4,7 @@ import { X, Upload, Camera, FileText, Download, CheckCircle2, ChevronDown, Searc
 import { convertPhotoToPdf, PDFExportOptions } from "../lib/pdfGenerator";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { stitchImages, compileIDCardToA4 } from "../lib/stitchImages";
-import { admobManager } from "../lib/admob";
+import { admobManager, isNative } from "../lib/admob";
 import { CameraOverlayScanner } from "./CameraOverlayScanner";
 
 function isIDCard(type: string): boolean {
@@ -323,6 +323,7 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/80 backdrop-blur-sm shadow-2xl"
+          style={{ paddingTop: !isPremium && isNative ? "calc(env(safe-area-inset-top) + 60px)" : undefined }}
         >
           <motion.div
             initial={{ y: 50, opacity: 0 }}
@@ -567,6 +568,7 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[200] bg-slate-950 flex flex-col justify-between p-6 select-none"
+          style={{ paddingTop: !isPremium && isNative ? "calc(env(safe-area-inset-top) + 60px)" : undefined }}
         >
           {/* Top Info Bar */}
           <div className="flex justify-between items-center w-full">
