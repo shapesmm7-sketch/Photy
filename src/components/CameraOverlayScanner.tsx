@@ -13,11 +13,61 @@ interface CameraOverlayScannerProps {
 export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, targetAspect = 1.588 }: CameraOverlayScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string>("");
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [isTorchOn, setIsTorchOn] = useState(false);
   const [isTorchSupported, setIsTorchSupported] = useState(false);
+
+  const drawOverlay = useCallback(() => {
+    const canvas = canvasRef.current;
+    const overlay = overlayRef.current;
+    if (!canvas || !overlay) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Set canvas dimensions to match displays precisely
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 1. Draw solid dark overlay on full screen
+    ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 2. Get the bounding box of the target frame
+    const cardRect = overlay.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+
+    const x = cardRect.left - canvasRect.left;
+    const y = cardRect.top - canvasRect.top;
+    const w = cardRect.width;
+    const h = cardRect.height;
+    const radius = 16; // border-radius of the guide box
+
+    // 3. Clear the center (transparent hole) utilizing equivalent CLEAR composite mode
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(x, y, w, h, radius);
+    } else {
+      ctx.moveTo(x + radius, y);
+      ctx.arcTo(x + w, y, x + w, y + h, radius);
+      ctx.arcTo(x + w, y + h, x, y + h, radius);
+      ctx.arcTo(x, y + h, x, y, radius);
+      ctx.arcTo(x, y, x + w, y, radius);
+      ctx.closePath();
+    }
+    ctx.fill();
+
+    // 4. Restore default state
+    ctx.globalCompositeOperation = "source-over";
+  }, []);
 
   const startCamera = useCallback(async () => {
     try {
@@ -104,6 +154,21 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
       setStream(null);
     };
   }, [isOpen, startCamera]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // Trigger overlay drawing
+    const timer = setTimeout(() => {
+      drawOverlay();
+    }, 150);
+
+    window.addEventListener("resize", drawOverlay);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", drawOverlay);
+    };
+  }, [isOpen, drawOverlay]);
 
   const toggleCamera = () => {
     setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
@@ -264,10 +329,16 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
               
               {/* Overlay with cutout */}
               <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none">
-                {/* We use a shadow strategy for the dark overlay around the cutout. */}
+                {/* Canvas acts as a physical destination-out mask, leaving 100% original camera feed inside */}
+                <canvas 
+                  ref={canvasRef} 
+                  className="absolute inset-0 w-full h-full pointer-events-none z-[11]" 
+                />
+                
+                {/* Visual alignment box - 100% transparent center */}
                 <div 
                    ref={overlayRef}
-                   className={`${overlayWidthClass} border-4 border-white/80 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.65)]`}
+                   className={`${overlayWidthClass} border-4 border-white/90 rounded-2xl relative z-[12]`}
                    style={{ aspectRatio: targetAspect.toString() }}
                 >
                   <div className="absolute -top-[4px] -left-[4px] w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl" />
