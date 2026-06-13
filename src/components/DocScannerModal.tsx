@@ -95,7 +95,6 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
   const [searchQuery, setSearchQuery] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  const [capturedPageForPrompt, setCapturedPageForPrompt] = useState<{ index: number; data: string } | null>(null);
   const [targetIndex, setTargetIndex] = useState<number | null>(null);
 
   const [format, setFormat] = useState<Format>("pdf");
@@ -116,20 +115,16 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
 
   const handleCameraCapture = (base64Image: string) => {
     setIsCameraScannerOpen(false);
-    let newIndex = 0;
     setPages(prev => {
       if (targetIndex !== null && targetIndex < prev.length) {
-        newIndex = targetIndex;
         const next = [...prev];
         next[targetIndex] = base64Image;
         return next;
       } else {
-        newIndex = prev.length;
         return [...prev, base64Image];
       }
     });
     setTargetIndex(null);
-    setCapturedPageForPrompt({ index: newIndex, data: base64Image });
   };
 
   const handleImageLoad = (file: File) => {
@@ -137,20 +132,16 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
     reader.onload = (e) => {
       if (e.target?.result) {
         const newImg = e.target.result as string;
-        let newIndex = 0;
         setPages(prev => {
           if (targetIndex !== null && targetIndex < prev.length) {
-            newIndex = targetIndex;
             const next = [...prev];
             next[targetIndex] = newImg;
             return next;
           } else {
-            newIndex = prev.length;
             return [...prev, newImg];
           }
         });
         setTargetIndex(null);
-        setCapturedPageForPrompt({ index: newIndex, data: newImg });
       }
     };
     reader.readAsDataURL(file);
@@ -561,51 +552,6 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
                 <p className="text-center text-xs text-gray-500 mt-3 font-medium">Capture or upload at least one page to begin.</p>
               )}
             </div>
-
-            {capturedPageForPrompt && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-black/75 backdrop-blur-sm z-[110] flex items-center justify-center p-6"
-              >
-                <motion.div 
-                  initial={{ scale: 0.9, y: 20 }}
-                  animate={{ scale: 1, y: 0 }}
-                  className="bg-white rounded-[28px] p-6 max-w-sm w-full text-center shadow-2xl relative"
-                >
-                  <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
-                    <Sparkles className="w-7 h-7" />
-                  </div>
-                  
-                  <h3 className="text-lg font-black text-gray-950 mb-2">Captured Successfully!</h3>
-                  <p className="text-xs text-gray-500 mb-6 leading-relaxed">
-                    Would you like to auto-crop, rotate, draw, or adjust contrast on this photo using Photy's built-in image designer?
-                  </p>
-
-                  <div className="flex flex-col gap-2">
-                    <button
-                      onClick={() => {
-                        if (capturedPageForPrompt) {
-                          const { index, data } = capturedPageForPrompt;
-                          setCapturedPageForPrompt(null);
-                          onEditPage(index, data);
-                        }
-                      }}
-                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl transition-all shadow-md shadow-blue-650/20 active:scale-[0.98] text-xs uppercase tracking-wider"
-                    >
-                      In-App Edit & Crop
-                    </button>
-                    <button
-                      onClick={() => setCapturedPageForPrompt(null)}
-                      className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold rounded-xl transition-all active:scale-[0.98] text-xs uppercase tracking-wider"
-                    >
-                      Save As Is (Skip)
-                    </button>
-                  </div>
-                </motion.div>
-              </motion.div>
-            )}
           </motion.div>
         </motion.div>
       )}

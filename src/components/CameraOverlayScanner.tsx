@@ -26,28 +26,41 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
         oldStream.getTracks().forEach((track) => track.stop());
         videoRef.current.srcObject = null;
       }
+      
+      // Request maximum possible resolution and disable user-agent scaling with resizeMode: "none"
+      // Request continuous focus, exposure, and white balance modes at the browser-camera level
       const newStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: { ideal: facingMode },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          advanced: [{ focusMode: "continuous" } as any]
-        },
+          width: { ideal: 3840, max: 3840 },
+          height: { ideal: 2160, max: 2160 },
+          focusMode: { ideal: "continuous" },
+          exposureMode: { ideal: "continuous" },
+          whiteBalanceMode: { ideal: "continuous" },
+          resizeMode: "none",
+        } as any,
         audio: false,
       });
       setStream(newStream);
       
       const track = newStream.getVideoTracks()[0];
-      const capabilities = track.getCapabilities ? track.getCapabilities() as any : {} as any;
-      setIsTorchSupported(!!(capabilities as any).torch);
+      const caps: any = track.getCapabilities ? track.getCapabilities() : {};
+      setIsTorchSupported(!!caps.torch);
       setIsTorchOn(false);
 
-      // Programmatically apply continuous focus if supported
-      if (capabilities.focusMode && (capabilities.focusMode.includes("continuous") || capabilities.focusMode.includes("autofocus"))) {
+      // Programmatically apply continuous focus constraints if supported by the hardware track
+      const supportedFocusModes = caps.focusMode || [];
+      if (supportedFocusModes.length > 0) {
         try {
-          await track.applyConstraints({
-            advanced: [{ focusMode: capabilities.focusMode.includes("continuous") ? "continuous" : "autofocus" }]
-          } as any);
+          const targetFocus = supportedFocusModes.includes("continuous") 
+            ? "continuous" 
+            : (supportedFocusModes.includes("autofocus") ? "autofocus" : null);
+          
+          if (targetFocus) {
+            await track.applyConstraints({
+              advanced: [{ focusMode: targetFocus } as any]
+            });
+          }
         } catch (e) {
           console.warn("Could not apply autofocus constraints:", e);
         }
@@ -55,7 +68,6 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
 
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
-        // Ensure starting and playing explicitly on WebView platforms
         videoRef.current.play().catch(e => console.warn("Video play error:", e));
       }
       setError("");
@@ -111,22 +123,60 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
     }
   };
 
-  const handleCapture = () => {
+  const handleCapture = async () => {
     if (videoRef.current && overlayRef.current) {
       const video = videoRef.current;
       const overlay = overlayRef.current;
       
+      let imgElement: HTMLImageElement | HTMLVideoElement = video;
+      let imgWidth = video.videoWidth;
+      let imgHeight = video.videoHeight;
+      let objectUrlToCleanup = "";
+
+      const track = stream?.getVideoTracks()[0];
+      // Check if browser/platform supports high-resolution photographic ImageCapture API
+      if (track && (window as any).ImageCapture) {
+        try {
+          const imageCapture = new (window as any).ImageCapture(track);
+          const photoBlob = await imageCapture.takePhoto({
+            imageWidth: track.getCapabilities?.()?.imageWidth?.max,
+            imageHeight: track.getCapabilities?.()?.imageHeight?.max
+          });
+          
+          const blobUrl = URL.createObjectURL(photoBlob);
+          const fullImg = new Image();
+          await new Promise((resolve) => {
+            fullImg.onload = () => {
+              objectUrlToCleanup = blobUrl;
+              imgWidth = fullImg.width;
+              imgHeight = fullImg.height;
+              imgElement = fullImg;
+              resolve(true);
+            };
+            fullImg.onerror = () => {
+              resolve(false);
+            };
+            fullImg.src = blobUrl;
+          });
+        } catch (e) {
+          console.warn("ImageCapture takePhoto failed, falling back to video stream canvas frame:", e);
+        }
+      }
+
       const canvas = document.createElement("canvas");
-      // Use actual video dimensions
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = imgWidth;
+      canvas.height = imgHeight;
       const ctx = canvas.getContext("2d");
       
       if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(imgElement, 0, 0, canvas.width, canvas.height);
         
-        // The video is `object-cover` within absolute inset-0 (the window)
-        const videoRatio = video.videoWidth / video.videoHeight;
+        if (objectUrlToCleanup) {
+          URL.revokeObjectURL(objectUrlToCleanup);
+        }
+        
+        // The media source (image or video) is `object-cover` within absolute inset-0 (the window container)
+        const videoRatio = imgWidth / imgHeight;
         const containerW = window.innerWidth;
         const containerH = window.innerHeight;
         const containerRatio = containerW / containerH;
@@ -134,13 +184,13 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
         let drawWidth, drawHeight, offsetX, offsetY;
         
         if (containerRatio > videoRatio) {
-            // Container is wider than video, so video height is cropped visually
+            // Container is wider than the source, so source height is cropped visually
             drawWidth = containerW;
             drawHeight = containerW / videoRatio;
             offsetX = 0;
             offsetY = (containerH - drawHeight) / 2;
         } else {
-            // Container is taller than video, so video width is cropped visually
+            // Container is taller than the source, so source width is cropped visually
             drawHeight = containerH;
             drawWidth = containerH * videoRatio;
             offsetX = (containerW - drawWidth) / 2;
@@ -150,8 +200,8 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
         // Overlay rect relative to window
         const rect = overlay.getBoundingClientRect();
         
-        // Map overlay visual rect to video native pixel dimensions
-        const scale = video.videoWidth / drawWidth;
+        // Map overlay visual rect to the source's native high-resolution pixel dimensions
+        const scale = imgWidth / drawWidth;
         
         const cropX = Math.max(0, (rect.left - offsetX) * scale);
         const cropY = Math.max(0, (rect.top - offsetY) * scale);
@@ -168,7 +218,7 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
             cropX, cropY, cropW, cropH,
             0, 0, cropW, cropH
           );
-          const base64 = croppedCanvas.toDataURL("image/jpeg", 0.95);
+          const base64 = croppedCanvas.toDataURL("image/jpeg", 0.98);
           onCapture(base64);
         }
       }
