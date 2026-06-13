@@ -3,8 +3,14 @@ import { motion, AnimatePresence } from "motion/react";
 import { X, Upload, Camera, FileText, Download, CheckCircle2, ChevronDown, Search, Plus } from "lucide-react";
 import { convertPhotoToPdf, PDFExportOptions } from "../lib/pdfGenerator";
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { stitchImages } from "../lib/stitchImages";
+import { stitchImages, compileIDCardToA4 } from "../lib/stitchImages";
 import { admobManager } from "../lib/admob";
+import { CameraOverlayScanner } from "./CameraOverlayScanner";
+
+function isIDCard(type: string): boolean {
+  const t = type.toLowerCase();
+  return t.includes("id") || t.includes("permit") || t.includes("license") || t.includes("card");
+}
 
 /*
   1. National ID
@@ -91,11 +97,31 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
 
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState(false);
   const [isPlayingAd, setIsPlayingAd] = useState(false);
   const [adCountdown, setAdCountdown] = useState(5);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  const handleCameraClick = (index?: number) => {
+    setTargetIndex(index ?? null);
+    setIsCameraScannerOpen(true);
+  };
+
+  const handleCameraCapture = (base64Image: string) => {
+    setIsCameraScannerOpen(false);
+    setPages(prev => {
+      if (targetIndex !== null && targetIndex < prev.length) {
+        const next = [...prev];
+        next[targetIndex] = base64Image;
+        return next;
+      } else {
+        return [...prev, base64Image];
+      }
+    });
+    setTargetIndex(null);
+  };
 
   const handleImageLoad = (file: File) => {
     const reader = new FileReader();
@@ -160,11 +186,6 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
     });
   };
 
-  const handleCameraClick = (index?: number) => {
-    setTargetIndex(index ?? null);
-    cameraInputRef.current?.click();
-  };
-
   const handleUploadClick = (index?: number) => {
     setTargetIndex(index ?? null);
     uploadInputRef.current?.click();
@@ -212,19 +233,32 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
     try {
       const filename = `${selectedDocType.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_scan`;
 
+      let imagesToCompile = [...pages];
+      let hasIDLayoutGenerated = false;
+
+      // If it's an ID Card and we have exactly 2 pages (Front and Back), composite them into one A4 page first!
+      if (isIDCard(selectedDocType) && pages.length === 2) {
+         try {
+           const compositeA4 = await compileIDCardToA4(pages[0], pages[1]);
+           imagesToCompile = [compositeA4];
+           hasIDLayoutGenerated = true;
+         } catch (err) {
+           console.error("Failed to compile ID layout:", err);
+         }
+      }
+
       if (format === "pdf") {
-        const imagesToCompile = [...pages];
         const options: PDFExportOptions = {
           pageSize: "A4",
           orientation: "portrait",
-          margin: "normal",
+          margin: hasIDLayoutGenerated ? "none" : "normal", // if already composited onto A4, don't add more margins
         };
         await convertPhotoToPdf(imagesToCompile, options, `${filename}.pdf`);
       } else {
         // Image format export
-        let finalImageSrc = pages[0];
-        if (pages.length > 1) {
-          finalImageSrc = await stitchImages(pages);
+        let finalImageSrc = imagesToCompile[0];
+        if (imagesToCompile.length > 1) {
+          finalImageSrc = await stitchImages(imagesToCompile);
         }
 
         // Change mime based on format
@@ -354,7 +388,7 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
                          <div className="max-h-60 overflow-y-auto">
                             {filteredDocs.length > 0 ? filteredDocs.map((doc, idx) => (
                               <button 
-                                key={idx}
+                                key={doc}
                                 onClick={() => {
                                   setSelectedDocType(doc);
                                   setIsDropdownOpen(false);
@@ -515,6 +549,16 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
             </div>
           </motion.div>
         </motion.div>
+      )}
+
+      {isCameraScannerOpen && (
+        <CameraOverlayScanner 
+          isOpen={isCameraScannerOpen}
+          onClose={() => setIsCameraScannerOpen(false)}
+          onCapture={handleCameraCapture}
+          docTitle={selectedDocType}
+          targetAspect={isIDCard(selectedDocType) ? 1.58 : (1 / 1.414)}
+        />
       )}
 
       {isPlayingAd && (

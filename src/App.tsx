@@ -1554,8 +1554,8 @@ export default function App() {
                     Recent Edits
                   </h3>
                   <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
-                    {recentEdits.map((edit) => (
-                      <div key={edit.id} className="relative group shrink-0">
+                    {recentEdits.map((edit, idx) => (
+                      <div key={`${edit.id}-${idx}`} className="relative group shrink-0">
                         <button
                           onClick={() => handleLoadRecent(edit.originalImage)}
                           className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all active:scale-95 ${isDarkMode ? "border-slate-600 hover:border-blue-500" : "border-gray-200 hover:border-blue-400"}`}

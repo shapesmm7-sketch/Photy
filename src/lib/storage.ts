@@ -30,7 +30,7 @@ export async function saveRecentEdit(edit: Omit<RecentEdit, "id" | "createdAt">)
 
     const newEdit: RecentEdit = {
       ...edit,
-      id: Date.now().toString(),
+      id: Date.now().toString() + "-" + Math.random().toString(36).substr(2, 9),
       createdAt: Date.now(),
     };
 
