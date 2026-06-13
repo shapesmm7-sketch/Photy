@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Camera as CameraIcon, CopyX, RefreshCcw } from "lucide-react";
+import { X, Camera as CameraIcon, CopyX, RefreshCcw, Flashlight, FlashlightOff } from "lucide-react";
 
 interface CameraOverlayScannerProps {
   isOpen: boolean;
@@ -16,45 +16,85 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string>("");
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
+  const [isTorchOn, setIsTorchOn] = useState(false);
+  const [isTorchSupported, setIsTorchSupported] = useState(false);
 
   const startCamera = useCallback(async () => {
     try {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+      if (videoRef.current?.srcObject) {
+        const oldStream = videoRef.current.srcObject as MediaStream;
+        oldStream.getTracks().forEach((track) => track.stop());
+        videoRef.current.srcObject = null;
       }
       const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facingMode } },
+        video: { 
+          facingMode: { ideal: facingMode },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        },
         audio: false,
       });
       setStream(newStream);
+      
+      const track = newStream.getVideoTracks()[0];
+      const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+      setIsTorchSupported(!!(capabilities as any).torch);
+      setIsTorchOn(false);
+
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
       }
       setError("");
+      return newStream;
     } catch (err: any) {
       console.warn("Camera error:", err);
       setError("Please allow camera access to scan documents directly. You can also upload a photo instead.");
+      return null;
     }
   }, [facingMode]);
 
   useEffect(() => {
+    let isMounted = true;
+    
     if (isOpen) {
-      startCamera();
-    } else {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-        setStream(null);
-      }
+      startCamera().then(newStream => {
+        if (!isMounted && newStream) {
+          // If unmounted before camera started, stop the tracks immediately
+          newStream.getTracks().forEach(t => t.stop());
+        }
+      });
     }
+
     return () => {
+      isMounted = false;
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
       }
+      if (videoRef.current?.srcObject) {
+        const oldStream = videoRef.current.srcObject as MediaStream;
+        oldStream.getTracks().forEach((track) => track.stop());
+        videoRef.current.srcObject = null;
+      }
+      setStream(null);
     };
-  }, [isOpen, facingMode]);
+  }, [isOpen, startCamera]);
 
   const toggleCamera = () => {
     setFacingMode((prev) => (prev === "environment" ? "user" : "environment"));
+  };
+
+  const toggleTorch = async () => {
+    if (stream) {
+      const track = stream.getVideoTracks()[0];
+      try {
+        await track.applyConstraints({
+          advanced: [{ torch: !isTorchOn }]
+        } as any);
+        setIsTorchOn(!isTorchOn);
+      } catch (e) {
+        console.warn("Torch error", e);
+      }
+    }
   };
 
   const handleCapture = () => {
@@ -109,6 +149,8 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
         croppedCanvas.height = cropH;
         const croppedCtx = croppedCanvas.getContext("2d");
         if (croppedCtx) {
+          // Auto-enhance the captured document (brightness and contrast)
+          croppedCtx.filter = "brightness(1.2) contrast(1.15) saturate(1.1)";
           croppedCtx.drawImage(
             canvas,
             cropX, cropY, cropW, cropH,
@@ -151,6 +193,7 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
                 playsInline
                 muted
                 className="absolute inset-0 w-full h-full object-cover"
+                style={{ filter: "brightness(1.15) contrast(1.1) saturate(1.1)" }}
               />
               
               {/* Overlay with cutout */}
@@ -161,10 +204,10 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
                    className="w-[90%] sm:w-[500px] border-4 border-white/80 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]"
                    style={{ aspectRatio: targetAspect.toString() }}
                 >
-                  <div className="absolute top-2 left-2 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl" />
-                  <div className="absolute top-2 right-2 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl" />
-                  <div className="absolute bottom-2 left-2 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl" />
-                  <div className="absolute bottom-2 right-2 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-xl" />
+                  <div className="absolute -top-[4px] -left-[4px] w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl" />
+                  <div className="absolute -top-[4px] -right-[4px] w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl" />
+                  <div className="absolute -bottom-[4px] -left-[4px] w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl" />
+                  <div className="absolute -bottom-[4px] -right-[4px] w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-2xl" />
                   <p className="absolute -top-10 left-0 right-0 text-center text-white font-bold tracking-widest text-sm drop-shadow-md">
                     Fit {docTitle} within the frame
                   </p>
@@ -187,6 +230,16 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
             >
               <RefreshCcw className="w-6 h-6" />
             </button>
+            {isTorchSupported && (
+              <button
+                onClick={toggleTorch}
+                className={`p-3 backdrop-blur rounded-full text-white transition-colors ${
+                  isTorchOn ? "bg-amber-500 hover:bg-amber-600" : "bg-black/40 hover:bg-black/60"
+                }`}
+              >
+                {isTorchOn ? <Flashlight className="w-6 h-6" /> : <FlashlightOff className="w-6 h-6" />}
+              </button>
+            )}
           </div>
 
           {/* Bottom Bar Controls */}
