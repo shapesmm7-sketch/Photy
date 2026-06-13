@@ -29,9 +29,8 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
       const newStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: { ideal: facingMode },
-          width: { ideal: 4096 }, // Request 4K if available for sharper images
-          height: { ideal: 2160 },
-          advanced: [{ focusMode: "continuous" } as any]
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
         },
         audio: false,
       });

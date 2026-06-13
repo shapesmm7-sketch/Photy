@@ -472,7 +472,7 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
-            className={`relative w-full max-w-md rounded-[28px] overflow-hidden shadow-2xl flex flex-col max-h-[92vh] ${
+            className={`relative w-full max-w-md rounded-[28px] overflow-hidden shadow-2xl flex flex-col max-h-full ${
               isDarkMode
                 ? "bg-slate-900 border border-slate-700 text-white"
                 : "bg-white text-slate-800"

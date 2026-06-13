@@ -7,6 +7,8 @@ import { stitchImages, compileIDCardToA4 } from "../lib/stitchImages";
 import { admobManager, isNative } from "../lib/admob";
 import { CameraOverlayScanner } from "./CameraOverlayScanner";
 
+import { Camera as CapCamera, CameraResultType, CameraSource } from '@capacitor/camera';
+
 function isIDCard(type: string): boolean {
   const t = type.toLowerCase();
   return t.includes("id") || t.includes("permit") || t.includes("license") || t.includes("card");
@@ -104,9 +106,27 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCameraClick = (index?: number) => {
+  const handleCameraClick = async (index?: number) => {
     setTargetIndex(index ?? null);
-    setIsCameraScannerOpen(true);
+    
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const image = await CapCamera.getPhoto({
+          quality: 100,
+          allowEditing: true, // Allow user to crop to ID card
+          resultType: CameraResultType.DataUrl,
+          source: CameraSource.Camera
+        });
+        
+        if (image.dataUrl) {
+          handleCameraCapture(image.dataUrl);
+        }
+      } catch (err) {
+        console.error("Camera error:", err);
+      }
+    } else {
+      setIsCameraScannerOpen(true);
+    }
   };
 
   const handleCameraCapture = (base64Image: string) => {
@@ -329,7 +349,7 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 50, opacity: 0 }}
-            className="bg-white w-full max-w-lg max-h-[90vh] rounded-[32px] overflow-hidden flex flex-col relative"
+            className="bg-white w-full max-w-lg max-h-full rounded-[32px] overflow-hidden flex flex-col relative"
           >
             <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-blue-50/30">
               <div className="flex items-center gap-3">

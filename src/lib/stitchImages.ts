@@ -33,22 +33,33 @@ export function compileIDCardToA4(frontSrc: string, backSrc: string): Promise<st
       const targetCardWidth = a4Width * 0.8;
 
       const drawCard = (img: HTMLImageElement, isTop: boolean) => {
-        const ratio = targetCardWidth / img.width;
-        let drawWidth = targetCardWidth;
-        let drawHeight = img.height * ratio;
-
-        // If for some reason the image is portrait, we rotate or treat differently? Let's assume it's landscape as captured from the box.
-        if (drawHeight > drawWidth) {
-           // Swap scale logic if needed, but we'll stick to scaling by width
-        }
+        let isPortrait = img.height > img.width;
+        
+        // Target dimensions for a landscape card
+        const cardTargetWidth = a4Width * 0.8; 
+        
+        let actualImgLandscapeWidth = isPortrait ? img.height : img.width;
+        let actualImgLandscapeHeight = isPortrait ? img.width : img.height;
+        
+        const ratio = cardTargetWidth / actualImgLandscapeWidth;
+        const drawWidth = cardTargetWidth;
+        const drawHeight = actualImgLandscapeHeight * ratio;
 
         const exactX = (a4Width - drawWidth) / 2;
-        // The top card is centered in the first half of the A4 page (a4Height/4)
-        // The bottom card is centered in the second half of the A4 page (a4Height * 3/4)
         const centerY = isTop ? (a4Height / 4) : (a4Height * 3 / 4);
         const exactY = centerY - (drawHeight / 2);
 
-        ctx.drawImage(img, exactX, exactY, drawWidth, drawHeight);
+        ctx.save();
+        if (isPortrait) {
+           // Translate to center of drawing area
+           ctx.translate(exactX + drawWidth / 2, exactY + drawHeight / 2);
+           ctx.rotate(-Math.PI / 2);
+           // Draw image centered on origin
+           ctx.drawImage(img, -drawHeight / 2, -drawWidth / 2, drawHeight, drawWidth);
+        } else {
+           ctx.drawImage(img, exactX, exactY, drawWidth, drawHeight);
+        }
+        ctx.restore();
       };
 
       drawCard(frontImg, true);
