@@ -193,7 +193,7 @@ class AdMobManager {
       this.preloadInterstitial();
     }
 
-    if (this.interactionCount >= 10) {
+    if (this.interactionCount >= 15) {
       this.interactionCount = 0;
       this.showInterstitial(() => {
         if (onTriggerInterstitial) onTriggerInterstitial();

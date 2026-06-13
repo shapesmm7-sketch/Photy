@@ -39,6 +39,7 @@ import { convertPhotoToPdf } from "./lib/pdfGenerator";
 import { ConverterModal } from "./components/ConverterModal";
 import { AppIconModal } from "./components/AppIconModal";
 import { TextConverterModal } from "./components/TextConverterModal";
+import { DocScannerModal } from "./components/DocScannerModal";
 import { translations, LanguageKey } from "./i18n";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Share } from "@capacitor/share";
@@ -219,6 +220,7 @@ export default function App() {
     | "converter"
     | "text"
     | "appicons"
+    | "docscanner"
     | null
   >(null);
   const [editorInitialTool, setEditorInitialTool] = useState<any>("none");
@@ -228,6 +230,7 @@ export default function App() {
   const [isConverterModalOpen, setIsConverterModalOpen] = useState(false);
   const [isTextModalOpen, setIsTextModalOpen] = useState(false);
   const [isAppIconModalOpen, setIsAppIconModalOpen] = useState(false);
+  const [isDocScannerModalOpen, setIsDocScannerModalOpen] = useState(false);
   const [pdfPageSize, setPdfPageSize] = useState<"A4" | "Letter" | "Original">(
     "A4",
   );
@@ -935,12 +938,17 @@ export default function App() {
       | "arrows"
       | "converter"
       | "text"
-      | "appicons",
+      | "appicons"
+      | "docscanner",
   ) => {
     setActiveQuickFeature(feature);
     setSelectedLayout("None");
     if (feature === "text") {
       setIsTextModalOpen(true);
+    } else if (feature === "docscanner") {
+      setIsDocScannerModalOpen(true);
+    } else if (feature === "converter") {
+      setIsConverterModalOpen(true);
     } else {
       fileInputRef.current?.click();
     }
@@ -1120,6 +1128,16 @@ export default function App() {
                   }`}
                 >
                   app icons
+                </button>
+                <button
+                  onClick={() => handleFeaturedClick("docscanner")}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                    isDarkMode
+                      ? "bg-slate-700 hover:bg-slate-650 text-rose-400 border border-slate-600/50"
+                      : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
+                  }`}
+                >
+                  Doc Converter
                 </button>
               </div>
             </div>
@@ -2301,6 +2319,17 @@ export default function App() {
           }
         }}
         isDarkMode={isDarkMode}
+        isPremium={isPremium}
+      />
+
+      <DocScannerModal
+        isOpen={isDocScannerModalOpen}
+        onClose={() => {
+          setIsDocScannerModalOpen(false);
+          if (activeQuickFeature === "docscanner") {
+            setActiveQuickFeature(null);
+          }
+        }}
         isPremium={isPremium}
       />
 

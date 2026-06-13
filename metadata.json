@@ -1,6 +1,6 @@
 {
   "name": "Photy",
-  "description": "Auto screenshots/photo editor, phone layouts, blur, crop, Play Store screenshots, Birthday & Party Stickers, emojis, and background colors.",
+  "description": "Auto screenshots/photo editor, phone mockups, blur, crop, Play Store screenshots, Birthday & Party Stickers, emojis, and background colors.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

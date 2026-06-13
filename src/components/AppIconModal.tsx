@@ -347,6 +347,14 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
                     />
                   </div>
 
+                  <p
+                    className={`text-xs text-center leading-relaxed max-w-xs ${
+                      isDarkMode ? "text-slate-400" : "text-slate-500"
+                    }`}
+                  >
+                    Automatically generate all required iOS Appiconset dimensions and Android mipmap directories in a single export. Saves hours of manual resizing by compiling everything into a ready-to-import Xcode & Android Studio package.
+                  </p>
+
                   <div className="w-full space-y-3">
                     <div
                       className={`p-4 rounded-xl text-center space-y-1 ${

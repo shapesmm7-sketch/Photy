@@ -24,7 +24,7 @@ interface TextConverterModalProps {
   isPremium?: boolean;
 }
 
-type Format = "jpg" | "png" | "webp" | "avif" | "gif" | "pdf";
+type Format = "jpg" | "png" | "webp" | "pdf";
 
 const FONTS = [
   { name: "Inter", family: '"Inter", sans-serif' },
@@ -87,18 +87,12 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
     "font" | "colors" | "format" | null
   >(null);
 
-  let availableFormats = [
+  const availableFormats = [
     { id: "png", label: "PNG", mime: "image/png", color: "bg-blue-500" },
     { id: "jpg", label: "JPG", mime: "image/jpeg", color: "bg-orange-500" },
     { id: "webp", label: "WebP", mime: "image/webp", color: "bg-emerald-500" },
-    { id: "avif", label: "AVIF", mime: "image/avif", color: "bg-indigo-500" },
-    { id: "gif", label: "GIF", mime: "image/gif", color: "bg-purple-500" },
     { id: "pdf", label: "PDF", mime: "application/pdf", color: "bg-red-500" },
   ];
-
-  if (Capacitor.isNativePlatform()) {
-    availableFormats = availableFormats.filter(f => f.id !== "avif" && f.id !== "gif");
-  }
 
   const formats = availableFormats as { id: Format; label: string; mime: string; color: string }[];
 
@@ -115,9 +109,11 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
     const mCtx = measureCanvas.getContext("2d");
     if (!mCtx) return null;
 
-    const baseSize = 44;
-    const canvasWidth = 1200;
-    const padding = 100;
+    const pixelRatio = window.devicePixelRatio || 1;
+    // Match physical device width so native gallery apps recognize it as a long screenshot and allow vertical scrolling without fitting to height
+    const canvasWidth = Math.max(1080, Math.floor(window.screen.width * pixelRatio));
+    const baseSize = Math.max(40, Math.floor(canvasWidth * 0.035));
+    const padding = Math.floor(canvasWidth * 0.08);
     const maxWidth = canvasWidth - padding * 2;
 
     mCtx.font = `500 ${baseSize}px ${selectedFont.family}`;
@@ -146,17 +142,33 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
 
     const lineHeight = baseSize * 1.4;
     const totalContentHeight = lines.length * lineHeight;
-    const finalHeight = Math.max(630, totalContentHeight + padding * 2);
+    let finalHeight = Math.max(630, totalContentHeight + padding * 2);
+    let renderWidth = canvasWidth;
 
-    canvas.width = canvasWidth;
+    const MAX_CANVAS_HEIGHT = 16384;
+    let renderScale = 1;
+    if (finalHeight > MAX_CANVAS_HEIGHT) {
+      renderScale = MAX_CANVAS_HEIGHT / finalHeight;
+      finalHeight = MAX_CANVAS_HEIGHT;
+      renderWidth = Math.floor(renderWidth * renderScale);
+    }
+
+    canvas.width = renderWidth;
     canvas.height = finalHeight;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
+    if (renderScale !== 1) {
+      ctx.scale(renderScale, renderScale);
+    }
+
     // Draw Background
     ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Use original unscaled virtual coordinates since ctx is scaled
+    const virtualWidth = canvas.width / renderScale;
+    const virtualHeight = canvas.height / renderScale;
+    ctx.fillRect(0, 0, virtualWidth, virtualHeight);
 
     // Draw Text
     ctx.font = `500 ${baseSize}px ${selectedFont.family}`;

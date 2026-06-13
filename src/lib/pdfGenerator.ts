@@ -11,14 +11,29 @@ export interface PDFExportOptions {
  * Converts a Base64/DataURL/Src image into a PDF document and downloads it.
  */
 export function convertPhotoToPdf(
-  imgSrc: string,
+  imgSrc: string | string[],
   options: PDFExportOptions,
   filename: string = "document.pdf",
 ): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
+  return new Promise<void>(async (resolve, reject) => {
+    try {
+      const sources = Array.isArray(imgSrc) ? imgSrc : [imgSrc];
+      if (sources.length === 0) {
+        return reject(new Error("No images provided"));
+      }
+      
+      let doc: jsPDF | null = null;
+      
+      for (let i = 0; i < sources.length; i++) {
+        const src = sources[i];
+        const img = new Image();
+        
+        await new Promise((imgResolve, imgReject) => {
+          img.onload = () => imgResolve(true);
+          img.onerror = () => imgReject(new Error(`Failed to load image index ${i}`));
+          img.src = src;
+        });
+        
         const originalWidth = img.width;
         const originalHeight = img.height;
 
@@ -51,12 +66,16 @@ export function convertPhotoToPdf(
           pdfHeight = temp;
         }
 
-        const doc = new jsPDF({
-          orientation: finalOrientation,
-          unit: "pt",
-          format: format,
-          compress: true,
-        });
+        if (i === 0) {
+          doc = new jsPDF({
+            orientation: finalOrientation,
+            unit: "pt",
+            format: format,
+            compress: true,
+          });
+        } else {
+          doc!.addPage(format, finalOrientation);
+        }
 
         let marginPts = 0;
         if (options.margin === "thin") {
@@ -86,9 +105,8 @@ export function convertPhotoToPdf(
         const drawX = marginPts + (maxDrawWidth - drawW) / 2;
         const drawY = marginPts + (maxDrawHeight - drawH) / 2;
 
-        // Draw image onto the PDF
-        doc.addImage(
-          imgSrc,
+        doc!.addImage(
+          src,
           "JPEG",
           drawX,
           drawY,
@@ -97,25 +115,23 @@ export function convertPhotoToPdf(
           undefined,
           "FAST",
         );
-
-        if (Capacitor.isNativePlatform()) {
-          const NativeMedia = registerPlugin<any>("NativeMedia");
-          const pdfDataUri = doc.output("datauristring");
-          const cleanBase64 = pdfDataUri.includes(",") ? pdfDataUri.split(",")[1] : pdfDataUri;
-          NativeMedia.savePdf({ base64: cleanBase64, filename: filename })
-            .then(() => resolve())
-            .catch((e: any) => reject(e));
-        } else {
-          doc.save(filename);
-          resolve();
-        }
-      } catch (err) {
-        reject(err);
       }
-    };
-    img.onerror = () => {
-      reject(new Error("Unable to load image for PDF compilation"));
-    };
-    img.src = imgSrc;
+      
+      if (!doc) throw new Error("Document generation failed");
+
+      if (Capacitor.isNativePlatform()) {
+        const NativeMedia = registerPlugin<any>("NativeMedia");
+        const pdfDataUri = doc.output("datauristring");
+        const cleanBase64 = pdfDataUri.includes(",") ? pdfDataUri.split(",")[1] : pdfDataUri;
+        NativeMedia.savePdf({ base64: cleanBase64, filename: filename })
+          .then(() => resolve())
+          .catch((e: any) => reject(e));
+      } else {
+        doc.save(filename);
+        resolve();
+      }
+    } catch (err) {
+      reject(err);
+    }
   });
 }
