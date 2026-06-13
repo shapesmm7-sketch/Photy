@@ -231,6 +231,8 @@ export default function App() {
   const [isTextModalOpen, setIsTextModalOpen] = useState(false);
   const [isAppIconModalOpen, setIsAppIconModalOpen] = useState(false);
   const [isDocScannerModalOpen, setIsDocScannerModalOpen] = useState(false);
+  const [docScannerPages, setDocScannerPages] = useState<string[]>([]);
+  const [editingDocPage, setEditingDocPage] = useState<{ index: number; data: string } | null>(null);
   const [pdfPageSize, setPdfPageSize] = useState<"A4" | "Letter" | "Original">(
     "A4",
   );
@@ -700,6 +702,19 @@ export default function App() {
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleEditDocPage = (index: number, base64: string) => {
+    setEditingDocPage({ index, data: base64 });
+    setCleanImage(base64);
+    setProcessedImage(null);
+    setOriginalImage(base64);
+    setEditorPaths([]);
+    setEditorTexts([]);
+    setCustomCanvasSize(null);
+    setSelectedLayout("None");
+    setIsDocScannerModalOpen(false);
+    setShowEditor(true);
   };
 
   const currentDisplayImage = showEditor ? null : processedImage;
@@ -1988,7 +2003,10 @@ export default function App() {
               onCancel={() => {
                 setShowEditor(false);
                 setEditorInitialTool("none");
-                if (activeQuickFeature) {
+                if (editingDocPage !== null) {
+                  setEditingDocPage(null);
+                  setIsDocScannerModalOpen(true);
+                } else if (activeQuickFeature) {
                   setActiveQuickFeature(null);
                 }
               }}
@@ -2011,6 +2029,16 @@ export default function App() {
                 newResizeMode,
                 newResizerBg,
               ) => {
+                if (editingDocPage !== null) {
+                  const updatedPages = [...docScannerPages];
+                  updatedPages[editingDocPage.index] = newImgDataUrl;
+                  setDocScannerPages(updatedPages);
+                  setEditingDocPage(null);
+                  setShowEditor(false);
+                  setIsDocScannerModalOpen(true);
+                  return;
+                }
+
                 if (activeQuickFeature) {
                   const performSave = async () => {
                     await triggerDownloadOfBase64(
@@ -2331,6 +2359,9 @@ export default function App() {
           }
         }}
         isPremium={isPremium}
+        pages={docScannerPages}
+        setPages={setDocScannerPages}
+        onEditPage={handleEditDocPage}
       />
 
       <AppIconModal

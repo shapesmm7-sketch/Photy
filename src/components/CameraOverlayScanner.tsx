@@ -30,19 +30,33 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
         video: { 
           facingMode: { ideal: facingMode },
           width: { ideal: 1920 },
-          height: { ideal: 1080 }
+          height: { ideal: 1080 },
+          advanced: [{ focusMode: "continuous" } as any]
         },
         audio: false,
       });
       setStream(newStream);
       
       const track = newStream.getVideoTracks()[0];
-      const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+      const capabilities = track.getCapabilities ? track.getCapabilities() as any : {} as any;
       setIsTorchSupported(!!(capabilities as any).torch);
       setIsTorchOn(false);
 
+      // Programmatically apply continuous focus if supported
+      if (capabilities.focusMode && (capabilities.focusMode.includes("continuous") || capabilities.focusMode.includes("autofocus"))) {
+        try {
+          await track.applyConstraints({
+            advanced: [{ focusMode: capabilities.focusMode.includes("continuous") ? "continuous" : "autofocus" }]
+          } as any);
+        } catch (e) {
+          console.warn("Could not apply autofocus constraints:", e);
+        }
+      }
+
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
+        // Ensure starting and playing explicitly on WebView platforms
+        videoRef.current.play().catch(e => console.warn("Video play error:", e));
       }
       setError("");
       return newStream;
@@ -163,6 +177,11 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
 
   if (!isOpen) return null;
 
+  const isLandscape = targetAspect > 1;
+  const overlayWidthClass = isLandscape 
+    ? "w-[90%] sm:w-[500px]" 
+    : "w-[82%] max-w-[340px] md:w-[450px]";
+
   return (
     <AnimatePresence>
       <motion.div
@@ -190,7 +209,7 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
                 autoPlay
                 playsInline
                 muted
-                className="absolute inset-0 w-full h-full object-cover"
+                className="absolute inset-0 w-full h-full object-cover bg-black"
               />
               
               {/* Overlay with cutout */}
@@ -198,14 +217,14 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
                 {/* We use a shadow strategy for the dark overlay around the cutout. */}
                 <div 
                    ref={overlayRef}
-                   className="w-[90%] sm:w-[500px] border-4 border-white/80 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]"
+                   className={`${overlayWidthClass} border-4 border-white/80 rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.65)]`}
                    style={{ aspectRatio: targetAspect.toString() }}
                 >
                   <div className="absolute -top-[4px] -left-[4px] w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl" />
                   <div className="absolute -top-[4px] -right-[4px] w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl" />
                   <div className="absolute -bottom-[4px] -left-[4px] w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl" />
                   <div className="absolute -bottom-[4px] -right-[4px] w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-2xl" />
-                  <p className="absolute -top-10 left-0 right-0 text-center text-white font-bold tracking-widest text-sm drop-shadow-md">
+                  <p className="absolute -top-10 left-0 right-0 text-center text-white font-bold tracking-widest text-xs sm:text-sm drop-shadow-md">
                     Fit {docTitle} within the frame
                   </p>
                 </div>

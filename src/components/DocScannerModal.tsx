@@ -1,6 +1,6 @@
 import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Upload, Camera, FileText, Download, CheckCircle2, ChevronDown, Search, Plus } from "lucide-react";
+import { X, Upload, Camera, FileText, Download, CheckCircle2, ChevronDown, Search, Plus, Sparkles } from "lucide-react";
 import { convertPhotoToPdf, PDFExportOptions } from "../lib/pdfGenerator";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { stitchImages, compileIDCardToA4 } from "../lib/stitchImages";
@@ -85,14 +85,17 @@ type DocScannerModalProps = {
   isOpen: boolean;
   onClose: () => void;
   isPremium?: boolean;
+  pages: string[];
+  setPages: React.Dispatch<React.SetStateAction<string[]>>;
+  onEditPage: (index: number, base64: string) => void;
 };
 
-export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalProps) {
+export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, onEditPage }: DocScannerModalProps) {
   const [selectedDocType, setSelectedDocType] = useState(documentTypes[0]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  const [pages, setPages] = useState<string[]>([]);
+  const [capturedPageForPrompt, setCapturedPageForPrompt] = useState<{ index: number; data: string } | null>(null);
   const [targetIndex, setTargetIndex] = useState<number | null>(null);
 
   const [format, setFormat] = useState<Format>("pdf");
@@ -106,41 +109,27 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCameraClick = async (index?: number) => {
+  const handleCameraClick = (index?: number) => {
     setTargetIndex(index ?? null);
-    
-    if (Capacitor.isNativePlatform()) {
-      try {
-        const image = await CapCamera.getPhoto({
-          quality: 100,
-          allowEditing: true, // Allow user to crop to ID card
-          resultType: CameraResultType.DataUrl,
-          source: CameraSource.Camera
-        });
-        
-        if (image.dataUrl) {
-          handleCameraCapture(image.dataUrl);
-        }
-      } catch (err) {
-        console.error("Camera error:", err);
-      }
-    } else {
-      setIsCameraScannerOpen(true);
-    }
+    setIsCameraScannerOpen(true);
   };
 
   const handleCameraCapture = (base64Image: string) => {
     setIsCameraScannerOpen(false);
+    let newIndex = 0;
     setPages(prev => {
       if (targetIndex !== null && targetIndex < prev.length) {
+        newIndex = targetIndex;
         const next = [...prev];
         next[targetIndex] = base64Image;
         return next;
       } else {
+        newIndex = prev.length;
         return [...prev, base64Image];
       }
     });
     setTargetIndex(null);
+    setCapturedPageForPrompt({ index: newIndex, data: base64Image });
   };
 
   const handleImageLoad = (file: File) => {
@@ -148,16 +137,20 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
     reader.onload = (e) => {
       if (e.target?.result) {
         const newImg = e.target.result as string;
+        let newIndex = 0;
         setPages(prev => {
           if (targetIndex !== null && targetIndex < prev.length) {
+            newIndex = targetIndex;
             const next = [...prev];
             next[targetIndex] = newImg;
             return next;
           } else {
+            newIndex = prev.length;
             return [...prev, newImg];
           }
         });
         setTargetIndex(null);
+        setCapturedPageForPrompt({ index: newIndex, data: newImg });
       }
     };
     reader.readAsDataURL(file);
@@ -342,14 +335,13 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/80 backdrop-blur-sm shadow-2xl"
-          style={{ paddingTop: !isPremium && isNative ? "calc(env(safe-area-inset-top) + 60px)" : undefined }}
+          className={`fixed inset-0 z-[100] flex justify-center p-4 bg-gray-900/80 backdrop-blur-sm shadow-2xl overflow-y-auto ${!isPremium && isNative ? "items-start pt-[calc(env(safe-area-inset-top)+84px)] pb-10" : "items-center"}`}
         >
           <motion.div
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 50, opacity: 0 }}
-            className="bg-white w-full max-w-lg max-h-full rounded-[32px] overflow-hidden flex flex-col relative"
+            className="bg-white w-full max-w-lg rounded-[32px] overflow-hidden flex flex-col relative my-auto"
           >
             <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-blue-50/30">
               <div className="flex items-center gap-3">
@@ -449,9 +441,10 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
                           {pageImage ? (
                             <>
                               <img src={pageImage} className="absolute inset-0 w-full h-full object-cover" alt={`Page ${index + 1}`} />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-2 transition-opacity">
-                                <button onClick={() => handleCameraClick(index)} className="text-white text-xs font-bold bg-black/50 px-3 py-1 rounded-full"><Camera className="w-3 h-3 inline mr-1"/>Replace</button>
-                                <button onClick={() => handleUploadClick(index)} className="text-white text-xs font-bold bg-black/50 px-3 py-1 rounded-full"><Upload className="w-3 h-3 inline mr-1"/>Upload</button>
+                              <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-1.5 transition-opacity">
+                                <button onClick={() => onEditPage(index, pageImage)} className="text-white text-[10px] sm:text-xs font-bold bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-full w-20 flex items-center justify-center gap-1 transition-all"><Sparkles className="w-3 h-3"/>Edit</button>
+                                <button onClick={() => handleCameraClick(index)} className="text-white text-[10px] sm:text-xs font-bold bg-black/60 hover:bg-black/80 px-3 py-1 rounded-full w-20 flex items-center justify-center gap-1 transition-all"><Camera className="w-3 h-3"/>Replace</button>
+                                <button onClick={() => handleUploadClick(index)} className="text-white text-[10px] sm:text-xs font-bold bg-black/60 hover:bg-black/80 px-3 py-1 rounded-full w-20 flex items-center justify-center gap-1 transition-all"><Upload className="w-3 h-3"/>Upload</button>
                               </div>
                             </>
                           ) : (
@@ -568,6 +561,51 @@ export function DocScannerModal({ isOpen, onClose, isPremium }: DocScannerModalP
                 <p className="text-center text-xs text-gray-500 mt-3 font-medium">Capture or upload at least one page to begin.</p>
               )}
             </div>
+
+            {capturedPageForPrompt && (
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/75 backdrop-blur-sm z-[110] flex items-center justify-center p-6"
+              >
+                <motion.div 
+                  initial={{ scale: 0.9, y: 20 }}
+                  animate={{ scale: 1, y: 0 }}
+                  className="bg-white rounded-[28px] p-6 max-w-sm w-full text-center shadow-2xl relative"
+                >
+                  <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
+                    <Sparkles className="w-7 h-7" />
+                  </div>
+                  
+                  <h3 className="text-lg font-black text-gray-950 mb-2">Captured Successfully!</h3>
+                  <p className="text-xs text-gray-500 mb-6 leading-relaxed">
+                    Would you like to auto-crop, rotate, draw, or adjust contrast on this photo using Photy's built-in image designer?
+                  </p>
+
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={() => {
+                        if (capturedPageForPrompt) {
+                          const { index, data } = capturedPageForPrompt;
+                          setCapturedPageForPrompt(null);
+                          onEditPage(index, data);
+                        }
+                      }}
+                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-xl transition-all shadow-md shadow-blue-650/20 active:scale-[0.98] text-xs uppercase tracking-wider"
+                    >
+                      In-App Edit & Crop
+                    </button>
+                    <button
+                      onClick={() => setCapturedPageForPrompt(null)}
+                      className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold rounded-xl transition-all active:scale-[0.98] text-xs uppercase tracking-wider"
+                    >
+                      Save As Is (Skip)
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
           </motion.div>
         </motion.div>
       )}
