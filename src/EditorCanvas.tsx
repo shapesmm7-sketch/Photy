@@ -959,10 +959,12 @@ export default function EditorCanvas({
             if (cb) cb();
             return;
         }
+        rcCtx.imageSmoothingEnabled = true;
+        rcCtx.imageSmoothingQuality = "high";
         rcCtx.translate(rc.width / 2, rc.height / 2);
         rcCtx.rotate(Math.PI / 2);
         rcCtx.drawImage(imgRef.current, -imgRef.current.width / 2, -imgRef.current.height / 2);
-        const dataUrl = rc.toDataURL("image/jpeg", 0.95);
+        const dataUrl = rc.toDataURL("image/png");
         const nextImg = new Image();
         if (!dataUrl.startsWith("data:")) {
             nextImg.crossOrigin = "anonymous";
@@ -3262,7 +3264,7 @@ export default function EditorCanvas({
         cropRect.w,
         cropRect.h,
       );
-      const cleanDataUrl = cleanCanvas.toDataURL("image/jpeg", 0.95);
+      const cleanDataUrl = cleanCanvas.toDataURL("image/png");
 
       // 2. Run applyStyle to dynamically generate the new base styled mockup!
       const newStyledDataUrl = await applyStyle(
@@ -3349,11 +3351,11 @@ export default function EditorCanvas({
           cropRect.h,
         );
         cCtx.restore();
-        const cleanDataUrl = cleanCanvas.toDataURL("image/jpeg", 0.95);
+        const cleanDataUrl = cleanCanvas.toDataURL("image/png");
         
         // Redraw without bounding boxes to capture clean preview
         redraw(undefined, undefined, undefined, true);
-        let previewDataUrl = canvasRef.current.toDataURL("image/jpeg", 0.95);
+        let previewDataUrl = canvasRef.current.toDataURL("image/png");
         // Put bounding boxes back
         redraw();
         

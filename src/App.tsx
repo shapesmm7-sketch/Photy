@@ -184,7 +184,7 @@ export default function App() {
         customResizerBg
       );
       if (editorPaths.length > 0 || editorTexts.length > 0) {
-        return await burnEditsToImage(hdBase, editorPaths, editorTexts);
+        return await burnEditsToImage(hdBase, editorPaths, editorTexts, true);
       }
       return hdBase;
     }
@@ -601,27 +601,10 @@ export default function App() {
     reader.onload = async (event) => {
       const img = new Image();
       img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const isMobile =
-          Capacitor.isNativePlatform() ||
-          (typeof window !== "undefined" && window.innerWidth < 768);
-        const MAX_WIDTH = isMobile ? 1000 : 1400;
-        const MAX_HEIGHT = isMobile ? 1000 : 1400;
-        let width = img.width;
-        let height = img.height;
-
-        const scale = Math.min(MAX_WIDTH / width, MAX_HEIGHT / height);
-        if (scale < 1) {
-          width = Math.round(width * scale);
-          height = Math.round(height * scale);
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx?.drawImage(img, 0, 0, width, height);
-
-        const resizedResult = canvas.toDataURL("image/jpeg", 0.9);
+        // Keep 100% original size and quality from the uploaded file!
+        const resizedResult = event.target?.result as string;
+        const width = img.width;
+        const height = img.height;
         setOriginalImage(resizedResult);
         setCleanImage(resizedResult);
         setProcessedImage(resizedResult);

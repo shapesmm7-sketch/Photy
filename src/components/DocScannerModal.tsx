@@ -108,9 +108,31 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCameraClick = (index?: number) => {
+  const handleCameraClick = async (index?: number) => {
     setTargetIndex(index ?? null);
-    setIsCameraScannerOpen(true);
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const image = await CapCamera.getPhoto({
+          quality: 100,
+          allowEditing: false,
+          resultType: CameraResultType.Base64,
+          source: CameraSource.Camera,
+          correctOrientation: true,
+          width: 3840, // Request ultra HD high quality
+          height: 2160,
+        });
+        if (image.base64String) {
+          const mimeType = image.format === "png" ? "image/png" : "image/jpeg";
+          const dataUrl = `data:${mimeType};base64,${image.base64String}`;
+          handleCameraCapture(dataUrl);
+        }
+      } catch (err) {
+        console.error("Native device camera capture cancelled or failed, falling back to overlay:", err);
+        setIsCameraScannerOpen(true);
+      }
+    } else {
+      setIsCameraScannerOpen(true);
+    }
   };
 
   const handleCameraCapture = (base64Image: string) => {

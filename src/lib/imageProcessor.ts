@@ -821,6 +821,27 @@ export async function applyStyle(
       let workingImg: HTMLCanvasElement | HTMLImageElement = img;
       let scaleRatio = 1;
 
+      if (highQuality) {
+        // Upscale small or medium images to at least 3000px maximum dimension to guarantee pristine HD download
+        const targetMaxDim = 3000;
+        const currentMaxDim = Math.max(img.width, img.height);
+        if (currentMaxDim < targetMaxDim) {
+          scaleRatio = targetMaxDim / currentMaxDim;
+          const upscaleCanvas = document.createElement("canvas");
+          upscaleCanvas.width = Math.round(img.width * scaleRatio);
+          upscaleCanvas.height = Math.round(img.height * scaleRatio);
+          const uCtx = upscaleCanvas.getContext("2d");
+          if (uCtx) {
+            uCtx.imageSmoothingEnabled = true;
+            uCtx.imageSmoothingQuality = "high";
+            uCtx.drawImage(img, 0, 0, upscaleCanvas.width, upscaleCanvas.height);
+            workingImg = upscaleCanvas;
+          } else {
+            scaleRatio = 1;
+          }
+        }
+      }
+
       const scaledSensitiveAreas = sensitiveAreas.map((area) => ({
         ...area,
         rect: {
@@ -861,6 +882,8 @@ export async function applyStyle(
           reject(new Error("Failed to get 2d context"));
           return;
         }
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
 
         // Base dimensions for the card content
         const cropLeft = scaledCropRect ? scaledCropRect.x : 0;
@@ -884,6 +907,8 @@ export async function applyStyle(
           reject(new Error("Failed to get source 2d context"));
           return;
         }
+        sCtx.imageSmoothingEnabled = true;
+        sCtx.imageSmoothingQuality = "high";
 
         sCtx.drawImage(
           workingImg,
@@ -1328,7 +1353,11 @@ export async function applyStyle(
         }
 
         try {
-          resolve(canvas.toDataURL("image/jpeg", 0.95));
+          if (highQuality) {
+            resolve(canvas.toDataURL("image/png"));
+          } else {
+            resolve(canvas.toDataURL("image/jpeg", 0.95));
+          }
         } catch (securityErr) {
           console.warn(
             "Canvas export error, retrying without external assets...",
@@ -1364,6 +1393,7 @@ export async function burnEditsToImage(
   styledImageDataUrl: string,
   paths: any[],
   texts: any[],
+  highQuality: boolean = false,
 ): Promise<string> {
   if (paths.length === 0 && texts.length === 0) {
     return styledImageDataUrl;
@@ -1608,7 +1638,11 @@ export async function burnEditsToImage(
           ctx.restore();
         });
 
-        resolve(canvas.toDataURL("image/jpeg", 0.95));
+        if (highQuality || styledImageDataUrl.startsWith("data:image/png")) {
+          resolve(canvas.toDataURL("image/png"));
+        } else {
+          resolve(canvas.toDataURL("image/jpeg", 0.95));
+        }
       } catch (err) {
         console.error("Failed burning edits:", err);
         resolve(styledImageDataUrl);

@@ -18,6 +18,67 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [isTorchOn, setIsTorchOn] = useState(false);
   const [isTorchSupported, setIsTorchSupported] = useState(false);
+  const [focusRing, setFocusRing] = useState<{ x: number; y: number; id: number } | null>(null);
+
+  const triggerAutofocus = useCallback(async () => {
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if (!track) return;
+    try {
+      const caps = track.getCapabilities ? track.getCapabilities() : {};
+      const supportedFocusModes = caps.focusMode || [];
+      if (supportedFocusModes.length > 0) {
+        if (supportedFocusModes.includes("continuous")) {
+          // Apply continuous focusing mode - safe, non-destructive, robust
+          await track.applyConstraints({
+            advanced: [{ focusMode: "continuous" } as any]
+          });
+        } else if (supportedFocusModes.includes("single-shot")) {
+          await track.applyConstraints({
+            advanced: [{ focusMode: "single-shot" } as any]
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Direct hardware track focus application failed:", e);
+    }
+  }, [stream]);
+
+  const handleScreenTap = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest("button")) {
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setFocusRing({ x, y, id: Date.now() });
+    
+    // Explicit manual autofocus sweep on tap
+    triggerAutofocus();
+  }, [triggerAutofocus]);
+
+  useEffect(() => {
+    if (focusRing) {
+      const timer = setTimeout(() => {
+        setFocusRing(null);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [focusRing]);
+
+  useEffect(() => {
+    if (!isOpen || !stream) return;
+
+    // Run custom focus cycle initially after camera stabilizes to acquire perfect initial focus
+    const initFocusTimer = setTimeout(() => {
+      triggerAutofocus();
+    }, 1000);
+
+    return () => {
+      clearTimeout(initFocusTimer);
+    };
+  }, [isOpen, stream, triggerAutofocus]);
 
   const startCamera = useCallback(async () => {
     try {
@@ -244,7 +305,7 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[200] bg-black flex flex-col"
       >
-        <div className="relative flex-1 overflow-hidden flex flex-col justify-center items-center">
+        <div className="relative flex-1 overflow-hidden flex flex-col justify-center items-center cursor-crosshair" onClick={handleScreenTap}>
           {error ? (
             <div className="text-white text-center p-6 bg-gray-900 rounded-2xl max-w-sm">
               <CameraIcon className="w-12 h-12 mx-auto mb-4 text-gray-500" />
@@ -266,6 +327,21 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
                 className="absolute inset-0 w-full h-full object-cover bg-black"
                 style={{ opacity: 1.0 }}
               />
+
+              {focusRing && (
+                <div
+                  key={focusRing.id}
+                  className="absolute pointer-events-none z-30 -ml-8 -mt-8 flex items-center justify-center"
+                  style={{ left: focusRing.x, top: focusRing.y }}
+                >
+                  {/* Outer ring pulsing/pinging */}
+                  <div className="absolute w-16 h-16 border-2 border-amber-400 rounded-full animate-ping opacity-75" />
+                  {/* Inner ring pulse with center guide dot */}
+                  <div className="absolute w-12 h-12 border border-dashed border-amber-400/80 rounded-full animate-pulse flex items-center justify-center">
+                    <div className="w-2 h-2 bg-amber-400 rounded-full" />
+                  </div>
+                </div>
+              )}
               
               {/* Separate Overlay layout darkening ONLY the outside area with NO covering layer on the ID frame clear area */}
               <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
