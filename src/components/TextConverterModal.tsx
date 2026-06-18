@@ -111,9 +111,29 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
 
     const pixelRatio = window.devicePixelRatio || 1;
     // Match physical device width so native gallery apps recognize it as a long screenshot and allow vertical scrolling without fitting to height
-    const canvasWidth = Math.max(1080, Math.floor(window.screen.width * pixelRatio));
-    const baseSize = Math.max(40, Math.floor(canvasWidth * 0.035));
-    const padding = Math.floor(canvasWidth * 0.08);
+    const rawWidth = "screen" in window ? window.screen.width * pixelRatio : window.innerWidth * pixelRatio;
+    
+    // Snap to exact common physical screen widths to trigger Android "screenshot" viewer mode
+    const commonWidths = [720, 1080, 1170, 1179, 1242, 1284, 1290, 1440, 1644];
+    let snappedWidth = Math.round(rawWidth);
+    for (const cw of commonWidths) {
+      if (Math.abs(rawWidth - cw) <= 15) {
+        snappedWidth = cw;
+        break;
+      }
+    }
+    
+    // Ensure we don't end up with an unreadably small canvas on desktop previews
+    const canvasWidth = Math.max(1080, snappedWidth);
+    
+    // Match the text editor's exact proportional text size and padding
+    // Editor uses text-sm (14px) and px-4 (16px) on mobile viewports (~390px)
+    const vw = ("innerWidth" in window && window.innerWidth > 0 && window.innerWidth < 800) ? window.innerWidth : 390;
+    const fontSizeRatio = 15 / vw; // Slightly bumped for better readability
+    const paddingRatio = 16 / vw;  // Exactly px-4 proportion
+    
+    const baseSize = Math.max(40, Math.floor(canvasWidth * fontSizeRatio));
+    const padding = Math.floor(canvasWidth * paddingRatio);
     const maxWidth = canvasWidth - padding * 2;
 
     mCtx.font = `500 ${baseSize}px ${selectedFont.family}`;

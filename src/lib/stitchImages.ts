@@ -92,10 +92,19 @@ export function stitchImages(imageSources: string[]): Promise<string> {
       const canvas = document.createElement("canvas");
       
       const pixelRatio = window.devicePixelRatio || 1;
-      const physicalScreenWidth = Math.max(1080, Math.floor(window.screen.width * pixelRatio));
+      const rawWidth = "screen" in window ? window.screen.width * pixelRatio : window.innerWidth * pixelRatio;
+      const commonWidths = [720, 1080, 1170, 1179, 1242, 1284, 1290, 1440, 1644];
+      let snappedWidth = Math.round(rawWidth);
+      for (const cw of commonWidths) {
+        if (Math.abs(rawWidth - cw) <= 15) {
+          snappedWidth = cw;
+          break;
+        }
+      }
 
       // Match the device's physical screen width to trigger "Long Screenshot" viewer modes natively, which prevents "fit-to-height" shrinkage.
-      let outputWidth = Math.min(physicalScreenWidth, Math.max(...images.map((img) => img.width)));
+      // Force it to the device width (minimum 1080) so OS galleries treat it as a scrolling screenshot instead of fitting the entire height on screen.
+      let outputWidth = Math.max(1080, snappedWidth);
 
       // Add a gap between them (e.g., 20px)
       const gap = 20;
