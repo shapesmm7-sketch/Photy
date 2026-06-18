@@ -842,7 +842,7 @@ export async function applyStyle(
         }
       } else {
         // DOWN-SCALE for incredibly fast real-time preview (resolves 10 second lag on physical devices)
-        const previewMaxDim = 1080;
+        const previewMaxDim = 600;
         const currentMaxDim = Math.max(img.width, img.height);
         if (currentMaxDim > previewMaxDim) {
           scaleRatio = previewMaxDim / currentMaxDim;
@@ -929,6 +929,11 @@ export async function applyStyle(
         sCtx.imageSmoothingEnabled = true;
         sCtx.imageSmoothingQuality = "high";
 
+        // Apply brightness/contrast solely to the source image, to avoid catastrophic slowdowns rendering shadowBlur on full canvas sizes
+        if (config.brightnessFactor !== 1 || config.contrastFactor !== 1) {
+          sCtx.filter = `brightness(${config.brightnessFactor}) contrast(${config.contrastFactor})`;
+        }
+
         sCtx.drawImage(
           workingImg,
           cropLeft,
@@ -940,6 +945,7 @@ export async function applyStyle(
           croppedWidth,
           croppedHeight,
         );
+        sCtx.filter = "none";
 
         if (styleName === "Money") {
           const moneyAreas = scaledSensitiveAreas.filter((a) => a.type === "Amount");
@@ -1041,13 +1047,8 @@ export async function applyStyle(
           canvas.height = contentH;
         }
 
-        // Optimize: Do not set ctx.filter if brightness and contrast are at default (1.0)
-        // Setting filter forces the engine to compile and run a webgl/CPU shader over millions of pixels on every draw.
-        if (config.brightnessFactor !== 1 || config.contrastFactor !== 1) {
-          ctx.filter = `brightness(${config.brightnessFactor}) contrast(${config.contrastFactor})`;
-        } else {
-          ctx.filter = "none";
-        }
+        // Clear filter on base context
+        ctx.filter = "none";
 
         let contentScaleX = 1;
         let contentScaleY = 1;
