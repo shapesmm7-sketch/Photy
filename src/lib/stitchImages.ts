@@ -92,7 +92,7 @@ export function stitchImages(imageSources: string[]): Promise<string> {
       const canvas = document.createElement("canvas");
       
       const pixelRatio = window.devicePixelRatio || 1;
-      const rawWidth = "screen" in window ? window.screen.width * pixelRatio : window.innerWidth * pixelRatio;
+      const rawWidth = window.screen?.width ? window.screen.width * pixelRatio : window.innerWidth * pixelRatio;
       const commonWidths = [720, 1080, 1170, 1179, 1242, 1284, 1290, 1440, 1644];
       let snappedWidth = Math.round(rawWidth);
       for (const cw of commonWidths) {

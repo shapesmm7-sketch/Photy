@@ -1414,6 +1414,7 @@ export async function burnEditsToImage(
   paths: any[],
   texts: any[],
   highQuality: boolean = false,
+  referenceSize: { width: number; height: number } | null = null
 ): Promise<string> {
   if (paths.length === 0 && texts.length === 0) {
     return styledImageDataUrl;
@@ -1434,6 +1435,9 @@ export async function burnEditsToImage(
 
         // Draw background styled image
         ctx.drawImage(img, 0, 0);
+
+        // Apply scale if referenceSize is provided. The exported canvas is scaled proportionally.
+        const scale = referenceSize ? (img.width / referenceSize.width) : 1;
 
         // Pre-render a blurred canvas if we have any blur paths
         let blurCanvas: HTMLCanvasElement | null = null;
@@ -1466,6 +1470,7 @@ export async function burnEditsToImage(
           if (!sCtx) return;
 
           sCtx.save();
+          sCtx.scale(scale, scale);
           sCtx.lineCap = "round";
           sCtx.lineJoin = "round";
           sCtx.shadowColor = "#FFFFFF";
@@ -1489,6 +1494,7 @@ export async function burnEditsToImage(
 
           if (color && color !== "transparent") {
             sCtx.save();
+            sCtx.scale(scale, scale);
             sCtx.globalCompositeOperation = "source-over";
             sCtx.lineCap = "round";
             sCtx.lineJoin = "round";
@@ -1519,6 +1525,7 @@ export async function burnEditsToImage(
             drawBlurredPathLocal(p.points, p.width, p.color);
           } else {
             ctx.save();
+            ctx.scale(scale, scale);
             ctx.lineCap = "round";
             ctx.lineJoin = "round";
             ctx.strokeStyle = p.color;
@@ -1538,6 +1545,7 @@ export async function burnEditsToImage(
         // Draw text items
         texts.forEach((t) => {
           ctx.save();
+          ctx.scale(scale, scale);
           ctx.fillStyle = t.color;
 
           let fontStr = "sans-serif";
@@ -1564,9 +1572,9 @@ export async function burnEditsToImage(
 
               if (t.hasShadow !== false) {
                 ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.4)";
-                ctx.shadowBlur = Math.max(6, t.size * 0.15);
-                ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
-                ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+                ctx.shadowBlur = Math.max(6, t.size * 0.15) * scale;
+                ctx.shadowOffsetX = Math.max(3, t.size * 0.08) * scale;
+                ctx.shadowOffsetY = Math.max(3, t.size * 0.08) * scale;
               } else {
                 ctx.shadowColor = "transparent";
                 ctx.shadowBlur = 0;
@@ -1604,9 +1612,9 @@ export async function burnEditsToImage(
               ctx.textAlign = "center";
               if (t.hasShadow) {
                 ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-                ctx.shadowBlur = Math.max(6, t.size * 0.15);
-                ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
-                ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+                ctx.shadowBlur = Math.max(6, t.size * 0.15) * scale;
+                ctx.shadowOffsetX = Math.max(3, t.size * 0.08) * scale;
+                ctx.shadowOffsetY = Math.max(3, t.size * 0.08) * scale;
               }
               ctx.fillText(t.text, 0, 0);
             }
@@ -1643,9 +1651,9 @@ export async function burnEditsToImage(
             ctx.fillStyle = t.color; // ensure text color is set
             if (t.hasShadow) {
               ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.6)";
-              ctx.shadowBlur = Math.max(4, t.size * 0.15);
-              ctx.shadowOffsetX = Math.max(2, t.size * 0.08);
-              ctx.shadowOffsetY = Math.max(2, t.size * 0.08);
+              ctx.shadowBlur = Math.max(4, t.size * 0.15) * scale;
+              ctx.shadowOffsetX = Math.max(2, t.size * 0.08) * scale;
+              ctx.shadowOffsetY = Math.max(2, t.size * 0.08) * scale;
             }
 
             if (t.bgColor === "transparent" || !t.bgColor) {

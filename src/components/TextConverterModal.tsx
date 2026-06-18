@@ -111,7 +111,7 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
 
     const pixelRatio = window.devicePixelRatio || 1;
     // Match physical device width so native gallery apps recognize it as a long screenshot and allow vertical scrolling without fitting to height
-    const rawWidth = "screen" in window ? window.screen.width * pixelRatio : window.innerWidth * pixelRatio;
+    const rawWidth = window.screen?.width ? window.screen.width * pixelRatio : window.innerWidth * pixelRatio;
     
     // Snap to exact common physical screen widths to trigger Android "screenshot" viewer mode
     const commonWidths = [720, 1080, 1170, 1179, 1242, 1284, 1290, 1440, 1644];

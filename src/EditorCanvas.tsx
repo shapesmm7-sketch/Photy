@@ -163,7 +163,8 @@ interface EditorCanvasProps {
     manualImageOffset?: { x: number; y: number },
     manualImageScale?: number,
     customResizeMode?: "cover" | "fit_no_border" | "fit_border" | "stretch",
-    customResizerBg?: string
+    customResizerBg?: string,
+    referenceSize?: { width: number; height: number }
   ) => void;
   onCancel: () => void;
   styleName?: string;
@@ -3320,7 +3321,8 @@ export default function EditorCanvas({
           manualImageOffset,
           manualImageScale,
           resizeMode,
-          resizerBg
+          resizerBg,
+          canvasRef.current ? { width: canvasRef.current.width, height: canvasRef.current.height } : undefined
         );
 
         // Force a redraw with the new image loaded. Since we now set the styled image,
@@ -3387,7 +3389,8 @@ export default function EditorCanvas({
           manualImageOffset,
           manualImageScale,
           resizeMode,
-          resizerBg
+          resizerBg,
+          canvasRef.current ? { width: canvasRef.current.width, height: canvasRef.current.height } : undefined
         );
       }
     }

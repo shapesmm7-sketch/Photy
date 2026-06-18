@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Layers, Download, Check } from "lucide-react";
 import JSZip from "jszip";
@@ -52,6 +52,27 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateSuccess, setGenerateSuccess] = useState(false);
+  const [featureGraphicSrc, setFeatureGraphicSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!imageData || !isOpen) return;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1024;
+      canvas.height = 500;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, 1024, 500);
+
+      const squareSize = 340;
+      const x = (1024 - squareSize) / 2;
+      const y = (500 - squareSize) / 2;
+      ctx.drawImage(img, x, y, squareSize, squareSize);
+      setFeatureGraphicSrc(canvas.toDataURL("image/png"));
+    };
+    img.src = imageData;
+  }, [imageData, isOpen]);
 
   const resizeImage = (
     img: HTMLImageElement,
@@ -69,6 +90,26 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
 
       // Stretch to fit the square icon exactly so no parts are cut off
       ctx.drawImage(img, 0, 0, size, size);
+
+      resolve(canvas.toDataURL("image/png").split(",")[1]);
+    });
+  };
+
+  const resizeToFeatureGraphic = (
+    img: HTMLImageElement,
+  ): Promise<string> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1024;
+      canvas.height = 500;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, 1024, 500);
+
+      const squareSize = 340;
+      const x = (1024 - squareSize) / 2;
+      const y = (500 - squareSize) / 2;
+      ctx.drawImage(img, x, y, squareSize, squareSize);
 
       resolve(canvas.toDataURL("image/png").split(",")[1]);
     });
@@ -204,6 +245,7 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
       // Top-level files
       zip.file("appstore.png", await resizeImage(img, 1024), { base64: true });
       zip.file("playstore.png", await resizeImage(img, 512), { base64: true });
+      zip.file("feature_graphic.png", await resizeToFeatureGraphic(img), { base64: true });
 
       // iOS AppIconset
       const iosFolder = zip.folder("Assets.xcassets/AppIcon.appiconset");
@@ -334,17 +376,58 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
             <div className="p-4 sm:p-5 flex-1 overflow-y-auto">
               {imageData ? (
                 <div className="flex flex-col items-center justify-center space-y-6">
-                  {/* Preview Image */}
-                  <div
-                    className={`w-32 h-32 rounded-3xl shadow-xl overflow-hidden flex items-center justify-center ${
-                      isDarkMode ? "bg-slate-800" : "bg-slate-50"
-                    }`}
-                  >
-                    <img
-                      src={imageData}
-                      alt="App Icon Preview"
-                      className="w-full h-full object-cover"
-                    />
+                  {/* Store Assets Preview Grid on Same Page */}
+                  <div className="w-full space-y-3">
+                    <div className="grid grid-cols-2 gap-3 pb-1">
+                      {/* App Store Icon */}
+                      <div className={`p-2.5 rounded-2xl flex flex-col items-center gap-1.5 border text-center ${
+                        isDarkMode ? "bg-slate-800/40 border-slate-700/50" : "bg-slate-50 border-slate-100"
+                      }`}>
+                        <span className={`text-[10px] font-bold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>App Store (1024²)</span>
+                        <div className="w-16 h-16 rounded-2xl shadow-md overflow-hidden bg-white flex items-center justify-center border border-black/5">
+                          <img
+                            src={imageData}
+                            alt="App Store Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Play Store Icon */}
+                      <div className={`p-2.5 rounded-2xl flex flex-col items-center gap-1.5 border text-center ${
+                        isDarkMode ? "bg-slate-800/40 border-slate-700/50" : "bg-slate-50 border-slate-100"
+                      }`}>
+                        <span className={`text-[10px] font-bold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Play Store (512²)</span>
+                        <div className="w-16 h-16 rounded-xl shadow-md overflow-hidden bg-white flex items-center justify-center border border-black/5">
+                          <img
+                            src={imageData}
+                            alt="Play Store Preview"
+                            className="w-full h-full object-cover rounded-md"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Google Play Feature Graphic */}
+                      <div className={`col-span-2 p-3 rounded-2xl flex flex-col items-center gap-2 border text-center ${
+                        isDarkMode ? "bg-slate-800/40 border-slate-700/50" : "bg-slate-50 border-slate-100"
+                      }`}>
+                        <div className="flex items-center justify-between w-full px-1">
+                          <span className={`text-[10px] font-bold ${isDarkMode ? "text-slate-350" : "text-slate-600"}`}>Google Play Feature Graphic</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-mono">1024×500</span>
+                        </div>
+                        <div className="w-full aspect-[1024/500] rounded-xl shadow-md overflow-hidden bg-white flex items-center justify-center border border-slate-200 dark:border-slate-800 bg-clip-padding">
+                          {featureGraphicSrc ? (
+                            <img
+                              src={featureGraphicSrc}
+                              alt="Feature Graphic Preview"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <p
@@ -352,7 +435,7 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
                       isDarkMode ? "text-slate-400" : "text-slate-500"
                     }`}
                   >
-                    Automatically generate all required iOS Appiconset dimensions and Android mipmap directories in a single export. Saves hours of manual resizing by compiling everything into a ready-to-import Xcode & Android Studio package.
+                    Automatically generate all required iOS Appiconset dimensions, Android mipmap directories, and store visuals in a single package. Saves hours of manual work processing your app designs.
                   </p>
 
                   <div className="w-full space-y-3">
@@ -396,12 +479,12 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
                       <h4
                         className={`text-sm font-bold ${isDarkMode ? "text-slate-200" : "text-blue-700"}`}
                       >
-                        Stores
+                        Stores & Feature Graphics
                       </h4>
                       <p
                         className={`text-xs ${isDarkMode ? "text-slate-400" : "text-blue-600/70"}`}
                       >
-                        playstore.png (512px), appstore.png (1024px)
+                        playstore.png (512px), appstore.png (1024px), feature_graphic.png (1024×500px)
                       </p>
                     </div>
                   </div>

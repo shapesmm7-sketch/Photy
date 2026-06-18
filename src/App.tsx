@@ -40,6 +40,8 @@ import { ConverterModal } from "./components/ConverterModal";
 import { AppIconModal } from "./components/AppIconModal";
 import { TextConverterModal } from "./components/TextConverterModal";
 import { DocScannerModal } from "./components/DocScannerModal";
+import { SplitPhotoModal } from "./components/SplitPhotoModal";
+import { StitchPhotoModal } from "./components/StitchPhotoModal";
 import { translations, LanguageKey } from "./i18n";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Share } from "@capacitor/share";
@@ -184,7 +186,7 @@ export default function App() {
         customResizerBg
       );
       if (editorPaths.length > 0 || editorTexts.length > 0) {
-        return await burnEditsToImage(hdBase, editorPaths, editorTexts, true);
+        return await burnEditsToImage(hdBase, editorPaths, editorTexts, true, editorReferenceSize);
       }
       return hdBase;
     }
@@ -221,6 +223,8 @@ export default function App() {
     | "text"
     | "appicons"
     | "docscanner"
+    | "split"
+    | "stitch"
     | null
   >(null);
   const [editorInitialTool, setEditorInitialTool] = useState<any>("none");
@@ -231,6 +235,8 @@ export default function App() {
   const [isTextModalOpen, setIsTextModalOpen] = useState(false);
   const [isAppIconModalOpen, setIsAppIconModalOpen] = useState(false);
   const [isDocScannerModalOpen, setIsDocScannerModalOpen] = useState(false);
+  const [isSplitPhotoModalOpen, setIsSplitPhotoModalOpen] = useState(false);
+  const [isStitchPhotoModalOpen, setIsStitchPhotoModalOpen] = useState(false);
   const [docScannerPages, setDocScannerPages] = useState<string[]>([]);
   const [editingDocPage, setEditingDocPage] = useState<{ index: number; data: string } | null>(null);
   const [pdfPageSize, setPdfPageSize] = useState<"A4" | "Letter" | "Original">(
@@ -247,6 +253,7 @@ export default function App() {
   // NEW STATES
   const [editorPaths, setEditorPaths] = useState<any[]>([]);
   const [editorTexts, setEditorTexts] = useState<any[]>([]);
+  const [editorReferenceSize, setEditorReferenceSize] = useState<{ width: number; height: number } | null>(null);
   const [selectedStyle, setSelectedStyle] = useState("Original");
   const [selectedLayout, setSelectedLayout] = useState("None");
   const [isPrivacyScanning, setIsPrivacyScanning] = useState(false);
@@ -502,14 +509,14 @@ export default function App() {
             setEditorTexts([]);
             setProcessedImage(res);
           } else if (styleChanged || layoutChanged || bgChanged) {
-            burnEditsToImage(res, editorPaths, editorTexts).then(
+            burnEditsToImage(res, editorPaths, editorTexts, false, editorReferenceSize).then(
               (finalCombined) => {
                 setProcessedImage(finalCombined);
               },
             );
           } else {
             if (editorPaths.length > 0 || editorTexts.length > 0) {
-              burnEditsToImage(res, editorPaths, editorTexts).then(
+              burnEditsToImage(res, editorPaths, editorTexts, false, editorReferenceSize).then(
                 (finalCombined) => {
                   setProcessedImage(finalCombined);
                 },
@@ -643,6 +650,12 @@ export default function App() {
 
           if (activeQuickFeature === "pdf") {
             setIsPdfModalOpen(true);
+          } else if (activeQuickFeature === "split") {
+            setIsSplitPhotoModalOpen(true);
+            setAppState("preview");
+          } else if (activeQuickFeature === "stitch") {
+            setIsStitchPhotoModalOpen(true);
+            setAppState("preview");
           } else if (activeQuickFeature === "converter") {
             setIsConverterModalOpen(true);
           } else if (activeQuickFeature === "text") {
@@ -650,14 +663,8 @@ export default function App() {
           } else if (activeQuickFeature === "appicons") {
             setIsAppIconModalOpen(true);
           } else {
-            if (activeQuickFeature === "draw") {
-              setEditorInitialTool("draw");
-              setEditorTexts([]);
-            } else if (activeQuickFeature === "blur") {
-              setEditorInitialTool("blur");
-              setEditorTexts([]);
-            } else if (activeQuickFeature === "arrows") {
-              setEditorInitialTool("arrows");
+            if (activeQuickFeature === "markup") {
+              setEditorInitialTool("none");
               setEditorTexts([]);
             } else if (activeQuickFeature === "resizer") {
               setEditorInitialTool("size");
@@ -931,16 +938,16 @@ export default function App() {
 
   const handleFeaturedClick = (
     feature:
-      | "draw"
-      | "blur"
+      | "markup"
       | "watermark"
       | "pdf"
       | "resizer"
-      | "arrows"
       | "converter"
       | "text"
       | "appicons"
-      | "docscanner",
+      | "docscanner"
+      | "split"
+      | "stitch",
   ) => {
     setActiveQuickFeature(feature);
     setSelectedLayout("None");
@@ -1051,34 +1058,34 @@ export default function App() {
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 <button
-                  onClick={() => handleFeaturedClick("draw")}
+                  onClick={() => handleFeaturedClick("markup")}
                   className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
                       ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
                   }`}
                 >
-                  Draw
+                  Edit & Markup photo
                 </button>
                 <button
-                  onClick={() => handleFeaturedClick("arrows")}
+                  onClick={() => handleFeaturedClick("split")}
                   className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
                       ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
                   }`}
                 >
-                  Arrows & Shapes
+                  Split Photo
                 </button>
                 <button
-                  onClick={() => handleFeaturedClick("blur")}
+                  onClick={() => handleFeaturedClick("stitch")}
                   className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
-                      ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
+                      ? "bg-slate-700 hover:bg-slate-650 text-green-400 border border-slate-600/50"
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
                   }`}
                 >
-                  Blur
+                  Stitch Photo
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("watermark")}
@@ -2015,6 +2022,7 @@ export default function App() {
                 newImageScale,
                 newResizeMode,
                 newResizerBg,
+                referenceSize
               ) => {
                 if (editingDocPage !== null) {
                   const updatedPages = [...docScannerPages];
@@ -2048,6 +2056,9 @@ export default function App() {
                 const performFullSave = () => {
                   if (newOriginalSrc) {
                     setOriginalImage(newOriginalSrc);
+                  }
+                  if (referenceSize) {
+                    setEditorReferenceSize(referenceSize);
                   }
                   setProcessedImage(newImgDataUrl);
                   setCleanImage(finalCleanSrc);
@@ -2362,6 +2373,26 @@ export default function App() {
         imageData={originalImage}
         isDarkMode={isDarkMode}
         isPremium={isPremium}
+      />
+
+      <SplitPhotoModal
+        isOpen={isSplitPhotoModalOpen}
+        onClose={() => {
+          setIsSplitPhotoModalOpen(false);
+          setActiveQuickFeature(null);
+          setAppState("upload");
+        }}
+        imageSrc={originalImage!}
+      />
+
+      <StitchPhotoModal
+        isOpen={isStitchPhotoModalOpen}
+        onClose={() => {
+          setIsStitchPhotoModalOpen(false);
+          setActiveQuickFeature(null);
+          setAppState("upload");
+        }}
+        initialImageSrc={originalImage}
       />
     </div>
   );
