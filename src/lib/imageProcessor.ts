@@ -840,6 +840,25 @@ export async function applyStyle(
             scaleRatio = 1;
           }
         }
+      } else {
+        // DOWN-SCALE for incredibly fast real-time preview (resolves 10 second lag on physical devices)
+        const previewMaxDim = 1080;
+        const currentMaxDim = Math.max(img.width, img.height);
+        if (currentMaxDim > previewMaxDim) {
+          scaleRatio = previewMaxDim / currentMaxDim;
+          const downscaleCanvas = document.createElement("canvas");
+          downscaleCanvas.width = Math.max(1, Math.round(img.width * scaleRatio));
+          downscaleCanvas.height = Math.max(1, Math.round(img.height * scaleRatio));
+          const dCtx = downscaleCanvas.getContext("2d");
+          if (dCtx) {
+            dCtx.imageSmoothingEnabled = true;
+            dCtx.imageSmoothingQuality = "medium";
+            dCtx.drawImage(img, 0, 0, downscaleCanvas.width, downscaleCanvas.height);
+            workingImg = downscaleCanvas;
+          } else {
+            scaleRatio = 1;
+          }
+        }
       }
 
       const scaledSensitiveAreas = sensitiveAreas.map((area) => ({
