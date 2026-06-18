@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Camera as CameraIcon, CopyX, RefreshCcw, Flashlight, FlashlightOff } from "lucide-react";
+import { Camera as CameraIcon, RefreshCcw, Flashlight, FlashlightOff, ArrowLeft, Image as ImageIcon, Grid, MoreVertical, Sliders, Aperture, Target } from "lucide-react";
 
 interface CameraOverlayScannerProps {
   isOpen: boolean;
@@ -8,17 +8,39 @@ interface CameraOverlayScannerProps {
   onCapture: (base64Image: string) => void;
   docTitle: string;
   targetAspect?: number;
+  pagesCount?: number;
 }
 
-export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, targetAspect = 1.588 }: CameraOverlayScannerProps) {
+export function CameraOverlayScanner({
+  isOpen,
+  onClose,
+  onCapture,
+  docTitle,
+  targetAspect = 1.58,
+  pagesCount = 0,
+}: CameraOverlayScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const viewfinderRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string>("");
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [isTorchOn, setIsTorchOn] = useState(false);
   const [isTorchSupported, setIsTorchSupported] = useState(false);
   const [focusRing, setFocusRing] = useState<{ x: number; y: number; id: number } | null>(null);
+
+  // Focus configuration states
+  const [isMacroMode, setIsMacroMode] = useState(false);
+  const [focusDistanceRange, setFocusDistanceRange] = useState<{ min: number; max: number; step: number } | null>(null);
+  const [currentFocusDistance, setCurrentFocusDistance] = useState<number>(0.15);
+
+  const isIDCardType =
+    docTitle.toLowerCase().includes("id") ||
+    docTitle.toLowerCase().includes("permit") ||
+    docTitle.toLowerCase().includes("license") ||
+    docTitle.toLowerCase().includes("card");
 
   const triggerAutofocus = useCallback(async () => {
     if (!stream) return;
@@ -29,13 +51,25 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
       const supportedFocusModes = caps.focusMode || [];
       if (supportedFocusModes.length > 0) {
         if (supportedFocusModes.includes("continuous")) {
-          // Apply continuous focusing mode - safe, non-destructive, robust
+          // Force a hardware focus lock sweep by switching to single-shot first
           await track.applyConstraints({
-            advanced: [{ focusMode: "continuous" } as any]
+            advanced: [{ focusMode: "single-shot" } as any],
           });
+          // Switch back to continuous focus after 250ms to maintain active tracking
+          setTimeout(async () => {
+            try {
+              if (track.readyState === "live") {
+                await track.applyConstraints({
+                  advanced: [{ focusMode: "continuous" } as any],
+                });
+              }
+            } catch (err) {
+              // Ignore silent focus errors
+            }
+          }, 250);
         } else if (supportedFocusModes.includes("single-shot")) {
           await track.applyConstraints({
-            advanced: [{ focusMode: "single-shot" } as any]
+            advanced: [{ focusMode: "single-shot" } as any],
           });
         }
       }
@@ -44,19 +78,22 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
     }
   }, [stream]);
 
-  const handleScreenTap = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest("button")) {
-      return;
-    }
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+  const handleScreenTap = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if ((e.target as HTMLElement).closest("button")) {
+        return;
+      }
+      if (!overlayRef.current) return;
 
-    setFocusRing({ x, y, id: Date.now() });
-    
-    // Explicit manual autofocus sweep on tap
-    triggerAutofocus();
-  }, [triggerAutofocus]);
+      const rect = overlayRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      setFocusRing({ x, y, id: Date.now() });
+      triggerAutofocus();
+    },
+    [triggerAutofocus]
+  );
 
   useEffect(() => {
     if (focusRing) {
@@ -68,17 +105,28 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
   }, [focusRing]);
 
   useEffect(() => {
-    if (!isOpen || !stream) return;
+    if (!isOpen || !stream || isMacroMode) return;
 
-    // Run custom focus cycle initially after camera stabilizes to acquire perfect initial focus
-    const initFocusTimer = setTimeout(() => {
+    // Run custom hardware lens autofocus sweeps on startup
+    const t1 = setTimeout(() => {
       triggerAutofocus();
-    }, 1000);
+    }, 500);
+
+    const t2 = setTimeout(() => {
+      triggerAutofocus();
+    }, 1500);
+
+    // Keep the focus sharp with gentle continuous sweeps every 4 seconds dynamically
+    const focusInterval = setInterval(() => {
+      triggerAutofocus();
+    }, 4000);
 
     return () => {
-      clearTimeout(initFocusTimer);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearInterval(focusInterval);
     };
-  }, [isOpen, stream, triggerAutofocus]);
+  }, [isOpen, stream, isMacroMode, triggerAutofocus]);
 
   const startCamera = useCallback(async () => {
     try {
@@ -91,39 +139,49 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
         stream.getTracks().forEach((track) => track.stop());
         setStream(null);
       }
-      
-      // Request maximum possible resolution and disable user-agent scaling with resizeMode: "none"
-      // Request continuous focus, exposure, and white balance modes at the browser-camera level
+
+      // Standard user media parameters - avoid polluting the root with focusMode/exposureMode
+      // as it causes many browsers/webviews to drop capabilities or fail streams.
       const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { 
+        video: {
           facingMode: { ideal: facingMode },
-          width: { ideal: 3840, max: 3840 },
-          height: { ideal: 2160, max: 2160 },
-          focusMode: { ideal: "continuous" },
-          exposureMode: { ideal: "continuous" },
-          whiteBalanceMode: { ideal: "continuous" },
-          resizeMode: "none",
-        } as any,
+          width: { ideal: 1920, max: 2560 },
+          height: { ideal: 1080, max: 1440 },
+        },
         audio: false,
       });
       setStream(newStream);
-      
+
       const track = newStream.getVideoTracks()[0];
       const caps: any = track.getCapabilities ? track.getCapabilities() : {};
       setIsTorchSupported(!!caps.torch);
       setIsTorchOn(false);
 
-      // Programmatically apply continuous focus constraints if supported by the hardware track
+      // Read focus distance configurations
+      if (caps.focusDistance) {
+        setFocusDistanceRange({
+          min: caps.focusDistance.min,
+          max: caps.focusDistance.max,
+          step: caps.focusDistance.step || 0.01,
+        });
+        setCurrentFocusDistance(caps.focusDistance.min || 0.15);
+      } else {
+        setFocusDistanceRange(null);
+      }
+      setIsMacroMode(false); // Reset to standard auto focus tracking initially
+
       const supportedFocusModes = caps.focusMode || [];
       if (supportedFocusModes.length > 0) {
         try {
-          const targetFocus = supportedFocusModes.includes("continuous") 
-            ? "continuous" 
-            : (supportedFocusModes.includes("autofocus") ? "autofocus" : null);
-          
+          const targetFocus = supportedFocusModes.includes("continuous")
+            ? "continuous"
+            : supportedFocusModes.includes("single-shot")
+            ? "single-shot"
+            : null;
+
           if (targetFocus) {
             await track.applyConstraints({
-              advanced: [{ focusMode: targetFocus } as any]
+              advanced: [{ focusMode: targetFocus } as any],
             });
           }
         } catch (e) {
@@ -133,25 +191,26 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
 
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
-        videoRef.current.play().catch(e => console.warn("Video play error:", e));
+        videoRef.current.play().catch((e) => console.warn("Video play error:", e));
       }
       setError("");
       return newStream;
     } catch (err: any) {
       console.warn("Camera error:", err);
-      setError("Please allow camera access to scan documents directly. You can also upload a photo instead.");
+      setError(
+        "Please allow camera access to scan documents directly. You can also upload a photo instead."
+      );
       return null;
     }
   }, [facingMode]);
 
   useEffect(() => {
     let isMounted = true;
-    
+
     if (isOpen) {
-      startCamera().then(newStream => {
+      startCamera().then((newStream) => {
         if (!isMounted && newStream) {
-          // If unmounted before camera started, stop the tracks immediately
-          newStream.getTracks().forEach(t => t.stop());
+          newStream.getTracks().forEach((t) => t.stop());
         }
       });
     }
@@ -179,7 +238,7 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
       const track = stream.getVideoTracks()[0];
       try {
         await track.applyConstraints({
-          advanced: [{ torch: !isTorchOn }]
+          advanced: [{ torch: !isTorchOn }],
         } as any);
         setIsTorchOn(!isTorchOn);
       } catch (e) {
@@ -188,137 +247,234 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
     }
   };
 
-  const handleCapture = async () => {
-    if (videoRef.current && overlayRef.current) {
-      const video = videoRef.current;
-      const overlay = overlayRef.current;
-      
-      let imgElement: HTMLImageElement | HTMLVideoElement = video;
-      let imgWidth = video.videoWidth;
-      let imgHeight = video.videoHeight;
-      let objectUrlToCleanup = "";
+  const handleToggleMacroMode = async () => {
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if (!track) return;
 
-      const track = stream?.getVideoTracks()[0];
-      // Check if browser/platform supports high-resolution photographic ImageCapture API
-      if (track && (window as any).ImageCapture) {
-        try {
-          const imageCapture = new (window as any).ImageCapture(track);
-          const photoBlob = await imageCapture.takePhoto({
-            imageWidth: track.getCapabilities?.()?.imageWidth?.max,
-            imageHeight: track.getCapabilities?.()?.imageHeight?.max
+    const nextMacro = !isMacroMode;
+    setIsMacroMode(nextMacro);
+
+    try {
+      const caps: any = track.getCapabilities ? track.getCapabilities() : {};
+      const supportedFocusModes = caps.focusMode || [];
+
+      if (nextMacro) {
+        // Turning Macro Mode ON - locks focus on close range text/ID document bounds
+        if (supportedFocusModes.includes("manual") && caps.focusDistance) {
+          const targetDistance = caps.focusDistance.min || 0.12;
+          setCurrentFocusDistance(targetDistance);
+          await track.applyConstraints({
+            advanced: [{ focusMode: "manual", focusDistance: targetDistance } as any],
           });
-          
-          const blobUrl = URL.createObjectURL(photoBlob);
-          const fullImg = new Image();
-          await new Promise((resolve) => {
-            fullImg.onload = () => {
-              objectUrlToCleanup = blobUrl;
-              imgWidth = fullImg.width;
-              imgHeight = fullImg.height;
-              imgElement = fullImg;
-              resolve(true);
-            };
-            fullImg.onerror = () => {
-              resolve(false);
-            };
-            fullImg.src = blobUrl;
+        } else {
+          // Fallback if full native manual zoom distance isn't supported inside webview:
+          // Switch to single-shot for intense focusing lock and do targeted sweep
+          await track.applyConstraints({
+            advanced: [{ focusMode: "single-shot" } as any],
           });
-        } catch (e) {
-          console.warn("ImageCapture takePhoto failed, falling back to video stream canvas frame:", e);
         }
+      } else {
+        // Turning Macro Mode OFF (switches back to standard continuous sweep tracking)
+        if (supportedFocusModes.includes("continuous")) {
+          await track.applyConstraints({
+            advanced: [{ focusMode: "continuous" } as any],
+          });
+        }
+        triggerAutofocus();
       }
+    } catch (err) {
+      console.warn("Error toggling macro focus constraints:", err);
+    }
+  };
+
+  const handleFocusDistanceChange = async (distanceValue: number) => {
+    setCurrentFocusDistance(distanceValue);
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if (!track) return;
+
+    try {
+      const caps: any = track.getCapabilities ? track.getCapabilities() : {};
+      const supportedFocusModes = caps.focusMode || [];
+      if (supportedFocusModes.includes("manual")) {
+        setIsMacroMode(true);
+        await track.applyConstraints({
+          advanced: [{ focusMode: "manual", focusDistance: distanceValue } as any],
+        });
+      }
+    } catch (err) {
+      console.warn("Could not apply micro distance shift:", err);
+    }
+  };
+
+  const handleCapture = async () => {
+    if (videoRef.current && overlayRef.current && viewfinderRef.current) {
+      const video = videoRef.current;
+
+      const videoW = video.videoWidth;
+      const videoH = video.videoHeight;
+      const containerW = overlayRef.current.clientWidth || window.innerWidth;
+      const containerH = overlayRef.current.clientHeight || window.innerHeight;
 
       const canvas = document.createElement("canvas");
-      canvas.width = imgWidth;
-      canvas.height = imgHeight;
+      canvas.width = videoW;
+      canvas.height = videoH;
       const ctx = canvas.getContext("2d");
-      
+
       if (ctx) {
-        ctx.drawImage(imgElement, 0, 0, canvas.width, canvas.height);
-        
-        if (objectUrlToCleanup) {
-          URL.revokeObjectURL(objectUrlToCleanup);
-        }
-        
-        // The media source (image or video) is `object-cover` within absolute inset-0 (the window container)
-        const videoRatio = imgWidth / imgHeight;
-        const containerW = window.innerWidth;
-        const containerH = window.innerHeight;
-        const containerRatio = containerW / containerH;
-        
-        let drawWidth, drawHeight, offsetX, offsetY;
-        
-        if (containerRatio > videoRatio) {
-            // Container is wider than the source, so source height is cropped visually
-            drawWidth = containerW;
-            drawHeight = containerW / videoRatio;
-            offsetX = 0;
-            offsetY = (containerH - drawHeight) / 2;
-        } else {
-            // Container is taller than the source, so source width is cropped visually
-            drawHeight = containerH;
-            drawWidth = containerH * videoRatio;
-            offsetX = (containerW - drawWidth) / 2;
-            offsetY = 0;
-        }
+        ctx.drawImage(video, 0, 0, videoW, videoH);
 
-        // Overlay rect relative to window
-        const rect = overlay.getBoundingClientRect();
-        
-        // Map overlay visual rect to the source's native high-resolution pixel dimensions
-        const scale = imgWidth / drawWidth;
-        
-        const cropX = Math.max(0, (rect.left - offsetX) * scale);
-        const cropY = Math.max(0, (rect.top - offsetY) * scale);
-        const cropW = Math.min(canvas.width - cropX, rect.width * scale);
-        const cropH = Math.min(canvas.height - cropY, rect.height * scale);
+        // Scale factor for object-cover fit
+        const scale = Math.max(containerW / videoW, containerH / videoH);
 
-        const croppedCanvas = document.createElement("canvas");
-        croppedCanvas.width = cropW;
-        croppedCanvas.height = cropH;
-        const croppedCtx = croppedCanvas.getContext("2d");
-        if (croppedCtx) {
-          croppedCtx.drawImage(
+        // Bounding dimensions of current video rendering
+        const scaledWidth = videoW * scale;
+        const scaledHeight = videoH * scale;
+
+        // Position offsets
+        const videoX = (containerW - scaledWidth) / 2;
+        const videoY = (containerH - scaledHeight) / 2;
+
+        // Bounding rect of the viewfinder element containing the yellow highlights
+        const rect = viewfinderRef.current.getBoundingClientRect();
+
+        // Map the viewfinder window to the canvas coordinates
+        const cropX = Math.max(0, (rect.left - videoX) / scale);
+        const cropY = Math.max(0, (rect.top - videoY) / scale);
+        const cropW = Math.min(videoW - cropX, rect.width / scale);
+        const cropH = Math.min(videoH - cropY, rect.height / scale);
+
+        const visibleCanvas = document.createElement("canvas");
+        visibleCanvas.width = cropW;
+        visibleCanvas.height = cropH;
+        const visibleCtx = visibleCanvas.getContext("2d");
+
+        if (visibleCtx) {
+          visibleCtx.drawImage(
             canvas,
-            cropX, cropY, cropW, cropH,
-            0, 0, cropW, cropH
+            cropX,
+            cropY,
+            cropW,
+            cropH,
+            0,
+            0,
+            cropW,
+            cropH
           );
-          const base64 = croppedCanvas.toDataURL("image/jpeg", 0.98);
+
+          const base64 = visibleCanvas.toDataURL("image/jpeg", 0.98);
           onCapture(base64);
         }
       }
     }
   };
 
-  if (!isOpen) return null;
+  const handleAlbumClick = () => {
+    fileInputRef.current?.click();
+  };
 
-  const isLandscape = targetAspect > 1;
-  const overlayWidthClass = isLandscape 
-    ? "w-[90%] sm:w-[500px]" 
-    : "w-[82%] max-w-[340px] md:w-[450px]";
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          onCapture(event.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  if (!isOpen) return null;
 
   return (
     <AnimatePresence>
       <motion.div
+        key="camera-overlay"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[200] bg-black flex flex-col"
+        className="fixed inset-0 z-[200] bg-black flex flex-col select-none"
       >
-        <div className="relative flex-1 overflow-hidden flex flex-col justify-center items-center cursor-crosshair" onClick={handleScreenTap}>
+        {/* HIDDEN FILE INPUT FOR ALBUMS */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileSelect}
+          accept="image/*"
+          className="hidden"
+        />
+
+        {/* TOP BAR ACTION CONTROLLERS */}
+        <div className="absolute top-0 left-0 right-0 h-20 bg-gradient-to-b from-black/80 to-transparent z-30 px-6 flex items-center justify-between pointer-events-auto">
+          {/* Back Action */}
+          <button
+            onClick={onClose}
+            className="p-2 -ml-2 text-white bg-black/30 hover:bg-black/50 active:scale-95 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-md"
+            aria-label="Back button"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
+
+          {/* Right Utilities */}
+          <div className="flex items-center gap-3">
+            {isTorchSupported && (
+              <button
+                onClick={toggleTorch}
+                className={`p-2.5 rounded-full bg-black/30 hover:bg-black/50 transition-all active:scale-95 cursor-pointer flex items-center justify-center shadow-md ${
+                  isTorchOn ? "text-yellow-400" : "text-white"
+                }`}
+                aria-label="Toggle flash"
+              >
+                {isTorchOn ? (
+                  <Flashlight className="w-5 h-5 animate-pulse" />
+                ) : (
+                  <FlashlightOff className="w-5 h-5 opacity-80" />
+                )}
+              </button>
+            )}
+
+            <button
+              onClick={toggleCamera}
+              className="p-2.5 text-white bg-black/30 hover:bg-black/50 active:scale-95 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-md"
+              aria-label="Switch camera view"
+            >
+              <RefreshCcw className="w-5 h-5" />
+            </button>
+
+            {/* Decorative Screenshot-Match Buttons */}
+            <span className="p-2.5 text-white bg-black/30 opacity-70 rounded-full flex items-center justify-center shadow-md select-none">
+              <Grid className="w-5 h-5" />
+            </span>
+
+            <span className="p-2.5 text-white bg-black/30 opacity-70 rounded-full flex items-center justify-center shadow-md select-none">
+              <MoreVertical className="w-5 h-5" />
+            </span>
+          </div>
+        </div>
+
+        {/* VIEWPORT CONTROLLER CONTAINER */}
+        <div
+          ref={overlayRef}
+          className="relative flex-1 overflow-hidden flex flex-col justify-center items-center cursor-crosshair pb-28 pt-10"
+          onClick={handleScreenTap}
+        >
           {error ? (
-            <div className="text-white text-center p-6 bg-gray-900 rounded-2xl max-w-sm">
-              <CameraIcon className="w-12 h-12 mx-auto mb-4 text-gray-500" />
+            <div className="text-white text-center p-6 bg-slate-900 rounded-2xl max-w-sm mx-4 shadow-xl border border-slate-850 z-20">
+              <CameraIcon className="w-12 h-12 mx-auto mb-4 text-slate-505" />
               <p className="text-sm">{error}</p>
-              <button 
+              <button
                 onClick={onClose}
-                className="mt-6 px-6 py-2 bg-blue-600 rounded-full font-bold text-white text-sm"
+                className="mt-6 px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full font-bold text-white text-sm cursor-pointer shadow-lg hover:brightness-110 active:scale-95 transition-all"
               >
                 Go Back
               </button>
             </div>
           ) : (
             <>
+              {/* VIDEO FEEDS */}
               <video
                 ref={videoRef}
                 autoPlay
@@ -328,107 +484,137 @@ export function CameraOverlayScanner({ isOpen, onClose, onCapture, docTitle, tar
                 style={{ opacity: 1.0 }}
               />
 
+              {/* TAP-TO-FOCUS RING */}
               {focusRing && (
                 <div
                   key={focusRing.id}
                   className="absolute pointer-events-none z-30 -ml-8 -mt-8 flex items-center justify-center"
                   style={{ left: focusRing.x, top: focusRing.y }}
                 >
-                  {/* Outer ring pulsing/pinging */}
-                  <div className="absolute w-16 h-16 border-2 border-amber-400 rounded-full animate-ping opacity-75" />
-                  {/* Inner ring pulse with center guide dot */}
-                  <div className="absolute w-12 h-12 border border-dashed border-amber-400/80 rounded-full animate-pulse flex items-center justify-center">
-                    <div className="w-2 h-2 bg-amber-400 rounded-full" />
+                  <div className="absolute w-16 h-16 border-2 border-yellow-400 rounded-full animate-ping opacity-75" />
+                  <div className="absolute w-12 h-12 border border-dashed border-yellow-400/80 rounded-full animate-pulse flex items-center justify-center">
+                    <div className="w-2 h-2 bg-yellow-400 rounded-full" />
                   </div>
                 </div>
               )}
-              
-              {/* Separate Overlay layout darkening ONLY the outside area with NO covering layer on the ID frame clear area */}
-              <div className="absolute inset-0 z-10 flex flex-col pointer-events-none">
-                {/* TOP DARK AREA - background opacity is #99000000 equivalent (rgba(0,0,0,0.6)) */}
-                 <div className="flex-1 w-full bg-black/60 flex items-end justify-center pb-6">
-                  <p className="text-white font-bold tracking-widest text-xs sm:text-sm drop-shadow-md px-4 text-center">
-                    Fit {docTitle} within the frame
-                  </p>
-                </div>
 
-                {/* CENTER ROW */}
-                <div className="flex-none flex flex-row items-stretch w-full">
-                  {/* LEFT DARK */}
-                  <div className="flex-1 bg-black/60" />
+              {/* VIEWPORT OVERLAYS (BOX SHADOW CUTOUT + CORNER HIGHLIGHTING) */}
+              <div className="absolute inset-0 z-10 flex flex-col justify-between pointer-events-none overflow-hidden">
+                <div className="flex-1" />
 
-                  {/* ID FRAME (CLEAR AREA with 100% original, untouched camera feed) */}
-                  <div 
-                     ref={overlayRef}
-                     className={`${overlayWidthClass} relative border-3 border-[#00AEEF] rounded-xl bg-transparent flex-none`}
-                     style={{ aspectRatio: targetAspect.toString() }}
+                {/* Cam Framing Zone */}
+                <div className="w-full flex justify-center px-6">
+                  <div
+                    ref={viewfinderRef}
+                    className="relative w-full max-w-[360px] rounded-xl pointer-events-none transition-all duration-300 shadow-[0_0_0_9999px_rgba(0,0,0,0.72)] border-0"
+                    style={{
+                      aspectRatio: targetAspect ? targetAspect : 1.58,
+                    }}
                   >
-                    {/* Corners around cutout for precise visual guides */}
-                    <div className="absolute -top-[3px] -left-[3px] w-8 h-8 border-t-3 border-l-3 border-white rounded-tl-xl" />
-                    <div className="absolute -top-[3px] -right-[3px] w-8 h-8 border-t-3 border-r-3 border-white rounded-tr-xl" />
-                    <div className="absolute -bottom-[3px] -left-[3px] w-8 h-8 border-b-3 border-l-3 border-white rounded-bl-xl" />
-                    <div className="absolute -bottom-[3px] -right-[3px] w-8 h-8 border-b-3 border-r-3 border-white rounded-br-xl" />
-                  </div>
+                    {/* Yellow corner brackets */}
+                    <div className="absolute -top-[2px] -left-[2px] w-8 h-8 border-t-[5px] border-l-[5px] border-[#FACC15] rounded-tl-xl pointer-events-none" />
+                    <div className="absolute -top-[2px] -right-[2px] w-8 h-8 border-t-[5px] border-r-[5px] border-[#FACC15] rounded-tr-xl pointer-events-none" />
+                    <div className="absolute -bottom-[2px] -left-[2px] w-8 h-8 border-b-[5px] border-l-[5px] border-[#FACC15] rounded-bl-xl pointer-events-none" />
+                    <div className="absolute -bottom-[2px] -right-[2px] w-8 h-8 border-b-[5px] border-r-[5px] border-[#FACC15] rounded-br-xl pointer-events-none" />
 
-                  {/* RIGHT DARK */}
-                  <div className="flex-1 bg-black/60" />
+                    {/* Central Translucent Pill Overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="bg-black/75 px-6 py-2.5 rounded-2xl flex flex-col items-center justify-center max-w-[85%] text-center pointer-events-none shadow-xl border border-white/5 animate-fade-in">
+                        <span className="text-white font-bold text-sm tracking-wide">
+                          {isIDCardType
+                            ? pagesCount === 0
+                              ? "Front page"
+                              : "Back page"
+                            : docTitle}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                {/* BOTTOM DARK AREA */}
-                <div className="flex-1 w-full bg-black/60" />
+                <div className="flex-1" />
               </div>
             </>
           )}
 
-          {/* Bottom Bar Controls - Relocated to the bottom, untouched by top banner ads */}
+          {/* BOTTOM BAR ACTION PANELS */}
           {!error && (
-            <div className="absolute bottom-0 left-0 w-full p-6 flex flex-col items-center gap-4 z-20 bg-gradient-to-t from-black/90 via-black/75 to-transparent pb-safe pb-8">
-              {/* Floating Torch/Flashlight control */}
-              {isTorchSupported && (
-                <button
-                  onClick={toggleTorch}
-                  className={`p-3.5 backdrop-blur rounded-full text-white transition-all shadow-md active:scale-90 ${
-                    isTorchOn ? "bg-amber-500 hover:bg-amber-600 scale-105" : "bg-black/60 hover:bg-black/85"
-                  }`}
-                  aria-label="Toggle flashlight"
-                >
-                  {isTorchOn ? <Flashlight className="w-5 h-5 animate-pulse" /> : <FlashlightOff className="w-5 h-5 opacity-80" />}
-                </button>
+            <div className="absolute bottom-0 left-0 w-full p-6 flex flex-col items-center gap-2 z-20 bg-gradient-to-t from-black/95 via-black/85 to-transparent pb-safe pb-8 pointer-events-auto">
+              {/* Conditional indicator above capture */}
+              {isIDCardType && (
+                <div className="text-[#FACC15] font-bold text-center text-xs tracking-wider uppercase mb-1 drop-shadow animate-pulse">
+                  Both sides
+                </div>
               )}
 
-              {/* Main controls row */}
-              <div className="w-full flex items-center justify-around max-w-xs sm:max-w-md">
-                {/* Cancel/Close Button */}
-                <button
-                  onClick={onClose}
-                  className="flex flex-col items-center gap-1 group focus:outline-none"
-                  aria-label="Cancel scanning"
-                >
-                  <div className="p-3.5 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-full transition-transform active:scale-90 shadow-lg">
-                    <X className="w-6 h-6" />
+              {/* Dynamic Focus Distance Slider - shows when manual lens tracking is supported */}
+              {focusDistanceRange && (
+                <div className="w-full max-w-[280px] mb-3 bg-black/70 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 flex flex-col items-center gap-1.5 animate-fade-in shadow-2xl">
+                  <div className="flex justify-between w-full text-[10px] text-white/60 font-bold uppercase tracking-wider">
+                    <span>Close (Macro)</span>
+                    <span className="text-[#FACC15]">{Math.round(currentFocusDistance * 100)}cm</span>
+                    <span>Far (Infinite)</span>
                   </div>
-                  <span className="text-[10px] text-white/80 font-bold uppercase tracking-widest leading-none mt-1">Cancel</span>
+                  <div className="w-full flex items-center gap-2">
+                    <Sliders className="w-3.5 h-3.5 text-[#FACC15] opacity-80" />
+                    <input
+                      type="range"
+                      min={focusDistanceRange.min}
+                      max={focusDistanceRange.max}
+                      step={focusDistanceRange.step}
+                      value={currentFocusDistance}
+                      onChange={(e) => handleFocusDistanceChange(parseFloat(e.target.value))}
+                      className="flex-1 accent-yellow-400 h-1 bg-white/20 rounded-lg cursor-pointer appearance-none focus:outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Shutter Circle Controller, Macro Toggle, and Gallery Button */}
+              <div className="w-full flex items-center justify-center relative h-24">
+                {/* ID/Doc Close-up Macro Focus Toggle on Left */}
+                <button
+                  onClick={handleToggleMacroMode}
+                  className="absolute left-8 flex flex-col items-center justify-center gap-1 group focus:outline-none cursor-pointer z-10"
+                  aria-label="Toggle close-up document focus mode"
+                >
+                  <div className={`p-3 rounded-xl transition-all active:scale-95 flex items-center justify-center ${
+                    isMacroMode 
+                      ? "bg-yellow-400 text-black shadow-[0_0_12px_rgba(250,204,21,0.4)]" 
+                      : "bg-white/10 hover:bg-white/20 text-white"
+                  }`}>
+                    {isMacroMode ? (
+                      <Target className="w-6 h-6 animate-pulse" />
+                    ) : (
+                      <Aperture className="w-6 h-6" />
+                    )}
+                  </div>
+                  <span className={`text-[9px] uppercase font-bold tracking-widest mt-1 ${isMacroMode ? "text-yellow-400" : "text-white/80"}`}>
+                    {isMacroMode ? "Macro On" : "Auto Focus"}
+                  </span>
                 </button>
 
-                {/* Capture Button */}
+                {/* Captured Action Shutter */}
                 <button
                   onClick={handleCapture}
-                  className="w-20 h-20 rounded-full border-[6px] border-white flex items-center justify-center bg-transparent active:scale-95 transition-transform shadow-xl hover:scale-105"
+                  className="w-20 h-20 rounded-full border-[6px] border-white flex items-center justify-center bg-transparent active:scale-95 transition-transform shadow-xl hover:scale-105 cursor-pointer z-10"
                   aria-label="Capture photo"
                 >
-                  <div className="w-14 h-14 bg-white active:bg-gray-100 rounded-full"></div>
+                  <div className="w-14 h-14 bg-white active:bg-gray-100 rounded-full" />
                 </button>
 
-                {/* Switch Camera Button */}
+                {/* Albums Gallery on Right */}
                 <button
-                  onClick={toggleCamera}
-                  className="flex flex-col items-center gap-1 group focus:outline-none"
-                  aria-label="Switch camera"
+                  onClick={handleAlbumClick}
+                  className="absolute right-8 flex flex-col items-center justify-center gap-1 group focus:outline-none cursor-pointer z-10"
+                  aria-label="Upload from gallery"
                 >
-                  <div className="p-3.5 bg-black/60 active:bg-black/85 text-white border border-white/20 rounded-full transition-transform active:scale-90 shadow-lg">
-                    <RefreshCcw className="w-6 h-6" />
+                  <div className="p-3 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all active:scale-95 flex items-center justify-center">
+                    <ImageIcon className="w-6 h-6" />
                   </div>
-                  <span className="text-[10px] text-white/80 font-bold uppercase tracking-widest leading-none mt-1">Flip</span>
+                  <span className="text-[9px] text-white/80 font-bold uppercase tracking-widest mt-1">
+                    Albums
+                  </span>
                 </button>
               </div>
             </div>

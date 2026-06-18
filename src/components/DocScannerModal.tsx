@@ -110,29 +110,10 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
 
   const handleCameraClick = async (index?: number) => {
     setTargetIndex(index ?? null);
-    if (Capacitor.isNativePlatform()) {
-      try {
-        const image = await CapCamera.getPhoto({
-          quality: 100,
-          allowEditing: false,
-          resultType: CameraResultType.Base64,
-          source: CameraSource.Camera,
-          correctOrientation: true,
-          width: 3840, // Request ultra HD high quality
-          height: 2160,
-        });
-        if (image.base64String) {
-          const mimeType = image.format === "png" ? "image/png" : "image/jpeg";
-          const dataUrl = `data:${mimeType};base64,${image.base64String}`;
-          handleCameraCapture(dataUrl);
-        }
-      } catch (err) {
-        console.error("Native device camera capture cancelled or failed, falling back to overlay:", err);
-        setIsCameraScannerOpen(true);
-      }
-    } else {
-      setIsCameraScannerOpen(true);
-    }
+    // Open our extremely high-performance Custom CameraOverlayScanner directly (both on web and native)
+    // as it is fully optimized with custom document framing guides, live tap-to-focus rings,
+    // macro close-up locking states, and focal distance micrometer sliders to guarantee sharp pictures.
+    setIsCameraScannerOpen(true);
   };
 
   const handleCameraCapture = (base64Image: string) => {
@@ -223,31 +204,7 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
 
   const triggerSaveWithAd = () => {
     if (pages.length === 0) return;
-
-    if (isPremium) {
-      handleExport();
-      return;
-    }
-
-    if (Capacitor.isNativePlatform()) {
-      admobManager.showInterstitial(() => {
-        handleExport();
-      });
-    } else {
-      setIsPlayingAd(true);
-      setAdCountdown(5);
-      const interval = setInterval(() => {
-        setAdCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            setIsPlayingAd(false);
-            handleExport();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
+    handleExport();
   };
 
   const handleExport = async () => {
@@ -313,7 +270,7 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
           ctx.drawImage(img, 0, 0);
         }
         
-        const outBase64 = offCanvas.toDataURL(mime, 0.9);
+        const outBase64 = offCanvas.toDataURL(mime, 1.0);
 
         if (Capacitor.isNativePlatform()) {
           const NativeMedia = registerPlugin<any>("NativeMedia");
@@ -414,7 +371,7 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
                          <div className="max-h-60 overflow-y-auto">
                             {filteredDocs.length > 0 ? filteredDocs.map((doc, idx) => (
                               <button 
-                                key={doc}
+                                key={`${doc}-${idx}`}
                                 onClick={() => {
                                   setSelectedDocType(doc);
                                   setIsDropdownOpen(false);
@@ -446,7 +403,7 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
                     const title = index === 0 ? "Step 1: Front side (Required)" : index === 1 ? "Step 2: Back side (Optional)" : `Page ${index + 1}`;
                     
                     return (
-                      <div key={index} className="flex flex-col relative group flex-[1_1_calc(50%-8px)] min-w-[120px] max-w-[200px]">
+                      <div key={`doc-page-${index}`} className="flex flex-col relative group flex-[1_1_calc(50%-8px)] min-w-[120px] max-w-[200px]">
                         <p className="text-[11px] sm:text-xs font-bold text-gray-500 mb-2 leading-tight text-center">{title}</p>
                         <div 
                           className={`relative flex-1 aspect-[3/4] sm:aspect-square flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all overflow-hidden ${pageImage ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-white'}`}
@@ -607,6 +564,7 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
           onCapture={handleCameraCapture}
           docTitle={selectedDocType}
           targetAspect={isIDCard(selectedDocType) ? 1.58 : (1 / 1.414)}
+          pagesCount={pages.length}
         />
       )}
 

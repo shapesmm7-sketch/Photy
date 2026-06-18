@@ -572,6 +572,7 @@ export default function App() {
     setOriginalImage(originalSrc);
     setCleanImage(originalSrc);
     setProcessedImage(originalSrc);
+    setBaseStyledImage(null);
     setAppState("preview");
     setShowSettings(false);
   };
@@ -588,6 +589,7 @@ export default function App() {
     setSelectedStyle("Original");
     setSelectedLayout("None");
     setCustomBgColor(null);
+    setBaseStyledImage(null);
     setBlurStrength(15);
     setSensitiveAreas([]);
     setMemeTopText("TOP TEXT");
@@ -692,6 +694,7 @@ export default function App() {
     setCleanImage(base64);
     setProcessedImage(null);
     setOriginalImage(base64);
+    setBaseStyledImage(null);
     setEditorPaths([]);
     setEditorTexts([]);
     setCustomCanvasSize(null);
@@ -954,7 +957,7 @@ export default function App() {
 
   return (
     <div
-      className={`h-[100dvh] w-full font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col pt-safe ${isDarkMode ? "bg-slate-900 text-white" : "bg-blue-600 text-gray-900"}`}
+      className={`h-[100dvh] w-full font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col pt-safe ${isDarkMode ? "bg-slate-900 text-white" : appState === "upload" ? "bg-blue-600 text-gray-900" : "bg-[#F1F5F9] text-gray-900"}`}
       style={{
         paddingTop:
           !isPremium && isNative
@@ -1974,6 +1977,7 @@ export default function App() {
             className="absolute inset-0 z-50 md:rounded-3xl overflow-hidden bg-black md:inset-auto md:w-[480px] md:h-[90vh]"
           >
             <EditorCanvas
+              key={cleanImage || "editor"}
               imageSrc={baseStyledImage || cleanImage!}
               cleanImageSrc={cleanImage!}
               originalScreenshotSrc={originalImage || undefined}

@@ -126,7 +126,7 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({
           const quality =
             selectedFormat === "jpg" ||
             selectedFormat === "webp"
-              ? 0.9
+              ? 1.0
               : undefined;
 
           const dataUrl = canvas.toDataURL(mimeType, quality);

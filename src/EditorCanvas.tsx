@@ -142,6 +142,7 @@ interface DrawingPath {
 }
 
 interface EditorCanvasProps {
+  key?: string | null;
   imageSrc: string;
   cleanImageSrc?: string;
   originalScreenshotSrc?: string;
@@ -816,6 +817,14 @@ export default function EditorCanvas({
 
   // Keep track of the clean image (no layout) for re-styling when canvas size changes.
   const [currentCleanSrc, setCurrentCleanSrc] = useState<string | null>(cleanImageSrc || originalScreenshotSrc || imageSrc);
+
+  // Sync states if the screenshot or image props change (e.g., when a user uploads a new image)
+  useEffect(() => {
+    setWorkingOriginalSrc(originalScreenshotSrc);
+    setCurrentCleanSrc(cleanImageSrc || originalScreenshotSrc || imageSrc);
+    setPaths(initialPaths || []);
+    setTexts(initialTexts || []);
+  }, [originalScreenshotSrc, cleanImageSrc, imageSrc]);
 
   // Initialize and load images
   useEffect(() => {
@@ -3391,7 +3400,7 @@ export default function EditorCanvas({
     >
       <canvas ref={blurCanvasRef} className="hidden" />
 
-      <div className="flex items-center justify-between p-4 bg-[#111] z-10 pt-safe border-b border-white/10">
+      <div className={`flex items-center justify-between p-4 bg-[#111] z-10 border-b border-white/10 ${!isPremium && isNative ? '' : 'pt-safe'}`}>
         <button
           onClick={onCancel}
           className="p-2 hover:bg-white/10 rounded-full transition-colors"
