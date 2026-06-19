@@ -639,6 +639,11 @@ export default function EditorCanvas({
   const [texts, setTexts] = useState<TextItem[]>(initialTexts);
   const [selectedTextIndex, setSelectedTextIndex] = useState<number | null>(initialTexts.length > 0 ? 0 : null);
 
+  const latestTextsRef = useRef<TextItem[]>(texts);
+  latestTextsRef.current = texts;
+  const latestPathsRef = useRef<DrawingPath[]>(paths);
+  latestPathsRef.current = paths;
+
   // History state for undo/redo
   const [history, setHistory] = useState<{
     paths: DrawingPath[];
@@ -819,13 +824,22 @@ export default function EditorCanvas({
   // Keep track of the clean image (no layout) for re-styling when canvas size changes.
   const [currentCleanSrc, setCurrentCleanSrc] = useState<string | null>(cleanImageSrc || originalScreenshotSrc || imageSrc);
 
-  // Sync states if the screenshot or image props change (e.g., when a user uploads a new image)
+  // Sync states if props change (e.g., when a user uploads a new image or activates a tool)
   useEffect(() => {
     setWorkingOriginalSrc(originalScreenshotSrc);
     setCurrentCleanSrc(cleanImageSrc || originalScreenshotSrc || imageSrc);
-    setPaths(initialPaths || []);
-    setTexts(initialTexts || []);
-  }, [originalScreenshotSrc, cleanImageSrc, imageSrc]);
+    const nextPaths = initialPaths || [];
+    setPaths(nextPaths);
+    const nextTexts = initialTexts || [];
+    setTexts(nextTexts);
+    if (nextTexts.length > 0) {
+      setSelectedTextIndex((prev) => (prev !== null && prev < nextTexts.length) ? prev : 0);
+    } else {
+      setSelectedTextIndex(null);
+    }
+    // Explicitly redraw to reflect prop updates on the canvas right away
+    redraw(undefined, nextPaths, nextTexts);
+  }, [originalScreenshotSrc, cleanImageSrc, imageSrc, initialPaths, initialTexts]);
 
   // Initialize and load images
   useEffect(() => {
@@ -1092,10 +1106,51 @@ export default function EditorCanvas({
           img.crossOrigin = "anonymous";
         }
         img.onload = () => {
+          const oldW = originalImageRef.current?.width || img.width;
+          const oldH = originalImageRef.current?.height || img.height;
+
           styledImageRef.current = img;
           if (activeTool !== "crop") {
             originalImageRef.current = img;
             fitImageToContainer(img, { x: 0, y: 0, w: img.width, h: img.height });
+          }
+
+          const newW = img.width;
+          const newH = img.height;
+          if (oldW !== newW || oldH !== newH) {
+            const scaleX = newW / oldW;
+            const scaleY = newH / oldH;
+
+            setTexts((prev) =>
+              prev.map((t) => ({
+                ...t,
+                x: t.x * scaleX,
+                y: t.y * scaleY,
+                size: Math.round(t.size * Math.min(scaleX, scaleY)),
+              }))
+            );
+
+            setPaths((prev) =>
+              prev.map((p) => {
+                const scaledPoints = p.points.map((pt) => ({
+                  x: pt.x * scaleX,
+                  y: pt.y * scaleY,
+                }));
+                const newPath2d = new Path2D();
+                if (scaledPoints.length > 0) {
+                  newPath2d.moveTo(scaledPoints[0].x, scaledPoints[0].y);
+                  for (let i = 1; i < scaledPoints.length; i++) {
+                    newPath2d.lineTo(scaledPoints[i].x, scaledPoints[i].y);
+                  }
+                }
+                return {
+                  ...p,
+                  width: p.width * Math.min(scaleX, scaleY),
+                  points: scaledPoints,
+                  path2d: newPath2d,
+                };
+              })
+            );
           }
         };
         img.src = newPreviewSrc;
@@ -1430,7 +1485,7 @@ export default function EditorCanvas({
     }
     if (!activeRect) return;
 
-    const hasBlurPaths = explicitPaths ? explicitPaths.some((p) => p.isBlur) : paths.some((p) => p.isBlur);
+    const hasBlurPaths = explicitPaths ? explicitPaths.some((p) => p.isBlur) : latestPathsRef.current.some((p) => p.isBlur);
     const needBlur = activeTool === "blur" || hasBlurPaths;
 
     if (needBlur && blurCanvasRef.current?.getAttribute("data-dirty") === "true") {
@@ -1581,7 +1636,7 @@ export default function EditorCanvas({
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
 
-      const pathsToDraw = explicitPaths || paths;
+      const pathsToDraw = explicitPaths || latestPathsRef.current;
       pathsToDraw.forEach((p, idx) => {
         if (p.isBlur) {
           drawBlurredPath(ctx, p.path2d, p.width, p.color, topPad);
@@ -1674,8 +1729,23 @@ export default function EditorCanvas({
       });
 
       // Draw texts
-      const textsToDraw = explicitTexts || texts;
-      textsToDraw.forEach((t) => {
+      const textsToDraw = explicitTexts || latestTextsRef.current;
+      textsToDraw.forEach((rawT, idx) => {
+        // If we are currently editing this item and the modal is open, use the live state values instead of stale array values
+        const t = (editingTextIndex === idx && showTextModal) ? {
+          ...rawT,
+          text: currentText,
+          color: currentTextColor,
+          size: currentTextSize,
+          fontName: currentTextFont,
+          rotation: currentTextRotation,
+          hasShadow: currentTextShadow,
+          shadowColor: currentTextShadowColor,
+          bgColor: currentTextBgColor,
+          positionMode: textPositionMode,
+          y: textPositionMode === "Top" ? (currentTextSize + 10) : (textPositionMode === "Bottom" ? (canvas.height - 20) : rawT.y)
+        } : rawT;
+
         if (t.opacity !== undefined) {
           ctx.globalAlpha = t.opacity;
         } else {
@@ -1819,8 +1889,8 @@ export default function EditorCanvas({
       });
 
       // Draw active selected text bounding box with interactive handles (Delete & Resize/Rotate)
-      if (!hideSelectionBoxes && selectedTextIndex !== null && selectedTextIndex < texts.length) {
-        const t = texts[selectedTextIndex];
+      if (!hideSelectionBoxes && selectedTextIndex !== null && selectedTextIndex < latestTextsRef.current.length) {
+        const t = latestTextsRef.current[selectedTextIndex];
         const bounds = getTextBounds(t);
         
         ctx.save();
@@ -1894,8 +1964,8 @@ export default function EditorCanvas({
         ctx.restore();
       }
 
-      // Draw temporary preview text if modal is open
-      if (showTextModal && currentText.trim() && activeRect) {
+      // Draw temporary preview text if modal is open and we are adding a brand new text
+      if (showTextModal && editingTextIndex < 0 && currentText.trim() && activeRect) {
         const size = currentTextSize;
         const x = canvas.width / 2;
         let y = activeRect.h / 2;
@@ -3007,9 +3077,12 @@ export default function EditorCanvas({
     if (!canvasRef.current || !currentText.trim() || !cropRect) return;
     const canvas = canvasRef.current;
 
+    const designW = canvas.width > 100 ? canvas.width : (cropRect ? cropRect.w : 1080);
+    const designH = canvas.height > 100 ? canvas.height : (cropRect ? cropRect.h : 1080);
+
     const size = currentTextSize;
-    let x = canvas.width / 2;
-    let y = canvas.height / 2;
+    let x = designW / 2;
+    let y = designH / 2;
 
     const topTextSize = Math.max(
       0,
@@ -3023,10 +3096,11 @@ export default function EditorCanvas({
       y = texts[editingTextIndex].y;
     } else {
       if (textPositionMode === "Top") y = size + 10;
-      if (textPositionMode === "Bottom") y = canvas.height - 20;
+      if (textPositionMode === "Bottom") y = designH - 20;
     }
 
     const newText: TextItem = {
+      ... (editingTextIndex >= 0 ? texts[editingTextIndex] : {}),
       text: currentText,
       x,
       y,
@@ -3734,7 +3808,7 @@ export default function EditorCanvas({
                       <input
                         type="range"
                         min={10}
-                        max={selectedWatermark.isLogo ? 600 : 250}
+                        max={canvasRef.current ? Math.round(Math.min(canvasRef.current.width, canvasRef.current.height) * (selectedWatermark.isLogo ? 0.82 : 0.62)) : (selectedWatermark.isLogo ? 650 : 300)}
                         value={selectedWatermark.size}
                         onChange={(e) => updateActive((item) => { item.size = parseInt(e.target.value); })}
                         className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
@@ -3835,18 +3909,21 @@ export default function EditorCanvas({
 
               <button
                 onClick={() => {
+                  const designW = canvasRef.current && canvasRef.current.width > 100 ? canvasRef.current.width : (cropRect ? cropRect.w : 1080);
+                  const designH = canvasRef.current && canvasRef.current.height > 100 ? canvasRef.current.height : (cropRect ? cropRect.h : 1080);
+                  const baseSize = designW;
                   const newTxt: TextItem = {
                     text: "Draft Watermark",
-                    x: canvasRef.current ? canvasRef.current.width / 2 : 200,
-                    y: canvasRef.current ? canvasRef.current.height / 2 : 200,
+                    x: designW / 2,
+                    y: designH / 2,
                     color: "#FFFFFF",
-                    size: Math.round(Math.min(canvasRef.current ? canvasRef.current.width : 500, canvasRef.current ? canvasRef.current.height : 500) * 0.08) || 45,
+                    size: Math.round(baseSize * 0.12) || 120,
                     positionMode: "Default",
                     fontName: "Space Grotesk",
                     hasShadow: true,
                     shadowColor: "rgba(0, 0, 0, 0.4)",
-                    bgColor: "rgba(0, 0, 0, 0.25)",
-                    opacity: 0.7,
+                    bgColor: "rgba(0, 0, 0, 0.35)",
+                    opacity: 0.85,
                     rotation: 0,
                   };
                   const updated = [...texts, newTxt];
@@ -3909,17 +3986,34 @@ export default function EditorCanvas({
           <ToolButton
             active={activeTool === "text"}
             onClick={() => {
-              if (activeTool === "text") {
+              if (activeTool === "text" && showTextModal) {
                 setActiveTool("none");
                 setShowTextModal(false);
               } else {
-                setActiveTool("text");
-                setCurrentText("");
-                setCurrentTextRotation(0);
-                setCurrentTextShadow(false);
-                setTextPositionMode("Default");
-                setShowTextModal(true);
-                setShowStickerPanel(false);
+                if (selectedTextIndex !== null && selectedTextIndex >= 0 && selectedTextIndex < texts.length) {
+                  const t = texts[selectedTextIndex];
+                  setEditingTextIndex(selectedTextIndex);
+                  setCurrentText(t.text);
+                  setCurrentTextColor(t.color);
+                  setCurrentTextSize(t.size);
+                  setCurrentTextFont(t.fontName);
+                  setCurrentTextRotation(t.rotation || 0);
+                  setCurrentTextShadow(t.hasShadow || false);
+                  setCurrentTextShadowColor(t.shadowColor || "rgba(0,0,0,0.6)");
+                  setCurrentTextBgColor(t.bgColor || "transparent");
+                  setTextPositionMode(t.positionMode);
+                  setActiveTool("text");
+                  setShowTextModal(true);
+                } else {
+                  setActiveTool("text");
+                  setEditingTextIndex(-1);
+                  setCurrentText("");
+                  setCurrentTextRotation(0);
+                  setCurrentTextShadow(false);
+                  setTextPositionMode("Default");
+                  setShowTextModal(true);
+                  setShowStickerPanel(false);
+                }
               }
             }}
             icon={<Type />}
@@ -4761,6 +4855,24 @@ export default function EditorCanvas({
                     onKeyDown={(e) =>
                       e.key === "Enter" && currentText && handleAddText()
                     }
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1 pr-1">
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
+                      Font Size
+                    </label>
+                    <span className="text-xs font-mono font-bold text-blue-600">{currentTextSize}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="500"
+                    step="1"
+                    value={currentTextSize}
+                    onChange={(e) => setCurrentTextSize(Number(e.target.value))}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600 mb-2"
                   />
                 </div>
 

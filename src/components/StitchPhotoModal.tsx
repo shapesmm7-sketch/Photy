@@ -16,17 +16,20 @@ import {
   PlusCircle,
   AlertCircle
 } from "lucide-react";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 
 interface StitchPhotoModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialImageSrc: string | null;
+  initialImageSrcs?: string[];
 }
 
 export const StitchPhotoModal: React.FC<StitchPhotoModalProps> = ({
   isOpen,
   onClose,
   initialImageSrc,
+  initialImageSrcs,
 }) => {
   const [images, setImages] = useState<string[]>([]);
   const [direction, setDirection] = useState<"vertical" | "horizontal">("vertical");
@@ -50,7 +53,9 @@ export const StitchPhotoModal: React.FC<StitchPhotoModalProps> = ({
   // Initialize with initial state
   useEffect(() => {
     if (isOpen) {
-      if (initialImageSrc) {
+      if (initialImageSrcs && initialImageSrcs.length > 0) {
+        setImages(initialImageSrcs);
+      } else if (initialImageSrc) {
         setImages([initialImageSrc]);
       } else {
         setImages([]);
@@ -63,7 +68,7 @@ export const StitchPhotoModal: React.FC<StitchPhotoModalProps> = ({
       setShowSortSheet(false);
       setShowSettingsSheet(false);
     }
-  }, [isOpen, initialImageSrc]);
+  }, [isOpen, initialImageSrc, initialImageSrcs]);
 
   // Handle auto-stitch edge-trimming of device status bars/navigation bars automatically
   const trimImageMargins = async (imgSrc: string): Promise<string> => {
@@ -289,23 +294,24 @@ export const StitchPhotoModal: React.FC<StitchPhotoModalProps> = ({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const fileList = Array.from(files);
+    const len = files.length;
     let loadedCount = 0;
     const newSrcs: string[] = [];
 
-    fileList.forEach((file) => {
+    for (let i = 0; i < len; i++) {
+      const file = files[i];
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
           newSrcs.push(event.target.result as string);
         }
         loadedCount++;
-        if (loadedCount === fileList.length) {
+        if (loadedCount === len) {
           setImages((prev) => [...prev, ...newSrcs]);
         }
       };
       reader.readAsDataURL(file);
-    });
+    }
 
     e.target.value = ""; // reset
   };
@@ -336,9 +342,31 @@ export const StitchPhotoModal: React.FC<StitchPhotoModalProps> = ({
     if (!compiledImageSrc || images.length < 2) return;
     setIsSaving(true);
     try {
+      const defaultFilename = `stitched_photo_${Date.now()}.png`;
+
+      if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
+        try {
+          const NativeMedia = registerPlugin<any>("NativeMedia");
+          const cleanBase64 = compiledImageSrc.includes(",")
+            ? compiledImageSrc.split(",")[1]
+            : compiledImageSrc;
+          
+          await NativeMedia.saveImage({
+            base64: cleanBase64,
+            filename: defaultFilename,
+            mimeType: "image/png"
+          });
+          alert("Image saved directly to your phone gallery under 'Pictures/Photy'!");
+          setIsSaving(false);
+          return;
+        } catch (nativeErr: any) {
+          console.error("Native save failed, trying Web download fallback:", nativeErr);
+        }
+      }
+
       const a = document.createElement("a");
       a.href = compiledImageSrc;
-      a.download = `stitched_photo_${Date.now()}.png`;
+      a.download = defaultFilename;
       a.click();
     } catch (e) {
       console.error(e);

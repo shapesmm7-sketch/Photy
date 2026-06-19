@@ -130,9 +130,8 @@ const EXTENDED_PALETTE = [
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>("upload");
+  const [editorSessionId, setEditorSessionId] = useState(Date.now());
   const [originalImage, setOriginalImage] = useState<string | null>(null); // Baked version for style
-  const [loadedOriginalImage, setLoadedOriginalImage] =
-    useState<HTMLImageElement | null>(null);
   const [cleanImage, setCleanImage] = useState<string | null>(null); // Clean version for editor (un-baked)
   const [processedImage, setProcessedImage] = useState<string | null>(null);
   const [baseStyledImage, setBaseStyledImage] = useState<string | null>(null);
@@ -169,9 +168,9 @@ export default function App() {
   };
 
   const generateHighQualityImage = async (): Promise<string> => {
-    if (originalImage && loadedOriginalImage) {
+    if (originalImage) {
       const hdBase = await applyStyle(
-        loadedOriginalImage,
+        originalImage,
         selectedStyle,
         selectedLayout,
         sensitiveAreas,
@@ -237,6 +236,7 @@ export default function App() {
   const [isDocScannerModalOpen, setIsDocScannerModalOpen] = useState(false);
   const [isSplitPhotoModalOpen, setIsSplitPhotoModalOpen] = useState(false);
   const [isStitchPhotoModalOpen, setIsStitchPhotoModalOpen] = useState(false);
+  const [stitchImages, setStitchImages] = useState<string[]>([]);
   const [docScannerPages, setDocScannerPages] = useState<string[]>([]);
   const [editingDocPage, setEditingDocPage] = useState<{ index: number; data: string } | null>(null);
   const [pdfPageSize, setPdfPageSize] = useState<"A4" | "Letter" | "Original">(
@@ -430,11 +430,14 @@ export default function App() {
     translations[language]?.[key] || translations["en"][key];
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const multiFileInputRef = useRef<HTMLInputElement>(null);
 
   const prevStyleRef = React.useRef(selectedStyle);
   const prevLayoutRef = React.useRef(selectedLayout);
   const prevBgRef = React.useRef(customBgColor);
   const prevOriginalImageRef = React.useRef<string | null>(null);
+  const currentOriginalImageRef = React.useRef<string | null>(null);
+  currentOriginalImageRef.current = originalImage;
 
   // Capacitor AdMob Initialization
   React.useEffect(() => {
@@ -459,28 +462,16 @@ export default function App() {
     preloadPhoneFrames();
   }, []);
 
-  // Preload original image into HTMLImageElement for instant subsequent rendering
-  React.useEffect(() => {
-    if (originalImage) {
-      const img = new Image();
-      img.onload = () => {
-        setLoadedOriginalImage(img);
-      };
-      img.src = originalImage;
-    } else {
-      setLoadedOriginalImage(null);
-    }
-  }, [originalImage]);
-
   // Sync processed image when any parameter changes
   React.useEffect(() => {
     if (showEditor) return;
 
-    if (originalImage && loadedOriginalImage) {
+    if (originalImage) {
+      const originalImageAtStart = originalImage;
       setZoomScale(1);
       setZoomOffset({ x: 0, y: 0 });
       applyStyle(
-        loadedOriginalImage,
+        originalImage,
         selectedStyle,
         selectedLayout,
         sensitiveAreas,
@@ -495,6 +486,10 @@ export default function App() {
         customResizerBg
       )
         .then((res) => {
+          if (currentOriginalImageRef.current !== originalImageAtStart) {
+            // Discard stale result because a new image was uploaded in the meantime!
+            return;
+          }
           setBaseStyledImage(res);
 
           // Only clear manual edits if structural options actually changed in the sidebar
@@ -505,8 +500,10 @@ export default function App() {
             prevOriginalImageRef.current !== originalImage;
 
           if (originalImageChanged) {
-            setEditorPaths([]);
-            setEditorTexts([]);
+            if (!activeQuickFeature) {
+              setEditorPaths([]);
+              setEditorTexts([]);
+            }
             setProcessedImage(res);
           } else if (styleChanged || layoutChanged || bgChanged) {
             burnEditsToImage(res, editorPaths, editorTexts, false, editorReferenceSize).then(
@@ -535,7 +532,6 @@ export default function App() {
     }
   }, [
     originalImage,
-    loadedOriginalImage,
     selectedStyle,
     selectedLayout,
     sensitiveAreas,
@@ -580,23 +576,58 @@ export default function App() {
     setCleanImage(originalSrc);
     setProcessedImage(originalSrc);
     setBaseStyledImage(null);
+    setEditorPaths([]);
+    setEditorTexts([]);
     setAppState("preview");
     setShowSettings(false);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const filesList = e.target.files;
+    if (!filesList || filesList.length === 0) return;
 
-    // Clear input value so selecting the same file works
-    e.target.value = "";
+    // Convert to standard JS array FIRST so the references are stable
+    const filesArray = Array.from(filesList);
+
+    if (activeQuickFeature === "stitch" && filesArray.length > 1) {
+      const readers = filesArray.map((f: File) => {
+        return new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (event) => resolve(event.target?.result as string);
+          reader.readAsDataURL(f);
+        });
+      });
+      Promise.all(readers).then((srcs) => {
+        setStitchImages(srcs);
+        setIsStitchPhotoModalOpen(true);
+        setAppState("preview");
+        setOriginalImage(null);
+        setCleanImage(null);
+      });
+      // Clear input value so selecting the same file works later
+      e.target.value = "";
+      return;
+    }
+
+    const file = filesArray[0] as File;
+    if (!file) {
+      e.target.value = "";
+      return;
+    }
+
+    // IMPORTANT: Clear previous images synchronously to guarantee old applyStyle effects are aborted!
+    setOriginalImage(null);
+    setCleanImage(null);
+    setProcessedImage(null);
+    setBaseStyledImage(null);
+    setEditorPaths([]);
+    setEditorTexts([]);
 
     // Reset style, layout, custom background and features to clean slate on new photo upload
     setActiveTab("layouts");
     setSelectedStyle("Original");
     setSelectedLayout("None");
     setCustomBgColor(null);
-    setBaseStyledImage(null);
     setBlurStrength(15);
     setSensitiveAreas([]);
     setMemeTopText("TOP TEXT");
@@ -645,6 +676,7 @@ export default function App() {
         } else {
           // If a quick feature from landing page is active:
           setEditorPaths([]);
+          setEditorTexts([]);
           setCustomCanvasSize(null);
           setCustomCropRect(null); // Full size canvas, no custom template wrapper
 
@@ -672,21 +704,26 @@ export default function App() {
             } else if (activeQuickFeature === "watermark") {
               setEditorInitialTool("text");
               // Elegant drag-adjustable watermark centered by default
+              const initialRefSize = { width, height };
+              setEditorReferenceSize(initialRefSize);
               setEditorTexts([
                 {
                   text: "Draft Watermark",
                   x: width / 2,
                   y: height / 2,
                   color: "#FFFFFF",
-                  size: Math.round(Math.max(width, height) * 0.05),
+                  size: Math.round(Math.min(width, height) * 0.12), // Use a more visible size
                   positionMode: "Default",
                   fontName: "Space Grotesk",
                   hasShadow: true,
                   shadowColor: "rgba(0, 0, 0, 0.4)",
-                  bgColor: "rgba(0, 0, 0, 0.25)",
+                  bgColor: "rgba(0, 0, 0, 0.35)", // Slightly darker bg
+                  opacity: 0.85,
+                  rotation: 0,
                 },
               ]);
             }
+            setEditorSessionId(Date.now());
             setShowEditor(true);
           }
         }
@@ -694,6 +731,9 @@ export default function App() {
       img.src = event.target?.result as string;
     };
     reader.readAsDataURL(file);
+
+    // Clear input value so selecting the same file works later
+    e.target.value = "";
   };
 
   const handleEditDocPage = (index: number, base64: string) => {
@@ -707,6 +747,7 @@ export default function App() {
     setCustomCanvasSize(null);
     setSelectedLayout("None");
     setIsDocScannerModalOpen(false);
+    setEditorSessionId(Date.now());
     setShowEditor(true);
   };
 
@@ -951,6 +992,7 @@ export default function App() {
   ) => {
     setActiveQuickFeature(feature);
     setSelectedLayout("None");
+    setEditorSessionId(Date.now());
     if (feature === "text") {
       setIsTextModalOpen(true);
     } else if (feature === "docscanner") {
@@ -958,7 +1000,14 @@ export default function App() {
     } else if (feature === "converter") {
       setIsConverterModalOpen(true);
     } else {
-      fileInputRef.current?.click();
+      if (feature === "stitch") {
+        multiFileInputRef.current?.click();
+      } else {
+        if (fileInputRef.current) {
+          fileInputRef.current.multiple = false;
+        }
+        fileInputRef.current?.click();
+      }
     }
   };
 
@@ -1013,7 +1062,12 @@ export default function App() {
             </div>
 
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                if (fileInputRef.current) {
+                  fileInputRef.current.multiple = false;
+                }
+                fileInputRef.current?.click();
+              }}
               className={`w-full py-5 rounded-2xl font-black shadow-2xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-lg ${isDarkMode ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-white text-blue-600 hover:bg-blue-50"}`}
             >
               <Upload className="w-6 h-6" />
@@ -1025,6 +1079,15 @@ export default function App() {
               className="hidden"
               ref={fileInputRef}
               onChange={handleFileUpload}
+              multiple={false}
+            />
+            <input
+              type="file"
+              accept="image/png, image/jpeg"
+              className="hidden"
+              ref={multiFileInputRef}
+              onChange={handleFileUpload}
+              multiple={true}
             />
 
             <div className="grid grid-cols-1 gap-3 w-full">
@@ -1489,7 +1552,10 @@ export default function App() {
               {/* Multi-Function Sleek Bottom Row Buttons */}
               <div className="w-full max-w-md mx-auto flex items-center justify-between gap-1.5 pt-1.5 mt-auto shrink-0 px-1">
                 <button
-                  onClick={() => setShowEditor(true)}
+                  onClick={() => {
+                    setEditorSessionId(Date.now());
+                    setShowEditor(true);
+                  }}
                   className="flex-1 py-1 bg-indigo-500 hover:bg-indigo-600 active:scale-95 text-white rounded-lg font-bold flex flex-col items-center justify-center gap-[1px] transition-all shadow-sm cursor-pointer"
                 >
                   <Edit2 className="w-3 h-3 shrink-0" />
@@ -1984,7 +2050,7 @@ export default function App() {
             className="absolute inset-0 z-50 md:rounded-3xl overflow-hidden bg-black md:inset-auto md:w-[480px] md:h-[90vh]"
           >
             <EditorCanvas
-              key={cleanImage || "editor"}
+              key={`${cleanImage || "editor"}-${editorSessionId}`}
               imageSrc={baseStyledImage || cleanImage!}
               cleanImageSrc={cleanImage!}
               originalScreenshotSrc={originalImage || undefined}
@@ -2036,8 +2102,30 @@ export default function App() {
 
                 if (activeQuickFeature) {
                   const performSave = async () => {
+                    let imageToSave = newImgDataUrl;
+                    if (
+                      activeQuickFeature === "watermark" ||
+                      activeQuickFeature === "markup" ||
+                      activeQuickFeature === "resizer"
+                    ) {
+                      try {
+                        const effectiveRefSize = referenceSize || editorReferenceSize;
+                        const hdImage = await burnEditsToImage(
+                          cleanImage || originalImage || newImgDataUrl,
+                          finalPaths,
+                          finalTexts,
+                          true,
+                          effectiveRefSize
+                        );
+                        if (hdImage) {
+                          imageToSave = hdImage;
+                        }
+                      } catch (err) {
+                        console.error("Failed high-quality burn for quick feature:", err);
+                      }
+                    }
                     await triggerDownloadOfBase64(
-                      newImgDataUrl,
+                      imageToSave,
                       `${activeQuickFeature}_edited.png`,
                     );
                     setShowEditor(false);
@@ -2387,12 +2475,14 @@ export default function App() {
 
       <StitchPhotoModal
         isOpen={isStitchPhotoModalOpen}
+        initialImageSrc={cleanImage}
+        initialImageSrcs={stitchImages}
         onClose={() => {
           setIsStitchPhotoModalOpen(false);
+          setStitchImages([]);
           setActiveQuickFeature(null);
           setAppState("upload");
         }}
-        initialImageSrc={originalImage}
       />
     </div>
   );

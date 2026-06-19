@@ -25,6 +25,7 @@ class MainActivity : BridgeActivity() {
             finish()
             return
         }
+
         registerPlugin(NativeMediaPlugin::class.java)
         super.onCreate(savedInstanceState)
 

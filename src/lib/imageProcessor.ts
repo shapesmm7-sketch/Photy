@@ -1409,6 +1409,147 @@ export async function autoProcessImage(originalSrc: string): Promise<string> {
   return applyStyle(originalSrc, "Minimal");
 }
 
+// Helper to draw shapes in the processor
+function drawShape(
+  ctx: CanvasRenderingContext2D,
+  shapeType: "arrow" | "tapered_arrow" | "double_arrow" | "rect" | "circle" | "line",
+  points: { x: number; y: number }[],
+  color: string,
+  width: number
+) {
+  if (points.length < 2) return;
+  const start = points[0];
+  const end = points[points.length - 1];
+
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  if (shapeType === "line") {
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+  } else if (shapeType === "rect") {
+    ctx.beginPath();
+    ctx.rect(start.x, start.y, end.x - start.x, end.y - start.y);
+    ctx.stroke();
+  } else if (shapeType === "circle") {
+    ctx.beginPath();
+    const rx = Math.abs(end.x - start.x) / 2;
+    const ry = Math.abs(end.y - start.y) / 2;
+    const cx = start.x + (end.x - start.x) / 2;
+    const cy = start.y + (end.y - start.y) / 2;
+    // fallback if ellipse is not supported
+    if (ctx.ellipse) {
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, 2 * Math.PI);
+    } else {
+      ctx.arc(cx, cy, Math.max(rx, ry), 0, 2 * Math.PI);
+    }
+    ctx.stroke();
+  } else if (shapeType === "arrow") {
+    // Draw line
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+
+    // Draw arrow head at the end pointing towards end coordinates
+    const angle = Math.atan2(end.y - start.y, end.x - start.x);
+    const arrowLength = Math.max(15, width * 2.5);
+
+    ctx.beginPath();
+    ctx.moveTo(end.x, end.y);
+    ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle - Math.PI / 6),
+      end.y - arrowLength * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle + Math.PI / 6),
+      end.y - arrowLength * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
+  } else if (shapeType === "tapered_arrow") {
+    const angle = Math.atan2(end.y - start.y, end.x - start.x);
+    const anglePerp = angle + Math.PI / 2;
+    const arrowLength = Math.max(15, width * 2.5);
+    
+    // Base is where the arrowhead begins
+    const base = {
+      x: end.x - arrowLength * Math.cos(angle),
+      y: end.y - arrowLength * Math.sin(angle),
+    };
+
+    // 1. Draw the tapered stem
+    ctx.beginPath();
+    const startLeft = { x: start.x - 1 * Math.cos(anglePerp), y: start.y - 1 * Math.sin(anglePerp) };
+    const startRight = { x: start.x + 1 * Math.cos(anglePerp), y: start.y + 1 * Math.sin(anglePerp) };
+    const baseLeft = { x: base.x - (width / 2) * Math.cos(anglePerp), y: base.y - (width / 2) * Math.sin(anglePerp) };
+    const baseRight = { x: base.x + (width / 2) * Math.cos(anglePerp), y: base.y + (width / 2) * Math.sin(anglePerp) };
+    
+    ctx.moveTo(startLeft.x, startLeft.y);
+    ctx.lineTo(baseLeft.x, baseLeft.y);
+    ctx.lineTo(baseRight.x, baseRight.y);
+    ctx.lineTo(startRight.x, startRight.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // 2. Draw the arrowhead at the end
+    ctx.beginPath();
+    ctx.moveTo(end.x, end.y);
+    ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle - Math.PI / 6),
+      end.y - arrowLength * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle + Math.PI / 6),
+      end.y - arrowLength * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
+  } else if (shapeType === "double_arrow") {
+    // Draw line
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+
+    const angle = Math.atan2(end.y - start.y, end.x - start.x);
+    const arrowLength = Math.max(15, width * 2.5);
+
+    // End Arrowhead
+    ctx.beginPath();
+    ctx.moveTo(end.x, end.y);
+    ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle - Math.PI / 6),
+      end.y - arrowLength * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      end.x - arrowLength * Math.cos(angle + Math.PI / 6),
+      end.y - arrowLength * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    // Start Arrowhead pointing backward
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.lineTo(
+      start.x + arrowLength * Math.cos(angle - Math.PI / 6),
+      start.y + arrowLength * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      start.x + arrowLength * Math.cos(angle + Math.PI / 6),
+      start.y + arrowLength * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
 export async function burnEditsToImage(
   styledImageDataUrl: string,
   paths: any[],
@@ -1422,7 +1563,7 @@ export async function burnEditsToImage(
 
   try {
     const img = await getCachedImage(styledImageDataUrl);
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       try {
         const canvas = document.createElement("canvas");
         canvas.width = img.width;
@@ -1437,7 +1578,9 @@ export async function burnEditsToImage(
         ctx.drawImage(img, 0, 0);
 
         // Apply scale if referenceSize is provided. The exported canvas is scaled proportionally.
-        const scale = referenceSize ? (img.width / referenceSize.width) : 1;
+        // We use Math.max(1, ...) to avoid division by zero
+        const refW = referenceSize?.width || img.width;
+        const scale = img.width / refW;
 
         // Pre-render a blurred canvas if we have any blur paths
         let blurCanvas: HTMLCanvasElement | null = null;
@@ -1523,6 +1666,11 @@ export async function burnEditsToImage(
         paths.forEach((p) => {
           if (p.isBlur) {
             drawBlurredPathLocal(p.points, p.width, p.color);
+          } else if (p.shapeType) {
+            ctx.save();
+            ctx.scale(scale, scale);
+            drawShape(ctx, p.shapeType, p.points, p.color, p.width);
+            ctx.restore();
           } else {
             ctx.save();
             ctx.scale(scale, scale);
@@ -1542,26 +1690,54 @@ export async function burnEditsToImage(
           }
         });
 
+        const fontCSSMap: Record<string, string> = {
+          "Default": "sans-serif",
+          "Inter": "'Inter', sans-serif",
+          "Montserrat": "'Montserrat', sans-serif",
+          "Playfair Display": "'Playfair Display', serif",
+          "EB Garamond": "'EB Garamond', serif",
+          "Space Grotesk": "'Space Grotesk', sans-serif",
+          "Oswald": "'Oswald', sans-serif",
+          "Anton": "'Anton', sans-serif",
+          "Pacifico": "'Pacifico', cursive",
+          "Serif": "serif",
+          "Monospace": "monospace",
+          "Cursive": "cursive"
+        };
+
         // Draw text items
-        texts.forEach((t) => {
+        for (const t of texts) {
           ctx.save();
+          // We apply the scale to the coordinate system
           ctx.scale(scale, scale);
-          ctx.fillStyle = t.color;
 
-          let fontStr = "sans-serif";
-          if (t.fontName === "Serif") fontStr = "serif";
-          if (t.fontName === "Monospace") fontStr = "monospace";
-          if (t.fontName === "Cursive") fontStr = "cursive";
+          let fontStr = fontCSSMap[t.fontName] || "sans-serif";
+          
+          // Use the size exactly as provided in the state; context scaling handles the rest
           ctx.font = `bold ${t.size}px ${fontStr}`;
-
           ctx.textAlign = "center";
-
           ctx.translate(t.x, t.y);
+
           if (t.rotation) {
             ctx.rotate(t.rotation);
           }
 
-          if (t.isSticker) {
+          if (t.isLogo) {
+            if (t.logoSrc) {
+              try {
+                const logoImg = await getCachedImage(t.logoSrc);
+                const aspect = logoImg.naturalHeight > 0 ? (logoImg.naturalWidth / logoImg.naturalHeight) : 1.0;
+                const drawW = t.size * aspect;
+                const drawH = t.size;
+                if (t.opacity !== undefined) {
+                  ctx.globalAlpha = t.opacity;
+                }
+                ctx.drawImage(logoImg, -drawW / 2, -drawH / 2, drawW, drawH);
+              } catch (logoErr) {
+                console.error("Failed loading logo inside burnEditsToImage:", logoErr);
+              }
+            }
+          } else if (t.isSticker) {
             if (t.stickerType === "badge") {
               const padX = t.size * 0.5;
               const padY = t.size * 0.3;
@@ -1572,14 +1748,12 @@ export async function burnEditsToImage(
 
               if (t.hasShadow !== false) {
                 ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.4)";
-                ctx.shadowBlur = Math.max(6, t.size * 0.15) * scale;
-                ctx.shadowOffsetX = Math.max(3, t.size * 0.08) * scale;
-                ctx.shadowOffsetY = Math.max(3, t.size * 0.08) * scale;
+                // Note: shadow context values are in browser-independent resolution when scaled
+                ctx.shadowBlur = Math.max(4, t.size * 0.12);
+                ctx.shadowOffsetX = Math.max(2, t.size * 0.06);
+                ctx.shadowOffsetY = Math.max(2, t.size * 0.06);
               } else {
                 ctx.shadowColor = "transparent";
-                ctx.shadowBlur = 0;
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 0;
               }
 
               ctx.fillStyle = t.badgeBg || "#2563EB";
@@ -1612,9 +1786,9 @@ export async function burnEditsToImage(
               ctx.textAlign = "center";
               if (t.hasShadow) {
                 ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-                ctx.shadowBlur = Math.max(6, t.size * 0.15) * scale;
-                ctx.shadowOffsetX = Math.max(3, t.size * 0.08) * scale;
-                ctx.shadowOffsetY = Math.max(3, t.size * 0.08) * scale;
+                ctx.shadowBlur = Math.max(4, t.size * 0.12);
+                ctx.shadowOffsetX = Math.max(2, t.size * 0.06);
+                ctx.shadowOffsetY = Math.max(2, t.size * 0.06);
               }
               ctx.fillText(t.text, 0, 0);
             }
@@ -1632,7 +1806,7 @@ export async function burnEditsToImage(
                 spanRight = Math.max(spanRight, Math.abs(metrics.actualBoundingBoxRight));
               }
               const padX = t.size * 0.4;
-              const padY = t.size * 0.3; // middle baseline padding
+              const padY = t.size * 0.3;
               const leftEdge = -spanLeft - padX;
               const rightEdge = spanRight + padX;
               const rectW = rightEdge - leftEdge;
@@ -1648,23 +1822,23 @@ export async function burnEditsToImage(
               }
             }
             
-            ctx.fillStyle = t.color; // ensure text color is set
+            ctx.fillStyle = t.color;
             if (t.hasShadow) {
               ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.6)";
-              ctx.shadowBlur = Math.max(4, t.size * 0.15) * scale;
-              ctx.shadowOffsetX = Math.max(2, t.size * 0.08) * scale;
-              ctx.shadowOffsetY = Math.max(2, t.size * 0.08) * scale;
+              ctx.shadowBlur = Math.max(4, t.size * 0.12);
+              ctx.shadowOffsetX = Math.max(2, t.size * 0.06);
+              ctx.shadowOffsetY = Math.max(2, t.size * 0.06);
             }
 
             if (t.bgColor === "transparent" || !t.bgColor) {
                ctx.strokeStyle = "#000000";
-               ctx.lineWidth = Math.max(2, t.size * 0.08);
+               ctx.lineWidth = Math.max(2, t.size * 0.05); 
                ctx.strokeText(t.text, 0, 0);
             }
             ctx.fillText(t.text, 0, 0);
           }
           ctx.restore();
-        });
+        }
 
         if (highQuality || styledImageDataUrl.startsWith("data:image/png")) {
           resolve(canvas.toDataURL("image/png"));

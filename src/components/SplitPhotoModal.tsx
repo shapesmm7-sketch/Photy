@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Download, ArrowUpRight, Check, Hand, GripVertical, GripHorizontal, Minimize } from "lucide-react";
 import JSZip from "jszip";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 
 interface SplitPhotoModalProps {
   isOpen: boolean;
@@ -204,13 +205,55 @@ export const SplitPhotoModal: React.FC<SplitPhotoModalProps> = ({
     setIsExporting(true);
     try {
       const segments = await generateSplitImages();
+      const timestamp = Date.now();
       
       if (segments.length === 1) {
+        // Native Android saving using NativeMedia plugin
+        if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
+          try {
+            const NativeMedia = registerPlugin<any>("NativeMedia");
+            const cleanBase64 = segments[0].includes(",") ? segments[0].split(",")[1] : segments[0];
+            await NativeMedia.saveImage({
+              base64: cleanBase64,
+              filename: `split_image_${timestamp}.png`,
+              mimeType: "image/png"
+            });
+            alert("Image saved directly to your phone gallery under 'Pictures/Photy'!");
+            setIsExporting(false);
+            return;
+          } catch (nativeErr: any) {
+            console.error("Native save failed, trying Web download fallback:", nativeErr);
+          }
+        }
+
         const a = document.createElement("a");
         a.href = segments[0];
-        a.download = `split_image.png`;
+        a.download = `split_image_${timestamp}.png`;
         a.click();
       } else {
+        // Zip download
+        if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
+          try {
+            const NativeMedia = registerPlugin<any>("NativeMedia");
+            const zip = new JSZip();
+            segments.forEach((seg, i) => {
+              const b64 = seg.split(",")[1];
+              zip.file(`split_${i + 1}.png`, b64, { base64: true });
+            });
+            const base64Content = await zip.generateAsync({ type: "base64" });
+            
+            await NativeMedia.saveZip({
+              base64: base64Content,
+              filename: `split_photos_${timestamp}.zip`
+            });
+            alert("Zip file saved directly to your 'Downloads/Photy' folder!");
+            setIsExporting(false);
+            return;
+          } catch (nativeErr: any) {
+            console.error("Native zip save failed, trying Web fallback:", nativeErr);
+          }
+        }
+
         const zip = new JSZip();
         segments.forEach((seg, i) => {
           const b64 = seg.split(",")[1];
@@ -220,7 +263,7 @@ export const SplitPhotoModal: React.FC<SplitPhotoModalProps> = ({
         const url = URL.createObjectURL(content);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `split_photos.zip`;
+        a.download = `split_photos_${timestamp}.zip`;
         a.click();
         URL.revokeObjectURL(url);
       }
