@@ -2111,7 +2111,7 @@ export default function App() {
                       try {
                         const effectiveRefSize = referenceSize || editorReferenceSize;
                         let baseImgForBurn = cleanImage || originalImage || newImgDataUrl;
-                        if (activeQuickFeature === "resizer" || customSize) {
+                        if (activeQuickFeature === "resizer" || customSize || customCrop) {
                           baseImgForBurn = await applyStyle(
                             newOriginalSrc || originalImage || cleanImage || newImgDataUrl,
                             "Original",

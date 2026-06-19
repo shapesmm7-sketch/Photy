@@ -3367,43 +3367,52 @@ export default function EditorCanvas({
         resizerBg
       );
 
-      // 3. Load these images into refs so the editor instantly switches to the new styled mockup base
+      // 3. Load both images into refs so the editor instantly switches to the new styled mockup and raw base
       const updatedStyledImg = new Image();
+      const updatedRawImg = new Image();
+      
+      let loadedCount = 0;
+      const onImageLoaded = () => {
+        loadedCount++;
+        if (loadedCount === 2) {
+          rawScreenshotRef.current = updatedRawImg;
+          styledImageRef.current = updatedStyledImg;
+          originalImageRef.current = updatedStyledImg;
+
+          // Keep local clean src in sync so layout previews updated for size changes correctly
+          setCurrentCleanSrc(cleanDataUrl);
+          setWorkingOriginalSrc(cleanDataUrl);
+          setCropRect({ x: 0, y: 0, w: cropRect.w, h: cropRect.h });
+
+          // Switch tool to none, to exit the crop mode and let them preview/continue drawing!
+          setActiveTool("none");
+          setIsApplyingCrop(false);
+
+          // Force a redraw with the new image loaded. Since we now set the styled image,
+          // the canvas fits the newly generated styled mockup, which is perfect and scaled!
+          fitImageToContainer(updatedStyledImg, { x: 0, y: 0, w: updatedStyledImg.width, h: updatedStyledImg.height });
+        }
+      };
+
       if (!newStyledDataUrl.startsWith("data:")) {
         updatedStyledImg.crossOrigin = "anonymous";
       }
-      updatedStyledImg.onload = () => {
-        styledImageRef.current = updatedStyledImg;
-        originalImageRef.current = updatedStyledImg;
-
-        // Keep local clean src in sync so layout previews updated for size changes correctly
-        setCurrentCleanSrc(cleanDataUrl);
-
-        // Switch tool to none, to exit the crop mode and let them preview/continue drawing!
-        setActiveTool("none");
+      updatedStyledImg.onload = onImageLoaded;
+      updatedStyledImg.onerror = () => {
+        console.error("Failed to load cropped styled image");
         setIsApplyingCrop(false);
-
-        // Notify parent immediately so that outer preview / phone layout gets the cropped image
-        onSave(
-          newStyledDataUrl,
-          cleanDataUrl,
-          paths,
-          texts,
-          cropRect,
-          manualCanvasSize,
-          workingOriginalSrc,
-          manualImageOffset,
-          manualImageScale,
-          resizeMode,
-          resizerBg,
-          canvasRef.current ? { width: canvasRef.current.width, height: canvasRef.current.height } : undefined
-        );
-
-        // Force a redraw with the new image loaded. Since we now set the styled image,
-        // the canvas fits the newly generated styled mockup, which is perfect and scaled!
-        fitImageToContainer(updatedStyledImg, { x: 0, y: 0, w: updatedStyledImg.width, h: updatedStyledImg.height });
       };
       updatedStyledImg.src = newStyledDataUrl;
+
+      if (!cleanDataUrl.startsWith("data:")) {
+        updatedRawImg.crossOrigin = "anonymous";
+      }
+      updatedRawImg.onload = onImageLoaded;
+      updatedRawImg.onerror = () => {
+        console.error("Failed to load cropped raw screenshot");
+        setIsApplyingCrop(false);
+      };
+      updatedRawImg.src = cleanDataUrl;
 
     } catch (err) {
       console.error("Error applying and saving crop:", err);
