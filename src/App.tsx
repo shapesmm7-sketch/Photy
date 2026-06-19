@@ -2110,8 +2110,26 @@ export default function App() {
                     ) {
                       try {
                         const effectiveRefSize = referenceSize || editorReferenceSize;
+                        let baseImgForBurn = cleanImage || originalImage || newImgDataUrl;
+                        if (activeQuickFeature === "resizer" || customSize) {
+                          baseImgForBurn = await applyStyle(
+                            newOriginalSrc || originalImage || cleanImage || newImgDataUrl,
+                            "Original",
+                            "None",
+                            [],
+                            15,
+                            null,
+                            customCrop,
+                            customSize,
+                            newImageOffset || { x: 0, y: 0 },
+                            newImageScale !== undefined ? newImageScale : 1,
+                            true,
+                            newResizeMode || "stretch",
+                            newResizerBg || "transparent"
+                          );
+                        }
                         const hdImage = await burnEditsToImage(
-                          cleanImage || originalImage || newImgDataUrl,
+                          baseImgForBurn,
                           finalPaths,
                           finalTexts,
                           true,

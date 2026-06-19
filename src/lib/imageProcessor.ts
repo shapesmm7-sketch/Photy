@@ -822,23 +822,28 @@ export async function applyStyle(
       let scaleRatio = 1;
 
       if (highQuality) {
-        // Upscale small or medium images to at least 3000px maximum dimension to guarantee pristine HD download
-        const targetMaxDim = 3000;
-        const currentMaxDim = Math.max(img.width, img.height);
-        if (currentMaxDim < targetMaxDim) {
-          scaleRatio = targetMaxDim / currentMaxDim;
-          const upscaleCanvas = document.createElement("canvas");
-          upscaleCanvas.width = Math.round(img.width * scaleRatio);
-          upscaleCanvas.height = Math.round(img.height * scaleRatio);
-          const uCtx = upscaleCanvas.getContext("2d");
-          if (uCtx) {
-            uCtx.imageSmoothingEnabled = true;
-            uCtx.imageSmoothingQuality = "high";
-            uCtx.drawImage(img, 0, 0, upscaleCanvas.width, upscaleCanvas.height);
-            workingImg = upscaleCanvas;
-          } else {
-            scaleRatio = 1;
+        if (!customCanvasSize) {
+          // Upscale small or medium images to at least 3000px maximum dimension to guarantee pristine HD download
+          const targetMaxDim = 3000;
+          const currentMaxDim = Math.max(img.width, img.height);
+          if (currentMaxDim < targetMaxDim) {
+            scaleRatio = targetMaxDim / currentMaxDim;
+            const upscaleCanvas = document.createElement("canvas");
+            upscaleCanvas.width = Math.round(img.width * scaleRatio);
+            upscaleCanvas.height = Math.round(img.height * scaleRatio);
+            const uCtx = upscaleCanvas.getContext("2d");
+            if (uCtx) {
+              uCtx.imageSmoothingEnabled = true;
+              uCtx.imageSmoothingQuality = "high";
+              uCtx.drawImage(img, 0, 0, upscaleCanvas.width, upscaleCanvas.height);
+              workingImg = upscaleCanvas;
+            } else {
+              scaleRatio = 1;
+            }
           }
+        } else {
+          // Preserve exact scale ratio as 1 for custom resized canvas high-quality download
+          scaleRatio = 1;
         }
       } else {
         // DOWN-SCALE for incredibly fast real-time preview (resolves 10 second lag on physical devices)
