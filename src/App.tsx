@@ -2489,12 +2489,14 @@ export default function App() {
           setAppState("upload");
         }}
         imageSrc={originalImage!}
+        isPremium={isPremium}
       />
 
       <StitchPhotoModal
         isOpen={isStitchPhotoModalOpen}
         initialImageSrc={cleanImage}
         initialImageSrcs={stitchImages}
+        isPremium={isPremium}
         onClose={() => {
           setIsStitchPhotoModalOpen(false);
           setStitchImages([]);

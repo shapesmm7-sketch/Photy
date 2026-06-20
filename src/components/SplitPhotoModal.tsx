@@ -3,11 +3,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Download, ArrowUpRight, Check, Hand, GripVertical, GripHorizontal, Minimize, Sparkles } from "lucide-react";
 import JSZip from "jszip";
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { playRewardedAds, isNative } from "../lib/admob";
 
 interface SplitPhotoModalProps {
   isOpen: boolean;
   onClose: () => void;
   imageSrc: string;
+  isPremium?: boolean;
 }
 
 type SplitMode = "vertical" | "horizontal" | "equal" | "manual";
@@ -16,6 +18,7 @@ export const SplitPhotoModal: React.FC<SplitPhotoModalProps> = ({
   isOpen,
   onClose,
   imageSrc,
+  isPremium = false,
 }) => {
   const [splitMode, setSplitMode] = useState<SplitMode>("vertical");
   const [splitCount, setSplitCount] = useState<number>(2);
@@ -200,34 +203,15 @@ export const SplitPhotoModal: React.FC<SplitPhotoModalProps> = ({
   };
 
   const [isExporting, setIsExporting] = useState(false);
-  const [showAd, setShowAd] = useState(false);
-  const [adCountdown, setAdCountdown] = useState(5);
-  const [isAdFinished, setIsAdFinished] = useState(false);
-
-  useEffect(() => {
-    let timer: any;
-    if (showAd && adCountdown > 0) {
-      timer = setInterval(() => {
-        setAdCountdown((prev) => prev - 1);
-      }, 1000);
-    } else if (showAd && adCountdown === 0) {
-      setIsAdFinished(true);
-      const autoSaveTimer = setTimeout(() => {
-        setShowAd(false);
-        handleDownloadActual();
-      }, 1500);
-      return () => {
-        clearInterval(timer);
-        clearTimeout(autoSaveTimer);
-      };
-    }
-    return () => clearInterval(timer);
-  }, [showAd, adCountdown]);
+  const [exportSuccess, setExportSuccess] = useState(false);
 
   const handleDownload = () => {
-    setShowAd(true);
-    setAdCountdown(5);
-    setIsAdFinished(false);
+    if (isExporting) return;
+    if (!isPremium) {
+      playRewardedAds(handleDownloadActual);
+    } else {
+      handleDownloadActual();
+    }
   };
 
   const handleDownloadActual = async () => {
@@ -483,88 +467,8 @@ export const SplitPhotoModal: React.FC<SplitPhotoModalProps> = ({
             )}
           </div>
 
-          {/* Ad Watching Overlay */}
-          {showAd && (
-            <div className="absolute inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center p-6 text-white select-none">
-              <div className="w-full max-w-sm bg-zinc-900 border border-white/10 rounded-3xl p-6 shadow-2xl flex flex-col items-center relative overflow-hidden">
-                {/* Background ambient light */}
-                <div className="absolute -top-12 -left-12 w-24 h-24 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
-                <div className="absolute -bottom-12 -right-12 w-24 h-24 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
-
-                {/* Ad top badge */}
-                <div className="flex items-center justify-between w-full mb-6 relative z-10">
-                  <span className="bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-widest uppercase">
-                    Sponsored Reward Ad
-                  </span>
-                  <div className="flex items-center gap-1 text-zinc-400 text-xs font-bold font-mono">
-                    {!isAdFinished ? (
-                      <>
-                        Watch ad to save: <span className="text-blue-400 text-sm font-black animate-pulse">{adCountdown}s</span>
-                      </>
-                    ) : (
-                      <span className="text-emerald-400 flex items-center gap-1">
-                        <Check className="w-4 h-4" /> Ready!
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Interactive content promoting "Photy Premium" */}
-                <div className="w-full bg-[#161616] rounded-2xl border border-white/5 p-4 flex flex-col items-center gap-4 text-center mb-6 relative z-10 shadow-inner">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                    <Sparkles className="w-7 h-7 text-white animate-pulse" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-black text-white leading-tight">Photy Premium Pro</h4>
-                    <p className="text-[11px] text-zinc-400 mt-1 max-w-[200px] leading-relaxed">
-                      Unlock all viral layout styles, high definition export, and remove watermarks permanently!
-                    </p>
-                  </div>
-                  
-                  {/* Progress simulator */}
-                  <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: "0%" }}
-                      animate={{ width: isAdFinished ? "100%" : `${((5 - adCountdown) / 5) * 100}%` }}
-                      transition={{ ease: "linear", duration: 0.5 }}
-                      className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full"
-                    />
-                  </div>
-                </div>
-
-                {/* Action button */}
-                <button
-                  disabled={!isAdFinished}
-                  onClick={() => {
-                    setShowAd(false);
-                    handleDownloadActual();
-                  }}
-                  className={`w-full py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition flex items-center justify-center gap-2 relative z-10 shadow-lg ${
-                    isAdFinished 
-                      ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:opacity-90 active:scale-95 cursor-pointer" 
-                      : "bg-zinc-800 text-zinc-505 cursor-not-allowed"
-                  }`}
-                >
-                  {isAdFinished ? (
-                    <>
-                      Claim Reward & Save
-                    </>
-                  ) : (
-                    <>
-                      Complete watching in {adCountdown}s
-                    </>
-                  )}
-                </button>
-
-                {/* Simple footer note */}
-                <span className="text-[9px] text-zinc-500 mt-4 text-center">
-                  This ad supports our developers. Download starts automatically.
-                </span>
-              </div>
-            </div>
-          )}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
 };

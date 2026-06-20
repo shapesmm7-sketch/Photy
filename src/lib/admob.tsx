@@ -300,14 +300,13 @@ export function AdMobBanner({
   unitId = BANNER_ID,
   className = "",
 }: AdMobBannerProps) {
-  // HIDDEN IN WEB PREVIEW AS PER USER REQUEST TO STOP "FOOLING" WITH TEST ADS
+  // HIDDEN IN WEB PREVIEW
   if (!isNative) {
     return null;
   }
 
   useEffect(() => {
     activeBannerCount++;
-    // On native, we show the real AdMob banner which is rendered over the webview
     showBannerAd();
     return () => {
       activeBannerCount--;
