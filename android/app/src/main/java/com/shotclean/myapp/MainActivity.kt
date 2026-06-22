@@ -16,6 +16,9 @@ class MainActivity : BridgeActivity() {
     private val UPDATE_REQUEST_CODE = 9991
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen(this)
+        setTheme(R.style.AppTheme_NoActionBar)
+
         if (!isTaskRoot
             && intent != null
             && intent.hasCategory(Intent.CATEGORY_LAUNCHER)
