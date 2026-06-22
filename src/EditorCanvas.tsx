@@ -571,6 +571,8 @@ export default function EditorCanvas({
   const textInitialBaseRotationRef = useRef<number>(0);
   const textInitialMidpointRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const textInitialPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const textInitialDistRef = useRef<number>(0);
+  const textInitialSizeRef = useRef<number>(0);
 
   const editorLastTapRef = useRef<number>(0);
 
@@ -766,7 +768,7 @@ export default function EditorCanvas({
   const [selectedStickerShadow, setSelectedStickerShadow] = useState(true);
   const [selectedStickerShadowColor, setSelectedStickerShadowColor] = useState("rgba(0,0,0,0.4)");
   const [selectedStickerBgColor, setSelectedStickerBgColor] = useState("transparent");
-  const [selectedStickerText, setSelectedStickerText] = useState("HOT");
+  const [selectedStickerText, setSelectedStickerText] = useState("");
   const [selectedStickerSize, setSelectedStickerSize] = useState(72);
   const [selectedStickerRotation, setSelectedStickerRotation] = useState(0);
   const [selectedStickerFont, setSelectedStickerFont] = useState("Inter");
@@ -884,7 +886,7 @@ export default function EditorCanvas({
     return () => {
       isCurrent = false;
     };
-  }, [imageSrc, activeTool, workingOriginalSrc]);
+  }, [imageSrc]); // Removed activeTool and workingOriginalSrc to prevent crop reset on tool change
 
   const hasInitializedCropRef = useRef(false);
 
@@ -1828,7 +1830,7 @@ export default function EditorCanvas({
             ctx.fillText(t.text, 0, 0);
           } else {
             // Emoji
-            ctx.font = `${t.size}px sans-serif`;
+            ctx.font = `${t.size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
             ctx.textBaseline = "middle";
             ctx.textAlign = "center";
             if (t.hasShadow) {
@@ -2272,6 +2274,8 @@ export default function EditorCanvas({
         isPinchingTextRef.current = true;
         textInitialAngleRef.current = Math.atan2(touch2.clientY - touch1.clientY, touch2.clientX - touch1.clientX);
         textInitialBaseRotationRef.current = texts[draggingTextIndex].rotation || 0;
+        textInitialDistRef.current = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+        textInitialSizeRef.current = texts[draggingTextIndex].size;
         textInitialMidpointRef.current = {
           x: (touch1.clientX + touch2.clientX) / 2,
           y: (touch1.clientY + touch2.clientY) / 2
@@ -2629,6 +2633,10 @@ export default function EditorCanvas({
         const currentAngle = Math.atan2(touch2.clientY - touch1.clientY, touch2.clientX - touch1.clientX);
         const deltaAngle = currentAngle - textInitialAngleRef.current;
         
+        const currentDist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+        const factor = textInitialDistRef.current ? currentDist / textInitialDistRef.current : 1;
+        const newSize = Math.max(10, Math.min(2000, textInitialSizeRef.current * factor));
+        
         const rect = canvasRef.current!.getBoundingClientRect();
         const scaleX = canvasRef.current!.width / rect.width;
         const scaleY = canvasRef.current!.height / rect.height;
@@ -2648,6 +2656,7 @@ export default function EditorCanvas({
             x: textInitialPosRef.current.x + deltaX,
             y: textInitialPosRef.current.y + deltaY,
             rotation: textInitialBaseRotationRef.current + deltaAngle,
+            size: newSize,
           };
         }
         setTexts(nextTexts);
@@ -4857,13 +4866,21 @@ export default function EditorCanvas({
                   </label>
                   <input
                     autoFocus
-                    className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 outline-none focus:ring-2 ring-blue-500 transition-all font-medium text-sm text-black"
+                    className="w-full border border-gray-300 rounded-xl px-4 py-3 outline-none focus:ring-2 ring-blue-500 transition-all font-medium text-sm"
                     placeholder="Enter text here..."
                     value={currentText}
                     onChange={(e) => setCurrentText(e.target.value)}
                     onKeyDown={(e) =>
                       e.key === "Enter" && currentText && handleAddText()
                     }
+                    style={{
+                      fontFamily: fontCSSMap[currentTextFont] || "sans-serif",
+                      color: currentTextColor,
+                      backgroundColor: currentTextBgColor === "transparent" 
+                        ? (currentTextColor === "#FFFFFF" || currentTextColor.toLowerCase() === "#fff" || currentTextColor === "white" ? "#cbd5e1" : "white") 
+                        : currentTextBgColor,
+                      textShadow: currentTextShadow ? `2px 2px 4px ${currentTextShadowColor}` : "none",
+                    }}
                   />
                 </div>
 
@@ -4877,7 +4894,7 @@ export default function EditorCanvas({
                   <input
                     type="range"
                     min="10"
-                    max="500"
+                    max="2000"
                     step="1"
                     value={currentTextSize}
                     onChange={(e) => setCurrentTextSize(Number(e.target.value))}
@@ -5079,6 +5096,8 @@ export default function EditorCanvas({
           const POPULAR_EMOJIS = [
             // Birthday, Wedding & Celebration
             "🎂", "🎁", "🎈", "🥳", "🎉", "🧁", "💍", "💒", "👰", "🤵", "🥂", "💖",
+            // Music
+            "🎵", "🎶", "🎸", "🎹", "🎧", "🎤", "🥁", "🎷", "🎺", "🎻",
             // Tech & Interaction Controls
             "🔥", "🚀", "💡", "✨", "⭐", "💯", "✔️", "❌", "❤️", "👍", "👏",
             "😂", "😍", "🤔", "😱", "📱", "💻", "🎯", "📢", "⬇️", "➡️", "💥", "🌈",
@@ -5098,10 +5117,7 @@ export default function EditorCanvas({
           ];
 
           const PRESET_BADGES = [
-            "HBD 🎂", "BIRTHDAY", "WEDDING 💍", "MARRIED", "PARTY 🥳", "CELEBRATE",
-            "HOT", "NEW", "BUG", "IDEA", "SOLVED", "A+", "TIP", "MVP", "NOTE", "DONE",
-            "TOP", "FREE", "PRO", "LIVE", "BETA", "COOL", "INFO", "WARN", "FIX", "OMG",
-            "BEST", "CHEF", "EPIC", "WOW", "YES", "NO", "TODO", "VIP", "OFFER", "SALE"
+            "Happy birthday", "Hbd", "Happy Anniversary", "Happy wedding", "My love", "I love you"
           ];
 
           const BADGE_COLORS = [
@@ -5211,11 +5227,19 @@ export default function EditorCanvas({
                           Badge Label
                         </label>
                         <input
-                          className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2 outline-none focus:ring-2 ring-blue-500 font-bold text-sm text-black uppercase"
+                          className="w-full border border-gray-300 rounded-full px-4 py-3 outline-none focus:ring-2 ring-blue-500 font-bold text-sm text-center uppercase transition-all"
                           placeholder="Type sticker text..."
                           maxLength={15}
                           value={selectedStickerText}
                           onChange={(e) => handleUpdateActiveStickerText(e.target.value.toUpperCase())}
+                          style={{
+                            fontFamily: fontCSSMap[selectedStickerFont] || "sans-serif",
+                            color: selectedStickerTextColor,
+                            backgroundColor: selectedStickerColor === "transparent" 
+                              ? (selectedStickerTextColor === "#FFFFFF" || selectedStickerTextColor.toLowerCase() === "#fff" || selectedStickerTextColor === "white" ? "#cbd5e1" : "white") 
+                              : selectedStickerColor,
+                            boxShadow: selectedStickerShadow ? `0px 4px 12px ${selectedStickerShadowColor.replace('0.4', '0.2')}` : "none",
+                          }}
                         />
                       </div>
 
