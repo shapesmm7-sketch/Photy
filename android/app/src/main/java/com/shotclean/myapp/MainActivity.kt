@@ -46,12 +46,16 @@ class MainActivity : BridgeActivity() {
             Log.e("MainActivity", "Failed to register NativeMediaPlugin", t)
         }
 
-        try {
-            appUpdateManager = AppUpdateManagerFactory.create(this)
-            checkForUpdates()
-        } catch (t: Throwable) {
-            Log.e("MainActivity", "Failed to initialize AppUpdateManager", t)
-        }
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            try {
+                if (!isFinishing && !isDestroyed) {
+                    appUpdateManager = AppUpdateManagerFactory.create(this)
+                    checkForUpdates()
+                }
+            } catch (t: Throwable) {
+                Log.e("MainActivity", "Failed to initialize AppUpdateManager asynchronously", t)
+            }
+        }, 1500)
     }
 
     private fun checkForUpdates() {
