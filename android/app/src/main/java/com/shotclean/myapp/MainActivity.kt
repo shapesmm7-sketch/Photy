@@ -16,9 +16,6 @@ class MainActivity : BridgeActivity() {
     private val UPDATE_REQUEST_CODE = 9991
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen(this)
-        setTheme(R.style.AppTheme_NoActionBar)
-
         if (!isTaskRoot
             && intent != null
             && intent.hasCategory(Intent.CATEGORY_LAUNCHER)
@@ -29,39 +26,24 @@ class MainActivity : BridgeActivity() {
             return
         }
 
-        registerPlugin(NativeMediaPlugin::class.java)
         super.onCreate(savedInstanceState)
+        registerPlugin(NativeMediaPlugin::class.java)
 
-        appUpdateManager = AppUpdateManagerFactory.create(this)
-        checkForUpdates()
-    }
-
-    private fun checkForUpdates() {
-        val appUpdateInfoTask = appUpdateManager.appUpdateInfo
-        appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
-            if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
-                && appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
-            ) {
-                try {
-                    appUpdateManager.startUpdateFlowForResult(
-                        appUpdateInfo,
-                        AppUpdateType.IMMEDIATE,
-                        this,
-                        UPDATE_REQUEST_CODE
-                    )
-                } catch (e: Exception) {
-                    Log.e("MainActivity", "Failed to start update flow", e)
-                }
-            }
+        try {
+            appUpdateManager = AppUpdateManagerFactory.create(this)
+            checkForUpdates()
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to initialize AppUpdateManager", e)
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (::appUpdateManager.isInitialized) {
-            appUpdateManager.appUpdateInfo.addOnSuccessListener { appUpdateInfo ->
-                if (appUpdateInfo.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
-                    // Resume an in-progress immediate update
+    private fun checkForUpdates() {
+        try {
+            val appUpdateInfoTask = appUpdateManager.appUpdateInfo
+            appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+                if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                    && appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+                ) {
                     try {
                         appUpdateManager.startUpdateFlowForResult(
                             appUpdateInfo,
@@ -70,9 +52,43 @@ class MainActivity : BridgeActivity() {
                             UPDATE_REQUEST_CODE
                         )
                     } catch (e: Exception) {
-                        Log.e("MainActivity", "Failed to resume update flow", e)
+                        Log.e("MainActivity", "Failed to start update flow", e)
                     }
                 }
+            }
+            appUpdateInfoTask.addOnFailureListener { e ->
+                Log.e("MainActivity", "App update task failed", e)
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "checkForUpdates failed", e)
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::appUpdateManager.isInitialized) {
+            try {
+                val appUpdateInfoTask = appUpdateManager.appUpdateInfo
+                appUpdateInfoTask.addOnSuccessListener { appUpdateInfo ->
+                    if (appUpdateInfo.updateAvailability() == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
+                        // Resume an in-progress immediate update
+                        try {
+                            appUpdateManager.startUpdateFlowForResult(
+                                appUpdateInfo,
+                                AppUpdateType.IMMEDIATE,
+                                this,
+                                UPDATE_REQUEST_CODE
+                            )
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Failed to resume update flow", e)
+                        }
+                    }
+                }
+                appUpdateInfoTask.addOnFailureListener { e ->
+                    Log.e("MainActivity", "App update info resume check failed", e)
+                }
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to retrieve appUpdateInfo in onResume", e)
             }
         }
     }
