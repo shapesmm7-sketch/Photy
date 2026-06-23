@@ -38,14 +38,20 @@ export async function initializeAdMob() {
 
 let bannerStatus: "none" | "created" = "none";
 
-// Simple legacy function to support backward-compatibility
+// Prevent concurrent showBanner calls from crashing the native plugin
+let isBannerLoading = false;
+
 export async function showBannerAd() {
   if (isNative) {
     try {
       if (bannerStatus === "created") {
         await AdMob.resumeBanner();
         console.log("AdMob: Native banner resumed");
+      } else if (isBannerLoading) {
+        console.log("AdMob: Banner is already loading, skipping");
+        return;
       } else {
+        isBannerLoading = true;
         const options: BannerAdOptions = {
           adId: BANNER_ID,
           adSize: BannerAdSize.ADAPTIVE_BANNER,
@@ -58,19 +64,8 @@ export async function showBannerAd() {
       }
     } catch (e) {
       console.error("AdMob: Failed to show/resume banner", e);
-      // Try to recreate if it failed
-      try {
-        const options: BannerAdOptions = {
-          adId: BANNER_ID,
-          adSize: BannerAdSize.ADAPTIVE_BANNER,
-          position: BannerAdPosition.TOP_CENTER,
-          margin: 0,
-        };
-        await AdMob.showBanner(options);
-        bannerStatus = "created";
-      } catch (err) {
-        console.error("AdMob: Recovery failed", err);
-      }
+    } finally {
+      isBannerLoading = false;
     }
   }
 }
@@ -313,24 +308,10 @@ export function AdMobBanner({
     }
   }, []);
 
-  if (!isNative) {
-    return null;
-  }
-
-  return (
-    <div 
-      className={`fixed top-0 left-0 right-0 w-full z-[100] bg-slate-950 border-b border-white/5 flex items-center justify-center select-none shadow-md ${className}`}
-      style={{
-        height: "calc(env(safe-area-inset-top) + 50px)",
-        paddingTop: "env(safe-area-inset-top)"
-      }}
-    >
-      <div className="text-[10px] uppercase font-mono tracking-widest text-blue-400 flex items-center gap-2">
-        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-        AdMob Banner Ad Space
-      </div>
-    </div>
-  );
+  // We don't render anything in the DOM for AdMobBanner
+  // In native, the OS draws the banner on top of the webview
+  // In web preview, the user requested to remove the sample banner
+  return null;
 }
 
 // -------------------------------------------------------------
