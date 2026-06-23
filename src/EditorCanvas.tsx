@@ -1086,7 +1086,7 @@ export default function EditorCanvas({
     const timer = setTimeout(async () => {
       try {
         const sourceSrc = currentCleanSrc || workingOriginalSrc;
-        const finalCrop = currentCleanSrc ? null : (workingOriginalSrc ? cropRect : null);
+        const finalCrop = cropRect;
 
         const newPreviewSrc = await applyStyle(
           sourceSrc,

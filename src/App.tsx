@@ -1605,7 +1605,7 @@ export default function App() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className={`absolute bottom-0 left-0 right-0 z-[150] rounded-t-[32px] p-6 pb-12 shadow-2xl max-h-[85vh] overflow-y-auto ${isDarkMode ? "bg-slate-800" : "bg-white"}`}
+              className={`absolute bottom-0 left-0 right-0 z-[150] rounded-t-[32px] p-6 pb-12 shadow-2xl max-h-[calc(100vh-120px)] overflow-y-auto ${isDarkMode ? "bg-slate-800" : "bg-white"}`}
             >
               <div className="flex justify-between items-center mb-6">
                 <h2

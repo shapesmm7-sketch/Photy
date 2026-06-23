@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { X, Download, ArrowUpRight, Check, Hand, GripVertical, GripHorizontal, Minimize, Sparkles } from "lucide-react";
 import JSZip from "jszip";
 import { Capacitor, registerPlugin } from "@capacitor/core";
