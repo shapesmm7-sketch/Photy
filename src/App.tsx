@@ -1017,12 +1017,12 @@ export default function App() {
       style={{
         paddingTop:
           !isPremium && isNative
-            ? "calc(env(safe-area-inset-top) + 60px)"
+            ? "calc(env(safe-area-inset-top) + 95px)"
             : undefined,
       }}
     >
       {/* Banner Ads on top of landing page, main page, and edit page */}
-      {!isPremium && <AdMobBanner className="shrink-0 z-[60]" />}
+      {!isPremium && <AdMobBanner className="fixed top-0 left-0 right-0 w-full z-[100]" />}
 
       {/* Full-screen simulated AdMob Interstitial Overlay */}
       <AdMobInterstitialContainer />
@@ -1597,7 +1597,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowSettings(false)}
-              className="absolute inset-0 z-50 bg-black/40 backdrop-blur-sm"
+              className="absolute inset-0 z-[150] bg-black/40 backdrop-blur-sm"
             />
             <motion.div
               key="settings-sheet"
@@ -1605,7 +1605,7 @@ export default function App() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className={`absolute bottom-0 left-0 right-0 z-50 rounded-t-[32px] p-6 pb-12 shadow-2xl ${isDarkMode ? "bg-slate-800" : "bg-white"}`}
+              className={`absolute bottom-0 left-0 right-0 z-[150] rounded-t-[32px] p-6 pb-12 shadow-2xl max-h-[85vh] overflow-y-auto ${isDarkMode ? "bg-slate-800" : "bg-white"}`}
             >
               <div className="flex justify-between items-center mb-6">
                 <h2
@@ -1842,11 +1842,11 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowPremiumModal(false)}
-              className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+              className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
               style={{
                 paddingTop:
                   !isPremium && isNative
-                    ? "calc(env(safe-area-inset-top) + 60px)"
+                    ? "calc(env(safe-area-inset-top) + 95px)"
                     : undefined,
               }}
             >
@@ -2231,11 +2231,11 @@ export default function App() {
                   setActiveQuickFeature(null);
                 }
               }}
-              className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+              className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
               style={{
                 paddingTop:
                   !isPremium && isNative
-                    ? "calc(env(safe-area-inset-top) + 60px)"
+                    ? "calc(env(safe-area-inset-top) + 95px)"
                     : undefined,
               }}
             >

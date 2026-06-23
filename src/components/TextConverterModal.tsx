@@ -472,7 +472,7 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
     <AnimatePresence>
       {isOpen && (
         <div
-          className={`fixed inset-0 z-[100] flex justify-center p-2 sm:p-4 overflow-y-auto ${!isPremium && isNative ? "items-start pt-[calc(env(safe-area-inset-top)+84px)] pb-10" : "items-center"}`}
+          className={`fixed inset-0 z-[100] flex justify-center p-2 sm:p-4 overflow-y-auto ${!isPremium && isNative ? "items-start pt-[calc(env(safe-area-inset-top)+115px)] pb-10" : "items-center"}`}
         >
           <motion.div
             initial={{ opacity: 0 }}

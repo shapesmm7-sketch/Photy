@@ -3491,11 +3491,11 @@ export default function EditorCanvas({
   return (
     <div 
       className="flex flex-col h-full bg-black text-white absolute inset-0 z-50"
-      style={{ paddingTop: (!isPremium && isNative) ? 'calc(env(safe-area-inset-top) + 60px)' : undefined }}
+      style={{ paddingTop: (!isPremium && isNative) ? 'calc(env(safe-area-inset-top) + 95px)' : undefined }}
     >
       <canvas ref={blurCanvasRef} className="hidden" />
 
-      <div className={`flex items-center justify-between p-4 bg-[#111] z-10 border-b border-white/10 ${!isPremium && isNative ? '' : 'pt-safe'}`}>
+      <div className={`flex items-center justify-between p-4 bg-[#111] z-10 border-b border-white/10 ${(!isPremium && isNative) ? '' : 'pt-safe'}`}>
         <button
           onClick={onCancel}
           className="p-2 hover:bg-white/10 rounded-full transition-colors"

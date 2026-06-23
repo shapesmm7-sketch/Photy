@@ -300,23 +300,37 @@ export function AdMobBanner({
   unitId = BANNER_ID,
   className = "",
 }: AdMobBannerProps) {
-  // HIDDEN IN WEB PREVIEW
+  useEffect(() => {
+    if (isNative) {
+      activeBannerCount++;
+      showBannerAd();
+      return () => {
+        activeBannerCount--;
+        if (activeBannerCount <= 0) {
+          hideBannerAd();
+        }
+      };
+    }
+  }, []);
+
   if (!isNative) {
     return null;
   }
 
-  useEffect(() => {
-    activeBannerCount++;
-    showBannerAd();
-    return () => {
-      activeBannerCount--;
-      if (activeBannerCount <= 0) {
-        hideBannerAd();
-      }
-    };
-  }, []);
-
-  return null;
+  return (
+    <div 
+      className={`fixed top-0 left-0 right-0 w-full z-[100] bg-slate-950 border-b border-white/5 flex items-center justify-center select-none shadow-md ${className}`}
+      style={{
+        height: "calc(env(safe-area-inset-top) + 50px)",
+        paddingTop: "env(safe-area-inset-top)"
+      }}
+    >
+      <div className="text-[10px] uppercase font-mono tracking-widest text-blue-400 flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+        AdMob Banner Ad Space
+      </div>
+    </div>
+  );
 }
 
 // -------------------------------------------------------------

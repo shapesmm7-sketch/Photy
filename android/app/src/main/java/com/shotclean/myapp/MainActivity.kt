@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.getcapacitor.BridgeActivity
 import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
@@ -18,12 +17,6 @@ class MainActivity : BridgeActivity() {
     private val UPDATE_REQUEST_CODE = 9991
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        try {
-            installSplashScreen()
-        } catch (t: Throwable) {
-            Log.e("MainActivity", "Failed to install splash screen", t)
-        }
-
         try {
             if (!isTaskRoot
                 && intent != null
