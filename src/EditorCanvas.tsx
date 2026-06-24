@@ -882,6 +882,9 @@ export default function EditorCanvas({
       };
       tryFit();
     };
+    img.onerror = () => {
+      console.error("Failed to load initial image");
+    };
     img.src = imageSrc;
     return () => {
       isCurrent = false;
@@ -950,6 +953,9 @@ export default function EditorCanvas({
       };
       tryFit();
     };
+    img.onerror = () => {
+      console.error("Failed to load raw screenshot image");
+    };
     img.src = workingOriginalSrc;
     return () => {
       isCurrent = false;
@@ -998,6 +1004,10 @@ export default function EditorCanvas({
         nextImg.onload = () => {
             imgRef.current = nextImg;
             if (cb) cb(dataUrl);
+        };
+        nextImg.onerror = () => {
+            console.error("Failed to load rotated image");
+            if (cb) cb();
         };
         nextImg.src = dataUrl;
     };
@@ -1154,6 +1164,9 @@ export default function EditorCanvas({
               })
             );
           }
+        };
+        img.onerror = () => {
+          console.error("Failed to load resized layout preview");
         };
         img.src = newPreviewSrc;
       } catch (err) {
@@ -1748,8 +1761,9 @@ export default function EditorCanvas({
           y: textPositionMode === "Top" ? (currentTextSize + 10) : (textPositionMode === "Bottom" ? (canvas.height - 20) : rawT.y)
         } : rawT;
 
-        if (t.opacity !== undefined) {
-          ctx.globalAlpha = t.opacity;
+        if (t.opacity !== undefined && t.opacity !== null) {
+          const parsedOpacity = typeof t.opacity === "string" ? parseFloat(t.opacity) : Number(t.opacity);
+          ctx.globalAlpha = isNaN(parsedOpacity) ? 1.0 : parsedOpacity;
         } else {
           ctx.globalAlpha = 1.0;
         }
@@ -1774,6 +1788,9 @@ export default function EditorCanvas({
               img.onload = () => {
                 t.logoImg = img;
                 redraw();
+              };
+              img.onerror = () => {
+                console.error("Failed to load logo image");
               };
               img.src = t.logoSrc;
               t.logoImg = img;
@@ -2772,7 +2789,7 @@ export default function EditorCanvas({
         if (textDragModeRef.current === "resize_rotate") {
           const parentText = nextTexts[draggingTextIndex];
           const rCurrent = Math.hypot(pt.x - parentText.x, pt.y - parentText.y);
-          const sizeNew = Math.max(12, Math.min(300, Math.round(initialTextSizeRef.current * (rCurrent / initialPointerDistRef.current))));
+          const sizeNew = Math.max(12, Math.round(initialTextSizeRef.current * (rCurrent / initialPointerDistRef.current)));
           
           const currentAngle = Math.atan2(pt.y - parentText.y, pt.x - parentText.x);
           const angleDiff = currentAngle - initialPointerAngleRef.current;
@@ -3917,6 +3934,9 @@ export default function EditorCanvas({
                         setSelectedTextIndex(updated.length - 1);
                         setShouldCommit(true);
                         redraw(undefined, undefined, updated);
+                      };
+                      img.onerror = () => {
+                        console.error("Failed to load uploaded logo image");
                       };
                       img.src = src;
                     };

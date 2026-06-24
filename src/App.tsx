@@ -139,7 +139,7 @@ export default function App() {
   const [recentEdits, setRecentEdits] = useState<RecentEdit[]>([]);
 
   useEffect(() => {
-    getRecentEdits().then(setRecentEdits);
+    getRecentEdits().then(setRecentEdits).catch(console.error);
   }, []);
 
   const generateThumbnail = (src: string, maxSize = 200): Promise<string> => {
@@ -445,7 +445,7 @@ export default function App() {
       initializeAdMob().then(() => {
         showBannerAd();
         admobManager.preloadInterstitial();
-      });
+      }).catch(console.error);
     } else {
       hideBannerAd();
     }
@@ -506,18 +506,18 @@ export default function App() {
             }
             setProcessedImage(res);
           } else if (styleChanged || layoutChanged || bgChanged) {
-            burnEditsToImage(res, editorPaths, editorTexts, false, editorReferenceSize).then(
-              (finalCombined) => {
+            burnEditsToImage(res, editorPaths, editorTexts, false, editorReferenceSize)
+              .then((finalCombined) => {
                 setProcessedImage(finalCombined);
-              },
-            );
+              })
+              .catch(console.error);
           } else {
             if (editorPaths.length > 0 || editorTexts.length > 0) {
-              burnEditsToImage(res, editorPaths, editorTexts, false, editorReferenceSize).then(
-                (finalCombined) => {
+              burnEditsToImage(res, editorPaths, editorTexts, false, editorReferenceSize)
+                .then((finalCombined) => {
                   setProcessedImage(finalCombined);
-                },
-              );
+                })
+                .catch(console.error);
             } else {
               setProcessedImage(res);
             }
@@ -603,7 +603,7 @@ export default function App() {
         setAppState("preview");
         setOriginalImage(null);
         setCleanImage(null);
-      });
+      }).catch(console.error);
       // Clear input value so selecting the same file works later
       e.target.value = "";
       return;
@@ -651,9 +651,9 @@ export default function App() {
 
         generateThumbnail(resizedResult).then((thumb) => {
           saveRecentEdit({ originalImage: resizedResult, thumbnail: thumb }).then(() => {
-            getRecentEdits().then(setRecentEdits);
-          });
-        });
+            getRecentEdits().then(setRecentEdits).catch(console.error);
+          }).catch(console.error);
+        }).catch(console.error);
 
         if (!activeQuickFeature) {
           const topH = Math.round(height * 0.04);

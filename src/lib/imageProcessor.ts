@@ -327,6 +327,9 @@ export function preloadPhoneFrames(): void {
       img.onload = () => {
         frameImageCache[frame.id] = img;
       };
+      img.onerror = () => {
+        console.warn(`Failed to preload frame image: ${frame.id}`);
+      };
       img.src = frame.image;
     }
   });
@@ -1713,15 +1716,20 @@ export async function burnEditsToImage(
         // Draw text items
         for (const t of texts) {
           ctx.save();
-          // We apply the scale to the coordinate system
-          ctx.scale(scale, scale);
+
+          if (t.opacity !== undefined && t.opacity !== null) {
+            const parsedOpacity = typeof t.opacity === "string" ? parseFloat(t.opacity) : Number(t.opacity);
+            ctx.globalAlpha = isNaN(parsedOpacity) ? 1.0 : parsedOpacity;
+          } else {
+            ctx.globalAlpha = 1.0;
+          }
 
           let fontStr = fontCSSMap[t.fontName] || "sans-serif";
           
-          // Use the size exactly as provided in the state; context scaling handles the rest
-          ctx.font = `bold ${t.size}px ${fontStr}`;
+          const scaledSize = t.size * scale;
+          ctx.font = `bold ${scaledSize}px ${fontStr}`;
           ctx.textAlign = "center";
-          ctx.translate(t.x, t.y);
+          ctx.translate(t.x * scale, t.y * scale);
 
           if (t.rotation) {
             ctx.rotate(t.rotation);
@@ -1732,10 +1740,11 @@ export async function burnEditsToImage(
               try {
                 const logoImg = await getCachedImage(t.logoSrc);
                 const aspect = logoImg.naturalHeight > 0 ? (logoImg.naturalWidth / logoImg.naturalHeight) : 1.0;
-                const drawW = t.size * aspect;
-                const drawH = t.size;
-                if (t.opacity !== undefined) {
-                  ctx.globalAlpha = t.opacity;
+                const drawW = scaledSize * aspect;
+                const drawH = scaledSize;
+                if (t.opacity !== undefined && t.opacity !== null) {
+                  const parsedOpacity = typeof t.opacity === "string" ? parseFloat(t.opacity) : Number(t.opacity);
+                  ctx.globalAlpha = isNaN(parsedOpacity) ? 1.0 : parsedOpacity;
                 }
                 ctx.drawImage(logoImg, -drawW / 2, -drawH / 2, drawW, drawH);
               } catch (logoErr) {
@@ -1744,19 +1753,19 @@ export async function burnEditsToImage(
             }
           } else if (t.isSticker) {
             if (t.stickerType === "badge") {
-              const padX = t.size * 0.5;
-              const padY = t.size * 0.3;
+              const padX = scaledSize * 0.5;
+              const padY = scaledSize * 0.3;
               const textWidth = ctx.measureText(t.text).width;
               const bgW = textWidth + padX * 2;
-              const bgH = t.size + padY * 2;
+              const bgH = scaledSize + padY * 2;
               const r = bgH / 2;
 
               if (t.hasShadow !== false) {
                 ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.4)";
                 // Note: shadow context values are in browser-independent resolution when scaled
-                ctx.shadowBlur = Math.max(4, t.size * 0.12);
-                ctx.shadowOffsetX = Math.max(2, t.size * 0.06);
-                ctx.shadowOffsetY = Math.max(2, t.size * 0.06);
+                ctx.shadowBlur = Math.max(4, scaledSize * 0.12);
+                ctx.shadowOffsetX = Math.max(2, scaledSize * 0.06);
+                ctx.shadowOffsetY = Math.max(2, scaledSize * 0.06);
               } else {
                 ctx.shadowColor = "transparent";
               }
@@ -1786,14 +1795,14 @@ export async function burnEditsToImage(
               ctx.fillText(t.text, 0, 0);
             } else {
               // Emoji
-              ctx.font = `${t.size}px sans-serif`;
+              ctx.font = `${scaledSize}px sans-serif`;
               ctx.textBaseline = "middle";
               ctx.textAlign = "center";
               if (t.hasShadow) {
                 ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-                ctx.shadowBlur = Math.max(4, t.size * 0.12);
-                ctx.shadowOffsetX = Math.max(2, t.size * 0.06);
-                ctx.shadowOffsetY = Math.max(2, t.size * 0.06);
+                ctx.shadowBlur = Math.max(4, scaledSize * 0.12);
+                ctx.shadowOffsetX = Math.max(2, scaledSize * 0.06);
+                ctx.shadowOffsetY = Math.max(2, scaledSize * 0.06);
               }
               ctx.fillText(t.text, 0, 0);
             }
@@ -1810,17 +1819,17 @@ export async function burnEditsToImage(
                 spanLeft = Math.max(spanLeft, Math.abs(metrics.actualBoundingBoxLeft));
                 spanRight = Math.max(spanRight, Math.abs(metrics.actualBoundingBoxRight));
               }
-              const padX = t.size * 0.4;
-              const padY = t.size * 0.3;
+              const padX = scaledSize * 0.4;
+              const padY = scaledSize * 0.3;
               const leftEdge = -spanLeft - padX;
               const rightEdge = spanRight + padX;
               const rectW = rightEdge - leftEdge;
-              const rectH = t.size + padY * 2;
+              const rectH = scaledSize + padY * 2;
               
               ctx.fillStyle = t.bgColor;
               if (ctx.roundRect) {
                 ctx.beginPath();
-                ctx.roundRect(leftEdge, -rectH/2, rectW, rectH, t.size * 0.15);
+                ctx.roundRect(leftEdge, -rectH/2, rectW, rectH, scaledSize * 0.15);
                 ctx.fill();
               } else {
                 ctx.fillRect(leftEdge, -rectH/2, rectW, rectH);
@@ -1830,14 +1839,14 @@ export async function burnEditsToImage(
             ctx.fillStyle = t.color;
             if (t.hasShadow) {
               ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.6)";
-              ctx.shadowBlur = Math.max(4, t.size * 0.12);
-              ctx.shadowOffsetX = Math.max(2, t.size * 0.06);
-              ctx.shadowOffsetY = Math.max(2, t.size * 0.06);
+              ctx.shadowBlur = Math.max(4, scaledSize * 0.12);
+              ctx.shadowOffsetX = Math.max(2, scaledSize * 0.06);
+              ctx.shadowOffsetY = Math.max(2, scaledSize * 0.06);
             }
 
             if (t.bgColor === "transparent" || !t.bgColor) {
                ctx.strokeStyle = "#000000";
-               ctx.lineWidth = Math.max(2, t.size * 0.05); 
+               ctx.lineWidth = Math.max(2, scaledSize * 0.05); 
                ctx.strokeText(t.text, 0, 0);
             }
             ctx.fillText(t.text, 0, 0);
