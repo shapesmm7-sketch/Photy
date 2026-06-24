@@ -37,7 +37,7 @@
 
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="@string/admob_app_id" />
+            android:value="ca-app-pub-8582659585800553~5146148959" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

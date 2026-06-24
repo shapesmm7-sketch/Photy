@@ -1858,17 +1858,19 @@ export default function App() {
                 exit={{ scale: 0.9, opacity: 0, y: 20 }}
                 transition={{ type: "spring", damping: 25, stiffness: 300 }}
                 onClick={(e) => e.stopPropagation()}
-                className={`w-full max-w-md max-h-full overflow-y-auto overflow-x-hidden rounded-[32px] shadow-2xl relative flex flex-col ${isDarkMode ? "bg-slate-900 border border-slate-700" : "bg-white"}`}
+                className={`w-full max-w-md max-h-[85vh] overflow-y-auto overflow-x-hidden rounded-[32px] shadow-2xl relative flex flex-col ${isDarkMode ? "bg-slate-900 border border-slate-700" : "bg-white"}`}
               >
-                <button
-                  onClick={() => setShowPremiumModal(false)}
-                  className="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="sticky top-0 right-0 z-50 flex justify-end p-4 pointer-events-none -mb-16">
+                  <button
+                    onClick={() => setShowPremiumModal(false)}
+                    className="p-2 rounded-full bg-black/20 hover:bg-black/40 backdrop-blur-md text-white transition-colors pointer-events-auto"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
 
                 {/* Header */}
-                <div className="bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 px-6 py-10 text-center relative overflow-hidden">
+                <div className="bg-gradient-to-br from-amber-400 via-orange-500 to-rose-500 px-6 py-10 pt-12 text-center relative overflow-hidden">
                   <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
                   <Crown className="w-16 h-16 text-white drop-shadow-lg mx-auto mb-4" />
                   <h2 className="text-3xl font-black text-white drop-shadow-md mb-2">
