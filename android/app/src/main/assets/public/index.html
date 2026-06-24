@@ -4,8 +4,22 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Photy</title>
-    <script type="module" crossorigin src="/assets/index-BSncX8cg.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-C4_cIbLE.css">
+    <script>
+      window.addEventListener('error', function(e) {
+        if (e.message === 'Script error.') {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+        }
+      }, true);
+      window.onerror = function(message, source, lineno, colno, error) {
+        if (message === 'Script error.') {
+          return true;
+        }
+      };
+    </script>
+    <script type="module" crossorigin src="/assets/index-Ds2SXgjc.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CP9Kox-i.css">
   </head>
   <body>
     <div id="root"></div>

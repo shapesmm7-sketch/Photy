@@ -163,6 +163,7 @@ export default function App() {
         ctx?.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL("image/jpeg", 0.7));
       };
+      img.onerror = () => resolve(src);
       img.src = src;
     });
   };
@@ -1857,7 +1858,7 @@ export default function App() {
                 exit={{ scale: 0.9, opacity: 0, y: 20 }}
                 transition={{ type: "spring", damping: 25, stiffness: 300 }}
                 onClick={(e) => e.stopPropagation()}
-                className={`w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl relative ${isDarkMode ? "bg-slate-900 border border-slate-700" : "bg-white"}`}
+                className={`w-full max-w-md max-h-full overflow-y-auto overflow-x-hidden rounded-[32px] shadow-2xl relative flex flex-col ${isDarkMode ? "bg-slate-900 border border-slate-700" : "bg-white"}`}
               >
                 <button
                   onClick={() => setShowPremiumModal(false)}
