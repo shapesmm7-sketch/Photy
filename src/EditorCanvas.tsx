@@ -39,7 +39,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Styles, PhoneLayouts, applyStyle } from "./lib/imageProcessor";
 import { PHONE_FRAMES } from "./lib/phoneFrames";
 import { translations, LanguageKey } from "./i18n";
-import { admobManager, isNative } from "./lib/admob";
+import { isNative } from "./lib/isNative";
 
 type Tool = "none" | "crop" | "draw" | "blur" | "text" | "sticker" | "adjust" | "size" | "arrows";
 
@@ -1274,13 +1274,6 @@ export default function EditorCanvas({
       setIsDetectingSensitive(false);
     }
   };
-
-  // Increment AdMob interactions when tool changes, if not premium
-  useEffect(() => {
-    if (activeTool !== "none" && !isPremium) {
-      admobManager.incrementInteractions();
-    }
-  }, [activeTool, isPremium]);
 
   // Handle resizing of container (with ResizeObserver for dynamic transitions) and tool change fitting
   useEffect(() => {

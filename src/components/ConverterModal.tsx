@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { X, Image as ImageIcon, FileText, Download, Check, Plus, Upload } from "lucide-react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 
-import { isNative, playRewardedAds } from "../lib/admob";
+import { isNative } from "../lib/isNative";
 import { stitchImages } from "../lib/stitchImages";
 import { convertPhotoToPdf, PDFExportOptions } from "../lib/pdfGenerator";
 
@@ -188,11 +188,7 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({
 
   const handleConvert = () => {
     if (images.length === 0) return;
-    if (!isPremium) {
-      playRewardedAds(performConvert);
-    } else {
-      performConvert();
-    }
+    performConvert();
   };
 
   return (

@@ -4,7 +4,7 @@ import { X, Upload, Camera, FileText, Download, CheckCircle2, ChevronDown, Searc
 import { convertPhotoToPdf, PDFExportOptions } from "../lib/pdfGenerator";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { stitchImages, compileIDCardToA4 } from "../lib/stitchImages";
-import { admobManager, isNative } from "../lib/admob";
+import { isNative } from "../lib/isNative";
 import { CameraOverlayScanner } from "./CameraOverlayScanner";
 
 import { Camera as CapCamera, CameraResultType, CameraSource } from '@capacitor/camera';

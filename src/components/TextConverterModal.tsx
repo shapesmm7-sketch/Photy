@@ -15,7 +15,7 @@ import jsPDF from "jspdf";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Share } from "@capacitor/share";
 
-import { isNative, playRewardedAds } from "../lib/admob";
+import { isNative } from "../lib/isNative";
 
 interface TextConverterModalProps {
   isOpen: boolean;
@@ -461,11 +461,7 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
   };
 
   const handleSave = () => {
-    if (!isPremium) {
-      playRewardedAds(performSave);
-    } else {
-      performSave();
-    }
+    performSave();
   };
 
   return (

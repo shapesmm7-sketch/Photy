@@ -51,17 +51,8 @@ import {
   purchasePremium,
   restorePurchases,
 } from "./lib/purchases";
-import {
-  initializeAdMob,
-  showBannerAd,
-  hideBannerAd,
-  playRewardedAds,
-  isNative,
-  AdMobBanner,
-  admobManager,
-  AdMobInterstitialContainer,
-} from "./lib/admob";
 import { saveRecentEdit, getRecentEdits, RecentEdit, deleteRecentEdit } from "./lib/storage";
+import { isNative } from "./lib/isNative";
 
 type AppState = "upload" | "processing" | "preview";
 
@@ -440,26 +431,6 @@ export default function App() {
   const currentOriginalImageRef = React.useRef<string | null>(null);
   currentOriginalImageRef.current = originalImage;
 
-  // Capacitor AdMob Initialization
-  React.useEffect(() => {
-    if (!isPremium) {
-      setTimeout(() => {
-        initializeAdMob().then(() => {
-          showBannerAd();
-          admobManager.preloadInterstitial();
-        }).catch(console.error);
-      }, 500);
-    } else {
-      hideBannerAd();
-    }
-  }, [isPremium]);
-
-  // Track user customizing choices as active interactions for AdMob Interstitials
-  React.useEffect(() => {
-    if (!originalImage || isPremium) return;
-    admobManager.incrementInteractions();
-  }, [selectedStyle, selectedLayout, customBgColor]);
-
   // Preload all frames on mount
   React.useEffect(() => {
     preloadPhoneFrames();
@@ -837,10 +808,6 @@ export default function App() {
 
   const downloadImage = () => {
     if (isExporting) return;
-    if (!isPremium) {
-      playRewardedAds(executeDownload);
-      return;
-    }
     executeDownload();
   };
 
@@ -922,10 +889,6 @@ export default function App() {
 
   const shareImage = () => {
     if (isExporting) return;
-    if (!isPremium) {
-      playRewardedAds(executeShare);
-      return;
-    }
     executeShare();
   };
 
@@ -1024,12 +987,6 @@ export default function App() {
             : undefined,
       }}
     >
-      {/* Banner Ads on top of landing page, main page, and edit page */}
-      {!isPremium && <AdMobBanner className="fixed top-0 left-0 right-0 w-full z-[100]" />}
-
-      {/* Full-screen simulated AdMob Interstitial Overlay */}
-      <AdMobInterstitialContainer />
-
       <AnimatePresence mode="wait">
         {/* ... upload and processing screens same ... */}
         {appState === "upload" && (
@@ -2156,11 +2113,7 @@ export default function App() {
                     setActiveQuickFeature(null);
                   };
 
-                  if (!isPremium) {
-                    playRewardedAds(performSave);
-                  } else {
-                    await performSave();
-                  }
+                  await performSave();
                   return;
                 }
 
@@ -2209,11 +2162,7 @@ export default function App() {
                   setShowEditor(false);
                 };
 
-                if (!isPremium) {
-                  playRewardedAds(performFullSave);
-                } else {
-                  performFullSave();
-                }
+                performFullSave();
               }}
             />
           </motion.div>

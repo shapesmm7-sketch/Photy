@@ -17,7 +17,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { playRewardedAds, isNative } from "../lib/admob";
+import { isNative } from "../lib/isNative";
 
 interface StitchPhotoModalProps {
   isOpen: boolean;
@@ -345,11 +345,7 @@ export const StitchPhotoModal: React.FC<StitchPhotoModalProps> = ({
 
   const handleSaveStitch = () => {
     if (!compiledImageSrc || images.length < 2 || isSaving) return;
-    if (!isPremium) {
-      playRewardedAds(handleSaveStitchActual);
-    } else {
-      handleSaveStitchActual();
-    }
+    handleSaveStitchActual();
   };
 
   const handleSaveStitchActual = async () => {

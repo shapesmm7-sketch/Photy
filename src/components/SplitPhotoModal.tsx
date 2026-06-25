@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { X, Download, ArrowUpRight, Check, Hand, GripVertical, GripHorizontal, Minimize, Sparkles } from "lucide-react";
 import JSZip from "jszip";
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { playRewardedAds, isNative } from "../lib/admob";
+import { isNative } from "../lib/isNative";
 
 interface SplitPhotoModalProps {
   isOpen: boolean;
@@ -207,11 +207,7 @@ export const SplitPhotoModal: React.FC<SplitPhotoModalProps> = ({
 
   const handleDownload = () => {
     if (isExporting) return;
-    if (!isPremium) {
-      playRewardedAds(handleDownloadActual);
-    } else {
-      handleDownloadActual();
-    }
+    handleDownloadActual();
   };
 
   const handleDownloadActual = async () => {

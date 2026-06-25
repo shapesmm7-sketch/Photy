@@ -7,7 +7,7 @@ import { Directory, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import saveAs from "file-saver";
 
-import { isNative, playRewardedAds } from "../lib/admob";
+import { isNative } from "../lib/isNative";
 
 interface AppIconModalProps {
   isOpen: boolean;
@@ -305,11 +305,7 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
 
   const handleGenerate = () => {
     if (!imageData) return;
-    if (!isPremium) {
-      playRewardedAds(performGenerate);
-    } else {
-      performGenerate();
-    }
+    performGenerate();
   };
 
   return (
