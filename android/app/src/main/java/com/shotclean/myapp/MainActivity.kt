@@ -10,6 +10,20 @@ class MainActivity : BridgeActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         try {
+            val prefs = getSharedPreferences("crash_prefs", android.content.Context.MODE_PRIVATE)
+            val lastCrash = prefs.getString("last_crash", null)
+            if (lastCrash != null) {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("App Crashed Last Time")
+                    .setMessage(lastCrash)
+                    .setPositiveButton("OK") { _, _ -> 
+                        prefs.edit().remove("last_crash").apply()
+                    }
+                    .show()
+            }
+        } catch (e: Exception) {}
+
+        try {
             try {
                 installSplashScreen()
             } catch (t: Throwable) {
