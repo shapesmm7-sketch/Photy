@@ -443,10 +443,12 @@ export default function App() {
   // Capacitor AdMob Initialization
   React.useEffect(() => {
     if (!isPremium) {
-      initializeAdMob().then(() => {
-        showBannerAd();
-        admobManager.preloadInterstitial();
-      }).catch(console.error);
+      setTimeout(() => {
+        initializeAdMob().then(() => {
+          showBannerAd();
+          admobManager.preloadInterstitial();
+        }).catch(console.error);
+      }, 500);
     } else {
       hideBannerAd();
     }

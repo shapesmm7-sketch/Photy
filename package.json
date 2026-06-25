@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "postinstall": "node scripts/patch-admob.js",
+    "postinstall": "node scripts/patch-admob.js && patch-package",
     "cap:sync": "npx cap sync android",
     "build:android": "npm run build && npx cap sync android"
   },
