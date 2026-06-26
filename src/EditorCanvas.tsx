@@ -978,6 +978,38 @@ export default function EditorCanvas({
         return;
     }
 
+    const rotateSrc = (src: string, cb: (rotatedUrl: string) => void) => {
+        if (!src) {
+            cb("");
+            return;
+        }
+        const img = new Image();
+        if (!src.startsWith("data:")) {
+            img.crossOrigin = "anonymous";
+        }
+        img.onload = () => {
+            const rc = document.createElement("canvas");
+            rc.width = img.height;
+            rc.height = img.width;
+            const rcCtx = rc.getContext("2d");
+            if (!rcCtx) {
+                cb("");
+                return;
+            }
+            rcCtx.imageSmoothingEnabled = true;
+            rcCtx.imageSmoothingQuality = "high";
+            rcCtx.translate(rc.width / 2, rc.height / 2);
+            rcCtx.rotate(Math.PI / 2);
+            rcCtx.drawImage(img, -img.width / 2, -img.height / 2);
+            cb(rc.toDataURL("image/png"));
+        };
+        img.onerror = () => {
+            console.error("Failed to load src for rotation");
+            cb("");
+        };
+        img.src = src;
+    };
+
     const createRotatedImg = (imgRef: React.MutableRefObject<HTMLImageElement | null>, cb?: (rotatedSrc?: string) => void) => {
         if (!imgRef.current) {
             if (cb) cb();
@@ -1013,7 +1045,7 @@ export default function EditorCanvas({
     };
 
     let completed = 0;
-    const total = 3;
+    const total = 4;
     let newOriginalSrc: string | undefined;
     let newCleanSrc: string | undefined;
     const checkComplete = () => {
@@ -1084,7 +1116,8 @@ export default function EditorCanvas({
     };
 
     createRotatedImg(rawScreenshotRef, (url) => { if (url) newOriginalSrc = url; checkComplete(); });
-    createRotatedImg(styledImageRef, (url) => { if (url) newCleanSrc = url; checkComplete(); });
+    rotateSrc(currentCleanSrc || "", (url) => { if (url) newCleanSrc = url; checkComplete(); });
+    createRotatedImg(styledImageRef, () => { checkComplete(); });
     createRotatedImg(originalImageRef, () => { checkComplete(); });
   };
 
@@ -1839,9 +1872,9 @@ export default function EditorCanvas({
             ctx.textBaseline = "middle";
             ctx.fillText(t.text, 0, 0);
           } else {
-            // Emoji high-quality rendering: Render the emoji at a standard native size
+            // Emoji high-quality rendering: Render the emoji at a high native size
             // and scale it using Canvas's high-quality imageSmoothingQuality to prevent pixelation.
-            const nativeRenderSize = Math.max(128, Math.min(256, t.size));
+            const nativeRenderSize = Math.max(512, Math.min(2048, Math.round(t.size)));
             const offscreen = document.createElement("canvas");
             offscreen.width = nativeRenderSize * 1.5;
             offscreen.height = nativeRenderSize * 1.5;

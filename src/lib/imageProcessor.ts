@@ -1794,9 +1794,9 @@ export async function burnEditsToImage(
               ctx.textBaseline = "middle";
               ctx.fillText(t.text, 0, 0);
             } else {
-              // Emoji high-quality rendering: Render the emoji at a standard native size
+              // Emoji high-quality rendering: Render the emoji at a high native size
               // and scale it using Canvas's high-quality imageSmoothingQuality to prevent pixelation.
-              const nativeRenderSize = Math.max(128, Math.min(256, scaledSize));
+              const nativeRenderSize = Math.max(512, Math.min(2048, Math.round(scaledSize)));
               const offscreen = document.createElement("canvas");
               offscreen.width = nativeRenderSize * 1.5;
               offscreen.height = nativeRenderSize * 1.5;

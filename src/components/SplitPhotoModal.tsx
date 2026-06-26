@@ -401,7 +401,10 @@ export const SplitPhotoModal: React.FC<SplitPhotoModalProps> = ({
           </div>
 
           {/* Bottom Toolbar Area */}
-          <div className="w-full bg-[#121212] pt-4 pb-8 px-4 flex flex-col gap-6 shadow-[0_-4px_20px_rgba(0,0,0,0.5)] z-10 border-t border-white/5">
+          <div 
+            className="w-full bg-[#121212] pt-4 pb-8 px-4 flex flex-col gap-6 shadow-[0_-4px_20px_rgba(0,0,0,0.5)] z-10 border-t border-white/5"
+            style={{ paddingBottom: !isPremium ? "calc(env(safe-area-inset-bottom) + 56px)" : undefined }}
+          >
             {/* Mode Selector */}
             <div className="flex items-center justify-around w-full max-w-sm mx-auto">
               <button 

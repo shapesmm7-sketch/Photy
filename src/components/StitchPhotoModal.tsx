@@ -645,7 +645,10 @@ export const StitchPhotoModal: React.FC<StitchPhotoModalProps> = ({
           </AnimatePresence>
 
           {/* Bottom Navigation Toolbar matches layout perfectly */}
-          <div className="w-full bg-[#161616] pt-4 pb-8 px-4 flex flex-col gap-4 shadow-[0_-4px_22px_rgba(0,0,0,0.6)] z-10 border-t border-white/5 shrink-0">
+          <div 
+            className="w-full bg-[#161616] pt-4 pb-8 px-4 flex flex-col gap-4 shadow-[0_-4px_22px_rgba(0,0,0,0.6)] z-10 border-t border-white/5 shrink-0"
+            style={{ paddingBottom: !isPremium ? "calc(env(safe-area-inset-bottom) + 56px)" : undefined }}
+          >
             <div className="flex items-center justify-around w-full max-w-md mx-auto">
               
               {/* Magic Wand Auto Stitch */}
