@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import { isNative } from './isNative';
 import React, { useEffect, useState } from 'react';
-import { AdMob, BannerAdOptions, BannerAdSize, BannerAdPosition } from '@capacitor-community/admob';
+import { AdMob, BannerAdOptions, BannerAdSize, BannerAdPosition, RewardAdPluginEvents, InterstitialAdPluginEvents } from '@capacitor-community/admob';
 
 // Real AdMob IDs provided by the user (only active on native Android)
 const bannerAdId = Capacitor.getPlatform() === 'ios'
@@ -16,9 +16,9 @@ const rewardedAdId = Capacitor.getPlatform() === 'ios'
   ? 'ca-app-pub-3940256099942544/1712485313'
   : 'ca-app-pub-3940256099942544/5224354917';
 
-// Determine if we should run in testing mode (test ads on iOS/Simulator, real ads on Native Android)
+// Determine if we should run in testing mode (disabled to use live AdMob IDs provided by the user)
 const isTestingMode = () => {
-  return Capacitor.getPlatform() === 'ios';
+  return false;
 };
 
 let _isPremium = false;
@@ -66,17 +66,17 @@ export const hideBannerAd = async () => {
 
 let rewardCallback: (() => void) | null = null;
 if (isNative) {
-  AdMob.addListener('onRewardedVideoAdRewarded', () => {
+  AdMob.addListener(RewardAdPluginEvents.Rewarded, () => {
     if (rewardCallback) rewardCallback();
     rewardCallback = null;
   });
-  AdMob.addListener('onRewardedVideoAdDismissed', () => {
+  AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
     if (rewardCallback) {
       rewardCallback();
       rewardCallback = null;
     }
   });
-  AdMob.addListener('onRewardedVideoAdFailedToLoad', () => {
+  AdMob.addListener(RewardAdPluginEvents.FailedToLoad, () => {
     if (rewardCallback) rewardCallback();
     rewardCallback = null;
   });
@@ -143,12 +143,12 @@ export const admobManager = {
     };
 
     // Listeners to resume after interstitial dismissal or failure
-    const dismissListener = await AdMob.addListener('onInterstitialAdDismissed', () => {
+    const dismissListener = await AdMob.addListener(InterstitialAdPluginEvents.Dismissed, () => {
       runActionOnce();
       dismissListener.remove();
     });
 
-    const failedListener = await AdMob.addListener('onInterstitialAdFailedToPresent', () => {
+    const failedListener = await AdMob.addListener(InterstitialAdPluginEvents.FailedToShow, () => {
       runActionOnce();
       failedListener.remove();
     });
