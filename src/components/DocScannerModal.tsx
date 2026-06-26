@@ -6,6 +6,7 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { stitchImages, compileIDCardToA4 } from "../lib/stitchImages";
 import { isNative } from "../lib/isNative";
 import { CameraOverlayScanner } from "./CameraOverlayScanner";
+import { admobManager } from "../lib/admob";
 
 import { Camera as CapCamera, CameraResultType, CameraSource } from '@capacitor/camera';
 
@@ -204,7 +205,9 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
 
   const triggerSaveWithAd = () => {
     if (pages.length === 0) return;
-    handleExport();
+    admobManager.showInterstitialBeforeAction(() => {
+      handleExport();
+    });
   };
 
   const handleExport = async () => {
@@ -305,7 +308,8 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className={`fixed inset-0 z-[100] flex justify-center p-4 bg-gray-900/80 backdrop-blur-sm shadow-2xl overflow-y-auto ${!isPremium && isNative ? "items-start pt-[calc(env(safe-area-inset-top)+115px)] pb-10" : "items-center"}`}
+          className={`fixed inset-0 z-[100] flex justify-center p-4 bg-gray-900/80 backdrop-blur-sm shadow-2xl overflow-y-auto`}
+          style={{ paddingBottom: (!isPremium) ? 'calc(env(safe-area-inset-bottom) + 56px)' : undefined }}
         >
           <motion.div
             initial={{ y: 50, opacity: 0 }}
@@ -574,7 +578,7 @@ export function DocScannerModal({ isOpen, onClose, isPremium, pages, setPages, o
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[200] bg-slate-950 flex flex-col justify-between p-6 select-none"
-          style={{ paddingTop: !isPremium && isNative ? "calc(env(safe-area-inset-top) + 95px)" : undefined }}
+          style={{ paddingBottom: !isPremium ? "calc(env(safe-area-inset-bottom) + 56px)" : undefined }}
         >
           {/* Top Info Bar */}
           <div className="flex justify-between items-center w-full">

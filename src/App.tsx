@@ -53,6 +53,16 @@ import {
 } from "./lib/purchases";
 import { saveRecentEdit, getRecentEdits, RecentEdit, deleteRecentEdit } from "./lib/storage";
 import { isNative } from "./lib/isNative";
+import {
+  initializeAdMob,
+  showBannerAd,
+  hideBannerAd,
+  playRewardedAds,
+  AdMobBanner,
+  admobManager,
+  AdMobInterstitialContainer,
+  setAdMobPremium,
+} from "./lib/admob";
 
 type AppState = "upload" | "processing" | "preview";
 
@@ -431,6 +441,39 @@ export default function App() {
   const currentOriginalImageRef = React.useRef<string | null>(null);
   currentOriginalImageRef.current = originalImage;
 
+  // Capacitor AdMob Initialization
+  React.useEffect(() => {
+    setAdMobPremium(isPremium);
+    if (!isPremium) {
+      setTimeout(() => {
+        initializeAdMob().then(() => {
+          showBannerAd();
+          admobManager.preloadInterstitial();
+        }).catch(console.error);
+      }, 500);
+    } else {
+      hideBannerAd();
+    }
+  }, [isPremium]);
+
+  // Global click event listener to count 15 user actions across the app to trigger interstitial ad
+  React.useEffect(() => {
+    if (isPremium) return;
+    const handleGlobalClick = () => {
+      admobManager.incrementInteractions().catch(console.error);
+    };
+    document.addEventListener("click", handleGlobalClick);
+    return () => {
+      document.removeEventListener("click", handleGlobalClick);
+    };
+  }, [isPremium]);
+
+  // Track user customizing choices as active interactions for AdMob Interstitials
+  React.useEffect(() => {
+    if (!originalImage || isPremium) return;
+    admobManager.incrementInteractions();
+  }, [selectedStyle, selectedLayout, customBgColor]);
+
   // Preload all frames on mount
   React.useEffect(() => {
     preloadPhoneFrames();
@@ -808,7 +851,9 @@ export default function App() {
 
   const downloadImage = () => {
     if (isExporting) return;
-    executeDownload();
+    admobManager.showInterstitialBeforeAction(() => {
+      executeDownload();
+    });
   };
 
   const executeShare = async () => {
@@ -889,7 +934,9 @@ export default function App() {
 
   const shareImage = () => {
     if (isExporting) return;
-    executeShare();
+    admobManager.showInterstitialBeforeAction(() => {
+      executeShare();
+    });
   };
 
   const handleShareSystem = async () => {
@@ -979,14 +1026,20 @@ export default function App() {
 
   return (
     <div
-      className={`h-[100dvh] w-full font-sans flex items-center justify-center relative overflow-hidden transition-colors duration-500 flex-col pt-safe ${isDarkMode ? "bg-slate-900 text-white" : appState === "upload" ? "bg-blue-600 text-gray-900" : "bg-[#F1F5F9] text-gray-900"}`}
+      className={`h-[100dvh] w-full font-sans flex items-center relative overflow-y-auto transition-colors duration-500 flex-col pt-safe ${isDarkMode ? "bg-slate-900 text-white" : appState === "upload" ? "bg-blue-600 text-gray-900" : "bg-[#F1F5F9] text-gray-900"}`}
       style={{
-        paddingTop:
-          !isPremium && isNative
-            ? "calc(env(safe-area-inset-top) + 95px)"
+        paddingBottom:
+          !isPremium
+            ? "calc(env(safe-area-inset-bottom) + 56px)"
             : undefined,
       }}
     >
+      {/* Banner Ads on bottom of landing page, main page, and edit page */}
+      {!isPremium && <AdMobBanner className="fixed bottom-0 left-0 right-0 w-full z-[100]" />}
+
+      {/* Full-screen simulated AdMob Interstitial Overlay */}
+      <AdMobInterstitialContainer />
+
       <AnimatePresence mode="wait">
         {/* ... upload and processing screens same ... */}
         {appState === "upload" && (
@@ -995,7 +1048,7 @@ export default function App() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className={`w-full max-w-md p-8 flex flex-col items-center text-center space-y-6 backdrop-blur-xl rounded-[40px] shadow-2xl m-4 relative ${isDarkMode ? "bg-slate-800/80 border border-slate-700" : "bg-white/10 border border-white/20"}`}
+            className={`w-full max-w-md p-6 flex flex-col items-center text-center space-y-4 backdrop-blur-xl rounded-[32px] shadow-2xl mx-4 mt-8 mb-auto shrink-0 relative ${isDarkMode ? "bg-slate-800/80 border border-slate-700" : "bg-white/10 border border-white/20"}`}
           >
             {/* Settings Button */}
             <button
@@ -1006,16 +1059,16 @@ export default function App() {
             </button>
 
             <div
-              className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 shadow-xl ${isDarkMode ? "bg-slate-700 text-blue-400" : "bg-white text-blue-600"}`}
+              className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-3 shadow-xl ${isDarkMode ? "bg-slate-700 text-blue-400" : "bg-white text-blue-600"}`}
             >
               <ImageIcon className="w-8 h-8" />
             </div>
             <div className={isDarkMode ? "text-white" : "text-white"}>
-              <h1 className="text-4xl font-black mb-2 tracking-tighter">
+              <h1 className="text-4xl font-black mb-1.5 tracking-tighter">
                 {t("appName")}
               </h1>
               <p
-                className={`text-sm font-medium ${isDarkMode ? "text-slate-300" : "text-blue-100"}`}
+                className={`text-[13px] font-medium leading-tight ${isDarkMode ? "text-slate-300" : "text-blue-100"}`}
               >
                 {t("subtitle")}
               </p>
@@ -1028,7 +1081,7 @@ export default function App() {
                 }
                 fileInputRef.current?.click();
               }}
-              className={`w-full py-5 rounded-2xl font-black shadow-2xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-lg ${isDarkMode ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-white text-blue-600 hover:bg-blue-50"}`}
+              className={`w-full py-4 rounded-2xl font-black shadow-2xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-[15px] ${isDarkMode ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-white text-blue-600 hover:bg-blue-50"}`}
             >
               <Upload className="w-6 h-6" />
               {t("uploadBtn")}
@@ -1050,20 +1103,20 @@ export default function App() {
               multiple={true}
             />
 
-            <div className="grid grid-cols-1 gap-3 w-full">
+            <div className="grid grid-cols-1 gap-2 w-full">
               <div
                 className={`p-4 rounded-2xl border text-center ${isDarkMode ? "bg-slate-800/50 border-slate-700" : "bg-white/10 border-white/10"}`}
               >
                 <Palette
-                  className={`w-5 h-5 mb-2 mx-auto ${isDarkMode ? "text-blue-400" : "text-blue-200"}`}
+                  className={`w-5 h-5 mb-1.5 mx-auto ${isDarkMode ? "text-blue-400" : "text-blue-200"}`}
                 />
                 <h3
-                  className={`text-xs font-bold uppercase tracking-widest ${isDarkMode ? "text-slate-200" : "text-white"}`}
+                  className={`text-sm font-bold uppercase tracking-widest ${isDarkMode ? "text-slate-200" : "text-white"}`}
                 >
                   {t("viralStylesTitle")}
                 </h3>
                 <p
-                  className={`text-[10px] ${isDarkMode ? "text-slate-400" : "text-blue-100/60"}`}
+                  className={`text-[11px] ${isDarkMode ? "text-slate-400" : "text-blue-100/70"}`}
                 >
                   {t("viralStylesDesc")}
                 </p>
@@ -1075,14 +1128,14 @@ export default function App() {
               className={`w-full border-t pt-4 ${isDarkMode ? "border-slate-700/60" : "border-white/10"}`}
             >
               <p
-                className={`text-[10px] font-extrabold uppercase tracking-widest mb-3 ${isDarkMode ? "text-slate-450" : "text-blue-100/90"}`}
+                className={`text-xs font-extrabold uppercase tracking-widest mb-3 ${isDarkMode ? "text-slate-450" : "text-blue-100/90"}`}
               >
                 Quick Actions
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 <button
                   onClick={() => handleFeaturedClick("markup")}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
                       ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
@@ -1092,7 +1145,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("split")}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
                       ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
@@ -1102,7 +1155,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("stitch")}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
                       ? "bg-slate-700 hover:bg-slate-650 text-green-400 border border-slate-600/50"
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
@@ -1112,7 +1165,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("watermark")}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
                       ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
@@ -1122,7 +1175,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("resizer")}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
                       ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
@@ -1132,7 +1185,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("converter")}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
                       ? "bg-slate-700 hover:bg-slate-650 text-blue-400 border border-slate-600/50"
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
@@ -1142,7 +1195,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("text")}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
                       ? "bg-slate-700 hover:bg-slate-650 text-purple-400 border border-slate-600/50"
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
@@ -1152,7 +1205,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("appicons")}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
                       ? "bg-slate-700 hover:bg-slate-650 text-yellow-400 border border-slate-600/50"
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
@@ -1162,7 +1215,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("docscanner")}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
                     isDarkMode
                       ? "bg-slate-700 hover:bg-slate-650 text-rose-400 border border-slate-600/50"
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
@@ -1181,7 +1234,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="w-full max-w-md flex flex-col items-center justify-center space-y-6"
+            className="w-full max-w-md flex flex-col items-center justify-center space-y-6 my-auto shrink-0"
           >
             <div className="relative w-20 h-20">
               <motion.div
@@ -1203,10 +1256,10 @@ export default function App() {
             key="preview"
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full flex-1 min-h-0 md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5 select-none"
+            className="w-full flex-1 min-h-0 md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5 select-none md:my-auto shrink-0"
           >
-            {/* Main Preview Area - Structured at exactly 74% of parent */}
-            <div className="h-[74%] max-h-[74%] bg-[#F1F5F9] p-3 flex items-center justify-center overflow-hidden relative select-none shrink-0 border-b border-gray-100">
+            {/* Main Preview Area */}
+            <div className="flex-1 min-h-0 bg-[#F1F5F9] p-3 flex items-center justify-center overflow-hidden relative select-none shrink border-b border-gray-100">
               {/* Absolute Close/Reset Button inside the Preview Area */}
               <button
                 onClick={() => {
@@ -1278,10 +1331,10 @@ export default function App() {
               )}
             </div>
 
-            {/* Bottom Controls Panel - Structured at exactly 26% of parent */}
-            <div className="h-[26%] max-h-[26%] shrink-0 bg-white flex flex-col justify-between overflow-hidden p-2.5 pb-2">
+            {/* Bottom Controls Panel */}
+            <div className="shrink-0 bg-white flex flex-col justify-between overflow-visible p-2 pb-2">
               {/* Selectors Wrapper: Scrollable to avoid overflow on tiny screens */}
-              <div className="flex-1 overflow-y-auto no-scrollbar space-y-2 mt-0.5">
+              <div className="overflow-visible space-y-2 mt-0.5">
                 {/* Tabs for Organization */}
                 <div className="flex w-full rounded-full bg-slate-100/80 p-1 mb-2 shrink-0 border border-slate-200/60 shadow-inner">
                   <button
@@ -1802,11 +1855,11 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowPremiumModal(false)}
-              className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+              className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex p-4 overflow-y-auto"
               style={{
-                paddingTop:
-                  !isPremium && isNative
-                    ? "calc(env(safe-area-inset-top) + 95px)"
+                paddingBottom:
+                  !isPremium
+                    ? "calc(env(safe-area-inset-bottom) + 80px)"
                     : undefined,
               }}
             >
@@ -1817,7 +1870,7 @@ export default function App() {
                 exit={{ scale: 0.9, opacity: 0, y: 20 }}
                 transition={{ type: "spring", damping: 25, stiffness: 300 }}
                 onClick={(e) => e.stopPropagation()}
-                className={`w-full max-w-md max-h-[85vh] overflow-y-auto overflow-x-hidden rounded-[32px] shadow-2xl relative flex flex-col ${isDarkMode ? "bg-slate-900 border border-slate-700" : "bg-white"}`}
+                className={`w-full max-w-md max-h-[85vh] overflow-y-auto overflow-x-hidden rounded-[32px] shadow-2xl relative flex flex-col my-auto mx-auto shrink-0 ${isDarkMode ? "bg-slate-900 border border-slate-700" : "bg-white"}`}
               >
                 <div className="sticky top-0 right-0 z-50 flex justify-end p-4 pointer-events-none -mb-16">
                   <button
@@ -2113,7 +2166,9 @@ export default function App() {
                     setActiveQuickFeature(null);
                   };
 
-                  await performSave();
+                  admobManager.showInterstitialBeforeAction(async () => {
+                    await performSave();
+                  });
                   return;
                 }
 
@@ -2162,7 +2217,9 @@ export default function App() {
                   setShowEditor(false);
                 };
 
-                performFullSave();
+                admobManager.showInterstitialBeforeAction(() => {
+                  performFullSave();
+                });
               }}
             />
           </motion.div>
@@ -2185,11 +2242,11 @@ export default function App() {
                   setActiveQuickFeature(null);
                 }
               }}
-              className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+              className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex p-4 overflow-y-auto"
               style={{
-                paddingTop:
-                  !isPremium && isNative
-                    ? "calc(env(safe-area-inset-top) + 95px)"
+                paddingBottom:
+                  !isPremium
+                    ? "calc(env(safe-area-inset-bottom) + 80px)"
                     : undefined,
               }}
             >
@@ -2200,7 +2257,7 @@ export default function App() {
                 exit={{ scale: 0.9, opacity: 0, y: 20 }}
                 transition={{ type: "spring", damping: 25, stiffness: 300 }}
                 onClick={(e) => e.stopPropagation()}
-                className={`w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl relative ${isDarkMode ? "bg-slate-900 border border-slate-700 text-white" : "bg-white text-slate-800"}`}
+                className={`w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl relative my-auto mx-auto shrink-0 ${isDarkMode ? "bg-slate-900 border border-slate-700 text-white" : "bg-white text-slate-800"}`}
               >
                 <button
                   onClick={() => {

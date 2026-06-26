@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { isNative } from "../lib/isNative";
+import { admobManager } from "../lib/admob";
 
 interface StitchPhotoModalProps {
   isOpen: boolean;
@@ -345,7 +346,9 @@ export const StitchPhotoModal: React.FC<StitchPhotoModalProps> = ({
 
   const handleSaveStitch = () => {
     if (!compiledImageSrc || images.length < 2 || isSaving) return;
-    handleSaveStitchActual();
+    admobManager.showInterstitialBeforeAction(() => {
+      handleSaveStitchActual();
+    });
   };
 
   const handleSaveStitchActual = async () => {

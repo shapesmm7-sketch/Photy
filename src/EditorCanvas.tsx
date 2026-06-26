@@ -1839,17 +1839,49 @@ export default function EditorCanvas({
             ctx.textBaseline = "middle";
             ctx.fillText(t.text, 0, 0);
           } else {
-            // Emoji
-            ctx.font = `${t.size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
-            ctx.textBaseline = "middle";
-            ctx.textAlign = "center";
-            if (t.hasShadow) {
-              ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-              ctx.shadowBlur = Math.max(6, t.size * 0.15);
-              ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
-              ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+            // Emoji high-quality rendering: Render the emoji at a standard native size
+            // and scale it using Canvas's high-quality imageSmoothingQuality to prevent pixelation.
+            const nativeRenderSize = Math.max(128, Math.min(256, t.size));
+            const offscreen = document.createElement("canvas");
+            offscreen.width = nativeRenderSize * 1.5;
+            offscreen.height = nativeRenderSize * 1.5;
+            const oCtx = offscreen.getContext("2d");
+            if (oCtx) {
+              oCtx.font = `bold ${nativeRenderSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+              oCtx.textBaseline = "middle";
+              oCtx.textAlign = "center";
+              oCtx.imageSmoothingEnabled = true;
+              oCtx.imageSmoothingQuality = "high";
+              oCtx.fillText(t.text, offscreen.width / 2, offscreen.height / 2);
+
+              ctx.save();
+              if (t.hasShadow) {
+                ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+                ctx.shadowBlur = Math.max(6, t.size * 0.15);
+                ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
+                ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+              }
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = "high";
+              
+              const ratio = t.size / nativeRenderSize;
+              const drawW = offscreen.width * ratio;
+              const drawH = offscreen.height * ratio;
+              ctx.drawImage(offscreen, -drawW / 2, -drawH / 2, drawW, drawH);
+              ctx.restore();
+            } else {
+              // Fallback
+              ctx.font = `${t.size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+              ctx.textBaseline = "middle";
+              ctx.textAlign = "center";
+              if (t.hasShadow) {
+                ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+                ctx.shadowBlur = Math.max(6, t.size * 0.15);
+                ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
+                ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+              }
+              ctx.fillText(t.text, 0, 0);
             }
-            ctx.fillText(t.text, 0, 0);
           }
         } else {
           // Standard text
@@ -3501,11 +3533,11 @@ export default function EditorCanvas({
   return (
     <div 
       className="flex flex-col h-full bg-black text-white absolute inset-0 z-50"
-      style={{ paddingTop: (!isPremium && isNative) ? 'calc(env(safe-area-inset-top) + 95px)' : undefined }}
+      style={{ paddingBottom: (!isPremium) ? 'calc(env(safe-area-inset-bottom) + 56px)' : undefined }}
     >
       <canvas ref={blurCanvasRef} className="hidden" />
 
-      <div className={`flex items-center justify-between p-4 bg-[#111] z-10 border-b border-white/10 ${(!isPremium && isNative) ? '' : 'pt-safe'}`}>
+      <div className={`flex items-center justify-between p-4 bg-[#111] z-10 border-b border-white/10 pt-safe shrink-0`}>
         <button
           onClick={onCancel}
           className="p-2 hover:bg-white/10 rounded-full transition-colors"
@@ -3545,7 +3577,7 @@ export default function EditorCanvas({
 
       <div
         ref={containerRef}
-        className="flex items-center justify-center relative overflow-hidden bg-[#0a0a0a] flex-1 min-h-[240px] sm:min-h-[350px]"
+        className="flex items-center justify-center relative overflow-hidden bg-[#0a0a0a] flex-1 min-h-0"
       >
         {activeTool === "crop" && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 bg-blue-600/95 backdrop-blur-md text-white font-bold text-xs px-4 py-2.5 rounded-full border border-blue-400/30 shadow-2xl flex items-center gap-2 pointer-events-none whitespace-nowrap animate-bounce">
@@ -3982,7 +4014,7 @@ export default function EditorCanvas({
           </div>
         </div>
       ) : (
-        <div className="flex items-center justify-start gap-1 p-3 bg-[#111] pb-safe z-10 border-t border-white/10 overflow-x-auto no-scrollbar">
+        <div className="flex items-center justify-start gap-1 p-3 bg-[#111] pb-safe z-10 border-t border-white/10 overflow-x-auto no-scrollbar shrink-0">
           <ToolButton
             active={false}
             disabled={isRotating}

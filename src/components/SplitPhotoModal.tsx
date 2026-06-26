@@ -4,6 +4,7 @@ import { X, Download, ArrowUpRight, Check, Hand, GripVertical, GripHorizontal, M
 import JSZip from "jszip";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { isNative } from "../lib/isNative";
+import { admobManager } from "../lib/admob";
 
 interface SplitPhotoModalProps {
   isOpen: boolean;
@@ -207,7 +208,9 @@ export const SplitPhotoModal: React.FC<SplitPhotoModalProps> = ({
 
   const handleDownload = () => {
     if (isExporting) return;
-    handleDownloadActual();
+    admobManager.showInterstitialBeforeAction(() => {
+      handleDownloadActual();
+    });
   };
 
   const handleDownloadActual = async () => {

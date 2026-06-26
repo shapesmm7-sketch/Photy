@@ -16,6 +16,7 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Share } from "@capacitor/share";
 
 import { isNative } from "../lib/isNative";
+import { admobManager } from "../lib/admob";
 
 interface TextConverterModalProps {
   isOpen: boolean;
@@ -461,14 +462,23 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
   };
 
   const handleSave = () => {
-    performSave();
+    admobManager.showInterstitialBeforeAction(() => {
+      performSave();
+    });
+  };
+
+  const handleShareWithAd = () => {
+    admobManager.showInterstitialBeforeAction(() => {
+      handleShare();
+    });
   };
 
   return (
     <AnimatePresence>
       {isOpen && (
         <div
-          className={`fixed inset-0 z-[100] flex justify-center p-2 sm:p-4 overflow-y-auto ${!isPremium && isNative ? "items-start pt-[calc(env(safe-area-inset-top)+115px)] pb-10" : "items-center"}`}
+          className={`fixed inset-0 z-[100] flex justify-center p-2 sm:p-4 overflow-y-auto`}
+          style={{ paddingBottom: (!isPremium) ? 'calc(env(safe-area-inset-bottom) + 56px)' : undefined }}
         >
           <motion.div
             initial={{ opacity: 0 }}
@@ -892,7 +902,7 @@ export const TextConverterModal: React.FC<TextConverterModalProps> = ({
                     </button>
 
                     <button
-                      onClick={handleShare}
+                      onClick={handleShareWithAd}
                       disabled={isConverting || !text}
                       className={`flex-1 py-3.5 sm:py-4 rounded-xl flex items-center justify-center gap-2.5 font-black text-[10px] sm:text-xs uppercase tracking-widest shadow-xl transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 ${
                         isDarkMode
