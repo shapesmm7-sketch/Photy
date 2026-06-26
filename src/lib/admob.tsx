@@ -22,6 +22,7 @@ const isTestingMode = () => {
 };
 
 let _isPremium = false;
+let isAdActive = false;
 
 export const setAdMobPremium = (premium: boolean) => {
   _isPremium = premium;
@@ -87,8 +88,16 @@ export const playRewardedAds = async (onSuccess: () => void) => {
     onSuccess();
     return;
   }
+  if (isAdActive) {
+    onSuccess();
+    return;
+  }
+  isAdActive = true;
   try {
-    rewardCallback = onSuccess;
+    rewardCallback = () => {
+      isAdActive = false;
+      onSuccess();
+    };
     await AdMob.prepareRewardVideoAd({
       adId: rewardedAdId,
       isTesting: isTestingMode(),
@@ -96,6 +105,7 @@ export const playRewardedAds = async (onSuccess: () => void) => {
     await AdMob.showRewardVideoAd();
   } catch (e) {
     console.error('Failed to play rewarded ad', e);
+    isAdActive = false;
     onSuccess(); // fallback
   }
 };
@@ -116,16 +126,29 @@ export const admobManager = {
     }
   },
   incrementInteractions: async () => {
-    if (!isNative || _isPremium) return;
+    if (!isNative || _isPremium || isAdActive) return;
     interstitialInteractions++;
     if (interstitialInteractions >= INTERSTITIAL_INTERVAL) {
       interstitialInteractions = 0;
       try {
+        isAdActive = true;
+
+        const dismissListener = await AdMob.addListener(InterstitialAdPluginEvents.Dismissed, () => {
+          isAdActive = false;
+          dismissListener.remove();
+        });
+
+        const failedListener = await AdMob.addListener(InterstitialAdPluginEvents.FailedToShow, () => {
+          isAdActive = false;
+          failedListener.remove();
+        });
+
         await AdMob.showInterstitial();
         // After showing, prepare the next one
         await admobManager.preloadInterstitial();
       } catch (e) {
         console.error('Failed to show interstitial', e);
+        isAdActive = false;
       }
     }
   },
@@ -135,10 +158,18 @@ export const admobManager = {
       return;
     }
 
+    if (isAdActive) {
+      // If an ad is already actively showing, just run the action directly to avoid freezing or duplicate calling
+      await action();
+      return;
+    }
+
+    isAdActive = true;
     let completed = false;
     const runActionOnce = async () => {
       if (completed) return;
       completed = true;
+      isAdActive = false;
       await action();
     };
 
@@ -164,12 +195,12 @@ export const admobManager = {
       runActionOnce();
     }
 
-    // Safety fallback: if ad is stuck or doesn't dismiss within 8 seconds, run action anyway
+    // Safety fallback: increased to 60 seconds so it never interrupts or overlaps with live ad playback
     setTimeout(() => {
       runActionOnce();
       try { dismissListener.remove(); } catch {}
       try { failedListener.remove(); } catch {}
-    }, 8000);
+    }, 60000);
   }
 };
 

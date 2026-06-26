@@ -1045,94 +1045,103 @@ export default function App() {
         {appState === "upload" && (
           <motion.div
             key="upload"
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className={`w-full max-w-md p-6 flex flex-col items-center text-center space-y-4 backdrop-blur-xl rounded-[32px] shadow-2xl mx-4 mt-8 mb-auto shrink-0 relative ${isDarkMode ? "bg-slate-800/80 border border-slate-700" : "bg-white/10 border border-white/20"}`}
+            className={`w-full max-w-md p-5 flex-grow flex-1 flex flex-col items-center justify-between text-center backdrop-blur-xl rounded-[28px] shadow-2xl mx-4 my-3 relative ${isDarkMode ? "bg-slate-800/80 border border-slate-700" : "bg-white/10 border border-white/20"}`}
           >
             {/* Settings Button */}
             <button
               onClick={() => setShowSettings(true)}
-              className={`absolute top-6 right-6 p-2 rounded-full transition-colors ${isDarkMode ? "bg-slate-700 text-slate-300 hover:bg-slate-600" : "bg-white/20 text-white hover:bg-white/30"}`}
+              className={`absolute top-4 right-4 p-2 rounded-full transition-colors ${isDarkMode ? "bg-slate-700 text-slate-300 hover:bg-slate-600" : "bg-white/20 text-white hover:bg-white/30"}`}
             >
               <Settings className="w-5 h-5" />
             </button>
 
-            <div
-              className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-3 shadow-xl ${isDarkMode ? "bg-slate-700 text-blue-400" : "bg-white text-blue-600"}`}
-            >
-              <ImageIcon className="w-8 h-8" />
-            </div>
-            <div className={isDarkMode ? "text-white" : "text-white"}>
-              <h1 className="text-4xl font-black mb-1.5 tracking-tighter">
-                {t("appName")}
-              </h1>
-              <p
-                className={`text-[13px] font-medium leading-tight ${isDarkMode ? "text-slate-300" : "text-blue-100"}`}
-              >
-                {t("subtitle")}
-              </p>
-            </div>
-
-            <button
-              onClick={() => {
-                if (fileInputRef.current) {
-                  fileInputRef.current.multiple = false;
-                }
-                fileInputRef.current?.click();
-              }}
-              className={`w-full py-4 rounded-2xl font-black shadow-2xl active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-[15px] ${isDarkMode ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-white text-blue-600 hover:bg-blue-50"}`}
-            >
-              <Upload className="w-6 h-6" />
-              {t("uploadBtn")}
-            </button>
-            <input
-              type="file"
-              accept="image/png, image/jpeg"
-              className="hidden"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              multiple={false}
-            />
-            <input
-              type="file"
-              accept="image/png, image/jpeg"
-              className="hidden"
-              ref={multiFileInputRef}
-              onChange={handleFileUpload}
-              multiple={true}
-            />
-
-            <div className="grid grid-cols-1 gap-2 w-full">
+            {/* Top section: Brand Info */}
+            <div className="flex flex-col items-center space-y-2 mt-2 w-full">
               <div
-                className={`p-4 rounded-2xl border text-center ${isDarkMode ? "bg-slate-800/50 border-slate-700" : "bg-white/10 border-white/10"}`}
+                className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-0.5 shadow-lg transition-transform hover:scale-105 ${isDarkMode ? "bg-slate-700 text-blue-400" : "bg-white text-blue-600"}`}
               >
-                <Palette
-                  className={`w-5 h-5 mb-1.5 mx-auto ${isDarkMode ? "text-blue-400" : "text-blue-200"}`}
-                />
-                <h3
-                  className={`text-sm font-bold uppercase tracking-widest ${isDarkMode ? "text-slate-200" : "text-white"}`}
-                >
-                  {t("viralStylesTitle")}
-                </h3>
+                <ImageIcon className="w-7 h-7" />
+              </div>
+              <div className={isDarkMode ? "text-white" : "text-white"}>
+                <h1 className="text-4xl font-black mb-1 tracking-tighter">
+                  {t("appName")}
+                </h1>
                 <p
-                  className={`text-[11px] ${isDarkMode ? "text-slate-400" : "text-blue-100/70"}`}
+                  className={`text-xs font-semibold leading-snug ${isDarkMode ? "text-slate-300" : "text-blue-100"}`}
                 >
-                  {t("viralStylesDesc")}
+                  {t("subtitle")}
                 </p>
               </div>
             </div>
 
-            {/* Quick Actions / Featured Badges */}
+            {/* Middle section: Action Buttons */}
+            <div className="w-full flex flex-col items-center space-y-3.5 my-auto py-2">
+              <button
+                onClick={() => {
+                  if (fileInputRef.current) {
+                    fileInputRef.current.multiple = false;
+                  }
+                  fileInputRef.current?.click();
+                }}
+                className={`w-full py-3 rounded-xl font-extrabold shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-[15px] ${isDarkMode ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-white text-blue-600 hover:bg-blue-50"}`}
+              >
+                <Upload className="w-5 h-5" />
+                {t("uploadBtn")}
+              </button>
+              <input
+                type="file"
+                accept="image/png, image/jpeg"
+                className="hidden"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                multiple={false}
+              />
+              <input
+                type="file"
+                accept="image/png, image/jpeg"
+                className="hidden"
+                ref={multiFileInputRef}
+                onChange={handleFileUpload}
+                multiple={true}
+              />
+
+              <div className="w-full">
+                <div
+                  onClick={() => handleFeaturedClick("markup")}
+                  className={`p-3 rounded-xl border text-center cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-3 ${isDarkMode ? "bg-slate-800/50 border-slate-700 hover:bg-slate-800" : "bg-white/10 border-white/10 hover:bg-white/15"}`}
+                >
+                  <Palette
+                    className={`w-5 h-5 shrink-0 ${isDarkMode ? "text-blue-400" : "text-blue-200"}`}
+                  />
+                  <div className="text-left">
+                    <h3
+                      className={`text-xs font-black uppercase tracking-wider ${isDarkMode ? "text-slate-200" : "text-white"}`}
+                    >
+                      {t("viralStylesTitle")}
+                    </h3>
+                    <p
+                      className={`text-[10px] font-medium ${isDarkMode ? "text-slate-400" : "text-blue-100/70"}`}
+                    >
+                      {t("viralStylesDesc")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom section: Quick Actions */}
             <div
-              className={`w-full border-t pt-4 ${isDarkMode ? "border-slate-700/60" : "border-white/10"}`}
+              className={`w-full border-t pt-3 ${isDarkMode ? "border-slate-700/60" : "border-white/10"}`}
             >
               <p
-                className={`text-xs font-extrabold uppercase tracking-widest mb-3 ${isDarkMode ? "text-slate-450" : "text-blue-100/90"}`}
+                className={`text-[11px] font-black uppercase tracking-wider mb-2.5 ${isDarkMode ? "text-slate-300" : "text-blue-100"}`}
               >
                 Quick Actions
               </p>
-              <div className="flex flex-wrap justify-center gap-2">
+              <div className="flex flex-wrap justify-center gap-1.5">
                 <button
                   onClick={() => handleFeaturedClick("markup")}
                   className={`px-3 py-1.5 rounded-full text-[11px] font-bold transition-all active:scale-95 cursor-pointer shadow-sm ${
