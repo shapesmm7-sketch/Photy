@@ -41,7 +41,16 @@ import { PHONE_FRAMES } from "./lib/phoneFrames";
 import { translations, LanguageKey } from "./i18n";
 import { isNative } from "./lib/isNative";
 
-type Tool = "none" | "crop" | "draw" | "blur" | "text" | "sticker" | "adjust" | "size" | "arrows";
+type Tool =
+  | "none"
+  | "crop"
+  | "draw"
+  | "blur"
+  | "text"
+  | "sticker"
+  | "adjust"
+  | "size"
+  | "arrows";
 
 interface TextItem {
   text: string;
@@ -61,6 +70,7 @@ interface TextItem {
   isLogo?: boolean;
   logoSrc?: string;
   logoImg?: HTMLImageElement | null;
+  emojiImg?: HTMLImageElement | "loading" | "failed" | null;
   opacity?: number;
 }
 
@@ -76,22 +86,22 @@ const fontNames = [
   "Pacifico",
   "Serif",
   "Monospace",
-  "Cursive"
+  "Cursive",
 ];
 
 const fontCSSMap: Record<string, string> = {
-  "Default": "sans-serif",
-  "Inter": "'Inter', sans-serif",
-  "Montserrat": "'Montserrat', sans-serif",
+  Default: "sans-serif",
+  Inter: "'Inter', sans-serif",
+  Montserrat: "'Montserrat', sans-serif",
   "Playfair Display": "'Playfair Display', serif",
   "EB Garamond": "'EB Garamond', serif",
   "Space Grotesk": "'Space Grotesk', sans-serif",
-  "Oswald": "'Oswald', sans-serif",
-  "Anton": "'Anton', sans-serif",
-  "Pacifico": "'Pacifico', cursive",
-  "Serif": "serif",
-  "Monospace": "monospace",
-  "Cursive": "cursive"
+  Oswald: "'Oswald', sans-serif",
+  Anton: "'Anton', sans-serif",
+  Pacifico: "'Pacifico', cursive",
+  Serif: "serif",
+  Monospace: "monospace",
+  Cursive: "cursive",
 };
 const textColors = [
   // Neutrals, Grayscale & Background Matchers
@@ -106,7 +116,7 @@ const textColors = [
   "#444444", // Dark Charcoal
   "#1E1E24", // Night Slate / Dark Mode BG
   "#000000", // Pure Black
-  
+
   // Vibrant & Accent Colors
   "#FF3366", // Bright Rose / Magenta
   "#FF0000", // Ruby Red
@@ -138,7 +148,8 @@ interface DrawingPath {
   color: string;
   width: number;
   isBlur: boolean;
-  shapeType?: "arrow" | "tapered_arrow" | "double_arrow" | "rect" | "circle" | "line";
+  shapeType?:
+    "arrow" | "tapered_arrow" | "double_arrow" | "rect" | "circle" | "line";
 }
 
 interface EditorCanvasProps {
@@ -164,7 +175,7 @@ interface EditorCanvasProps {
     manualImageScale?: number,
     customResizeMode?: "cover" | "fit_no_border" | "fit_border" | "stretch",
     customResizerBg?: string,
-    referenceSize?: { width: number; height: number }
+    referenceSize?: { width: number; height: number },
   ) => void;
   onCancel: () => void;
   styleName?: string;
@@ -175,7 +186,11 @@ interface EditorCanvasProps {
   isWatermarkMode?: boolean;
 }
 
-function getDistanceToSegment(pt: { x: number; y: number }, p1: { x: number; y: number }, p2: { x: number; y: number }) {
+function getDistanceToSegment(
+  pt: { x: number; y: number },
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+) {
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
   const lenSq = dx * dx + dy * dy;
@@ -187,72 +202,77 @@ function getDistanceToSegment(pt: { x: number; y: number }, p1: { x: number; y: 
   return Math.hypot(pt.x - (p1.x + t * dx), pt.y - (p1.y + t * dy));
 }
 
-function isPointNearPath(pt: { x: number; y: number }, p: DrawingPath): boolean {
+function isPointNearPath(
+  pt: { x: number; y: number },
+  p: DrawingPath,
+): boolean {
   const threshold = Math.max(p.width + 12, 24); // Generous hit area for easy selection
-  
+
   if (p.shapeType) {
     if (p.points.length < 2) return false;
     const start = p.points[0];
     const end = p.points[p.points.length - 1];
-    
+
     if (p.shapeType === "rect") {
       const x1 = Math.min(start.x, end.x);
       const x2 = Math.max(start.x, end.x);
       const y1 = Math.min(start.y, end.y);
       const y2 = Math.max(start.y, end.y);
-      
+
       // Inside check
       if (pt.x >= x1 && pt.x <= x2 && pt.y >= y1 && pt.y <= y2) {
         return true;
       }
-      
+
       // Boundary segments check
       const d1 = getDistanceToSegment(pt, { x: x1, y: y1 }, { x: x2, y: y1 });
       const d2 = getDistanceToSegment(pt, { x: x2, y: y1 }, { x: x2, y: y2 });
       const d3 = getDistanceToSegment(pt, { x: x2, y: y2 }, { x: x1, y: y2 });
       const d4 = getDistanceToSegment(pt, { x: x1, y: y2 }, { x: x1, y: y1 });
-      
+
       return Math.min(d1, d2, d3, d4) < threshold;
     }
-    
+
     if (p.shapeType === "circle") {
       const rx = Math.abs(end.x - start.x) / 2;
       const ry = Math.abs(end.y - start.y) / 2;
       const cx = start.x + (end.x - start.x) / 2;
       const cy = start.y + (end.y - start.y) / 2;
-      
+
       const dx = pt.x - cx;
       const dy = pt.y - cy;
-      
+
       // Inside ellipse check
       if ((dx * dx) / (rx * rx || 1) + (dy * dy) / (ry * ry || 1) <= 1.0) {
         return true;
       }
-      
+
       // Boundary check
       const theta = Math.atan2(dy, dx);
       const px = cx + rx * Math.cos(theta);
       const py = cy + ry * Math.sin(theta);
       return Math.hypot(pt.x - px, pt.y - py) < threshold;
     }
-    
+
     // Default shapes: line, arrow, tapered_arrow, double_arrow
     return getDistanceToSegment(pt, start, end) < threshold;
   }
-  
+
   // Standard freeform drawing
   return p.points.some(
     (ppp) =>
-      Math.sqrt(Math.pow(ppp.x - pt.x, 2) + Math.pow(ppp.y - pt.y, 2)) < threshold
+      Math.sqrt(Math.pow(ppp.x - pt.x, 2) + Math.pow(ppp.y - pt.y, 2)) <
+      threshold,
   );
 }
 
 function drawShape(
   ctx: CanvasRenderingContext2D,
-  shapeType: "arrow" | "tapered_arrow" | "double_arrow" | "rect" | "circle" | "line",
+  shapeType:
+    "arrow" | "tapered_arrow" | "double_arrow" | "rect" | "circle" | "line",
   points: { x: number; y: number }[],
   color: string,
-  width: number
+  width: number,
 ) {
   if (points.length < 2) return;
   const start = points[0];
@@ -301,11 +321,11 @@ function drawShape(
     ctx.moveTo(end.x, end.y);
     ctx.lineTo(
       end.x - arrowLength * Math.cos(angle - Math.PI / 6),
-      end.y - arrowLength * Math.sin(angle - Math.PI / 6)
+      end.y - arrowLength * Math.sin(angle - Math.PI / 6),
     );
     ctx.lineTo(
       end.x - arrowLength * Math.cos(angle + Math.PI / 6),
-      end.y - arrowLength * Math.sin(angle + Math.PI / 6)
+      end.y - arrowLength * Math.sin(angle + Math.PI / 6),
     );
     ctx.closePath();
     ctx.fill();
@@ -313,7 +333,7 @@ function drawShape(
     const angle = Math.atan2(end.y - start.y, end.x - start.x);
     const anglePerp = angle + Math.PI / 2;
     const arrowLength = Math.max(15, width * 2.5);
-    
+
     // Base is where the arrowhead begins
     const base = {
       x: end.x - arrowLength * Math.cos(angle),
@@ -322,11 +342,23 @@ function drawShape(
 
     // 1. Draw the tapered stem
     ctx.beginPath();
-    const startLeft = { x: start.x - 1 * Math.cos(anglePerp), y: start.y - 1 * Math.sin(anglePerp) };
-    const startRight = { x: start.x + 1 * Math.cos(anglePerp), y: start.y + 1 * Math.sin(anglePerp) };
-    const baseLeft = { x: base.x - (width / 2) * Math.cos(anglePerp), y: base.y - (width / 2) * Math.sin(anglePerp) };
-    const baseRight = { x: base.x + (width / 2) * Math.cos(anglePerp), y: base.y + (width / 2) * Math.sin(anglePerp) };
-    
+    const startLeft = {
+      x: start.x - 1 * Math.cos(anglePerp),
+      y: start.y - 1 * Math.sin(anglePerp),
+    };
+    const startRight = {
+      x: start.x + 1 * Math.cos(anglePerp),
+      y: start.y + 1 * Math.sin(anglePerp),
+    };
+    const baseLeft = {
+      x: base.x - (width / 2) * Math.cos(anglePerp),
+      y: base.y - (width / 2) * Math.sin(anglePerp),
+    };
+    const baseRight = {
+      x: base.x + (width / 2) * Math.cos(anglePerp),
+      y: base.y + (width / 2) * Math.sin(anglePerp),
+    };
+
     ctx.moveTo(startLeft.x, startLeft.y);
     ctx.lineTo(baseLeft.x, baseLeft.y);
     ctx.lineTo(baseRight.x, baseRight.y);
@@ -339,11 +371,11 @@ function drawShape(
     ctx.moveTo(end.x, end.y);
     ctx.lineTo(
       end.x - arrowLength * Math.cos(angle - Math.PI / 6),
-      end.y - arrowLength * Math.sin(angle - Math.PI / 6)
+      end.y - arrowLength * Math.sin(angle - Math.PI / 6),
     );
     ctx.lineTo(
       end.x - arrowLength * Math.cos(angle + Math.PI / 6),
-      end.y - arrowLength * Math.sin(angle + Math.PI / 6)
+      end.y - arrowLength * Math.sin(angle + Math.PI / 6),
     );
     ctx.closePath();
     ctx.fill();
@@ -362,11 +394,11 @@ function drawShape(
     ctx.moveTo(end.x, end.y);
     ctx.lineTo(
       end.x - arrowLength * Math.cos(angle - Math.PI / 6),
-      end.y - arrowLength * Math.sin(angle - Math.PI / 6)
+      end.y - arrowLength * Math.sin(angle - Math.PI / 6),
     );
     ctx.lineTo(
       end.x - arrowLength * Math.cos(angle + Math.PI / 6),
-      end.y - arrowLength * Math.sin(angle + Math.PI / 6)
+      end.y - arrowLength * Math.sin(angle + Math.PI / 6),
     );
     ctx.closePath();
     ctx.fill();
@@ -376,11 +408,11 @@ function drawShape(
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(
       start.x + arrowLength * Math.cos(angle - Math.PI / 6),
-      start.y + arrowLength * Math.sin(angle - Math.PI / 6)
+      start.y + arrowLength * Math.sin(angle - Math.PI / 6),
     );
     ctx.lineTo(
       start.x + arrowLength * Math.cos(angle + Math.PI / 6),
-      start.y + arrowLength * Math.sin(angle + Math.PI / 6)
+      start.y + arrowLength * Math.sin(angle + Math.PI / 6),
     );
     ctx.closePath();
     ctx.fill();
@@ -410,6 +442,9 @@ export default function EditorCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const blurCanvasRef = useRef<HTMLCanvasElement>(null);
   const scratchCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const getDPR = () =>
+    typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
   const [activeTool, setActiveTool] = useState<Tool>(initialTool);
   const [isApplyingCrop, setIsApplyingCrop] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
@@ -431,7 +466,12 @@ export default function EditorCanvas({
     return Math.max(w, h) * basePaddingFactor;
   };
 
-  const getScreenshotCenterAndScale = (rect: { x: number; y: number; w: number; h: number }) => {
+  const getScreenshotCenterAndScale = (rect: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }) => {
     const sName = styleName || "Minimal";
     const lName = layoutName || "None";
 
@@ -458,7 +498,8 @@ export default function EditorCanvas({
     } else {
       const px = layout.deviceX !== undefined ? layout.deviceX : 0.5;
       const py = layout.deviceY !== undefined ? layout.deviceY : 0.5;
-      const deviceScale = layout.deviceScale !== undefined ? layout.deviceScale : 0.85;
+      const deviceScale =
+        layout.deviceScale !== undefined ? layout.deviceScale : 0.85;
 
       const devX = styledW * px;
       const devY = styledH * py;
@@ -514,8 +555,14 @@ export default function EditorCanvas({
         };
       }
 
-      const screenCenterX = -frameW / 2 + (sRect.left / 100) * frameW + ((sRect.width / 100) * frameW) / 2;
-      const screenCenterY = -frameH / 2 + (sRect.top / 100) * frameH + ((sRect.height / 100) * frameH) / 2;
+      const screenCenterX =
+        -frameW / 2 +
+        (sRect.left / 100) * frameW +
+        ((sRect.width / 100) * frameW) / 2;
+      const screenCenterY =
+        -frameH / 2 +
+        (sRect.top / 100) * frameH +
+        ((sRect.height / 100) * frameH) / 2;
       const screenW = (sRect.width / 100) * frameW;
       const screenH = (sRect.height / 100) * frameH;
 
@@ -553,10 +600,22 @@ export default function EditorCanvas({
   } | null>(null);
   const cropStartRef = useRef<{ x: number; y: number } | null>(null);
   const cropEndRef = useRef<{ x: number; y: number } | null>(null);
-  const cropDragModeRef = useRef<"none" | "new" | "tl" | "tr" | "bl" | "br" | "t" | "b" | "l" | "r" | "move">("none");
+  const cropDragModeRef = useRef<
+    "none" | "new" | "tl" | "tr" | "bl" | "br" | "t" | "b" | "l" | "r" | "move"
+  >("none");
   const dragStartPointRef = useRef<{ x: number; y: number } | null>(null);
-  const dragStartCropRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
-  const tempCropRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
+  const dragStartCropRectRef = useRef<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
+  const tempCropRectRef = useRef<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  } | null>(null);
 
   // Focus and Zoom state
   const [zoomScale, setZoomScale] = useState(1);
@@ -565,11 +624,14 @@ export default function EditorCanvas({
   const zoomInitialScaleRef = useRef<number>(1);
   const zoomInitialDistanceRef = useRef<number | null>(null);
   const isPinchZoomingRef = useRef<boolean>(false);
-  
+
   const isPinchingTextRef = useRef<boolean>(false);
   const textInitialAngleRef = useRef<number>(0);
   const textInitialBaseRotationRef = useRef<number>(0);
-  const textInitialMidpointRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const textInitialMidpointRef = useRef<{ x: number; y: number }>({
+    x: 0,
+    y: 0,
+  });
   const textInitialPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const textInitialDistRef = useRef<number>(0);
   const textInitialSizeRef = useRef<number>(0);
@@ -639,7 +701,9 @@ export default function EditorCanvas({
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [showAllToolsInWatermark, setShowAllToolsInWatermark] = useState(false);
   const [texts, setTexts] = useState<TextItem[]>(initialTexts);
-  const [selectedTextIndex, setSelectedTextIndex] = useState<number | null>(initialTexts.length > 0 ? 0 : null);
+  const [selectedTextIndex, setSelectedTextIndex] = useState<number | null>(
+    initialTexts.length > 0 ? 0 : null,
+  );
 
   const latestTextsRef = useRef<TextItem[]>(texts);
   latestTextsRef.current = texts;
@@ -647,11 +711,13 @@ export default function EditorCanvas({
   latestPathsRef.current = paths;
 
   // History state for undo/redo
-  const [history, setHistory] = useState<{
-    paths: DrawingPath[];
-    texts: TextItem[];
-    cropRect: { x: number; y: number; w: number; h: number } | null;
-  }[]>([]);
+  const [history, setHistory] = useState<
+    {
+      paths: DrawingPath[];
+      texts: TextItem[];
+      cropRect: { x: number; y: number; w: number; h: number } | null;
+    }[]
+  >([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [shouldCommit, setShouldCommit] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
@@ -665,13 +731,13 @@ export default function EditorCanvas({
 
   useEffect(() => {
     if (shouldCommit && !isUndoing) {
-      setHistory(prev => {
+      setHistory((prev) => {
         const nextHistory = prev.slice(0, historyIndex + 1);
         nextHistory.push({ paths, texts, cropRect });
         if (nextHistory.length > 50) nextHistory.shift();
         return nextHistory;
       });
-      setHistoryIndex(prev => {
+      setHistoryIndex((prev) => {
         const next = prev + 1;
         return next >= 50 ? 49 : next;
       });
@@ -756,23 +822,32 @@ export default function EditorCanvas({
   const [currentTextFont, setCurrentTextFont] = useState("Default");
   const [currentTextRotation, setCurrentTextRotation] = useState(0);
   const [currentTextShadow, setCurrentTextShadow] = useState(false);
-  const [currentTextShadowColor, setCurrentTextShadowColor] = useState("rgba(0,0,0,0.6)");
+  const [currentTextShadowColor, setCurrentTextShadowColor] =
+    useState("rgba(0,0,0,0.6)");
   const [currentTextBgColor, setCurrentTextBgColor] = useState("transparent");
-  const [activeTextTab, setActiveTextTab] = useState<"font" | "color" | "bg" | "shadow">("font");
+  const [activeTextTab, setActiveTextTab] = useState<
+    "font" | "color" | "bg" | "shadow"
+  >("font");
 
   // Sticker & Emoji state
   const [showStickerPanel, setShowStickerPanel] = useState(false);
-  const [selectedStickerTab, setSelectedStickerTab] = useState<"emoji" | "badge">("emoji");
+  const [selectedStickerTab, setSelectedStickerTab] = useState<
+    "emoji" | "badge"
+  >("emoji");
   const [selectedStickerColor, setSelectedStickerColor] = useState("#FF3366");
-  const [selectedStickerTextColor, setSelectedStickerTextColor] = useState("#FFFFFF");
+  const [selectedStickerTextColor, setSelectedStickerTextColor] =
+    useState("#FFFFFF");
   const [selectedStickerShadow, setSelectedStickerShadow] = useState(true);
-  const [selectedStickerShadowColor, setSelectedStickerShadowColor] = useState("rgba(0,0,0,0.4)");
-  const [selectedStickerBgColor, setSelectedStickerBgColor] = useState("transparent");
+  const [selectedStickerShadowColor, setSelectedStickerShadowColor] =
+    useState("rgba(0,0,0,0.4)");
+  const [selectedStickerBgColor, setSelectedStickerBgColor] =
+    useState("transparent");
   const [selectedStickerText, setSelectedStickerText] = useState("");
   const [selectedStickerSize, setSelectedStickerSize] = useState(72);
   const [selectedStickerRotation, setSelectedStickerRotation] = useState(0);
   const [selectedStickerFont, setSelectedStickerFont] = useState("Inter");
-  const [expandedBadgeSection, setExpandedBadgeSection] = useState<string>("Presets");
+  const [expandedBadgeSection, setExpandedBadgeSection] =
+    useState<string>("Presets");
 
   // Text drag & double-tap states
   const [draggingTextIndex, setDraggingTextIndex] = useState<number | null>(
@@ -792,39 +867,61 @@ export default function EditorCanvas({
   const [selectedBlurColor, setSelectedBlurColor] =
     useState<string>("transparent");
   const [brushSize, setBrushSize] = useState<number>(45);
-  const [selectedShapeTool, setSelectedShapeTool] = useState<"arrow" | "tapered_arrow" | "double_arrow" | "rect" | "circle" | "line" >("arrow");
-  const [arrowSubTab, setArrowSubTab] = useState<"shape" | "color" | "thickness">("shape");
+  const [selectedShapeTool, setSelectedShapeTool] = useState<
+    "arrow" | "tapered_arrow" | "double_arrow" | "rect" | "circle" | "line"
+  >("arrow");
+  const [arrowSubTab, setArrowSubTab] = useState<
+    "shape" | "color" | "thickness"
+  >("shape");
   const [isDetectingSensitive, setIsDetectingSensitive] = useState(false);
 
   // Size tool states
   const [canvasWidthInput, setCanvasWidthInput] = useState<string>(
-    initialCustomSize ? initialCustomSize.width.toString() : ""
+    initialCustomSize ? initialCustomSize.width.toString() : "",
   );
   const [canvasHeightInput, setCanvasHeightInput] = useState<string>(
-    initialCustomSize ? initialCustomSize.height.toString() : ""
+    initialCustomSize ? initialCustomSize.height.toString() : "",
   );
-  const [selectedPresetLabel, setSelectedPresetLabel] = useState<string | null>(() => {
-    if (!initialCustomSize) return null;
-    const presets = [
-      { label: "Insta Post", w: 1080, h: 1080 },
-      { label: "Insta Story", w: 1080, h: 1920 },
-      { label: "FB Post", w: 1080, h: 1080 },
-      { label: "Play Store", w: 1080, h: 1920 }
-    ];
-    const match = presets.find(p => p.w === initialCustomSize.width && p.h === initialCustomSize.height);
-    return match ? match.label : null;
-  });
-  const [manualCanvasSize, setManualCanvasSize] = useState<{ width: number; height: number } | null>(initialCustomSize);
-  const [manualImageOffset, setManualImageOffset] = useState<{ x: number; y: number }>(initialImageOffset);
-  const [manualImageScale, setManualImageScale] = useState<number>(initialImageScale);
-  const [resizeMode, setResizeMode] = useState<"cover" | "fit_no_border" | "fit_border" | "stretch">("stretch");
+  const [selectedPresetLabel, setSelectedPresetLabel] = useState<string | null>(
+    () => {
+      if (!initialCustomSize) return null;
+      const presets = [
+        { label: "Insta Post", w: 1080, h: 1080 },
+        { label: "Insta Story", w: 1080, h: 1920 },
+        { label: "FB Post", w: 1080, h: 1080 },
+        { label: "Play Store", w: 1080, h: 1920 },
+      ];
+      const match = presets.find(
+        (p) =>
+          p.w === initialCustomSize.width && p.h === initialCustomSize.height,
+      );
+      return match ? match.label : null;
+    },
+  );
+  const [manualCanvasSize, setManualCanvasSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(initialCustomSize);
+  const [manualImageOffset, setManualImageOffset] = useState<{
+    x: number;
+    y: number;
+  }>(initialImageOffset);
+  const [manualImageScale, setManualImageScale] =
+    useState<number>(initialImageScale);
+  const [resizeMode, setResizeMode] = useState<
+    "cover" | "fit_no_border" | "fit_border" | "stretch"
+  >("stretch");
   const [resizerBg, setResizerBg] = useState<string>("transparent");
-  
+
   // Create local states to handle rotated internal images safely apart from props
-  const [workingOriginalSrc, setWorkingOriginalSrc] = useState<string | undefined>(originalScreenshotSrc);
+  const [workingOriginalSrc, setWorkingOriginalSrc] = useState<
+    string | undefined
+  >(originalScreenshotSrc);
 
   // Keep track of the clean image (no layout) for re-styling when canvas size changes.
-  const [currentCleanSrc, setCurrentCleanSrc] = useState<string | null>(cleanImageSrc || originalScreenshotSrc || imageSrc);
+  const [currentCleanSrc, setCurrentCleanSrc] = useState<string | null>(
+    cleanImageSrc || originalScreenshotSrc || imageSrc,
+  );
 
   // Sync states if props change (e.g., when a user uploads a new image or activates a tool)
   useEffect(() => {
@@ -835,13 +932,21 @@ export default function EditorCanvas({
     const nextTexts = initialTexts || [];
     setTexts(nextTexts);
     if (nextTexts.length > 0) {
-      setSelectedTextIndex((prev) => (prev !== null && prev < nextTexts.length) ? prev : 0);
+      setSelectedTextIndex((prev) =>
+        prev !== null && prev < nextTexts.length ? prev : 0,
+      );
     } else {
       setSelectedTextIndex(null);
     }
     // Explicitly redraw to reflect prop updates on the canvas right away
     redraw(undefined, nextPaths, nextTexts);
-  }, [originalScreenshotSrc, cleanImageSrc, imageSrc, initialPaths, initialTexts]);
+  }, [
+    originalScreenshotSrc,
+    cleanImageSrc,
+    imageSrc,
+    initialPaths,
+    initialTexts,
+  ]);
 
   // Initialize and load images
   useEffect(() => {
@@ -853,7 +958,7 @@ export default function EditorCanvas({
     img.onload = () => {
       if (!isCurrent) return;
       styledImageRef.current = img;
-      
+
       if (activeTool !== "crop") {
         originalImageRef.current = img;
       }
@@ -872,8 +977,13 @@ export default function EditorCanvas({
 
       const tryFit = () => {
         if (!isCurrent) return;
-        if (containerRef.current && canvasRef.current && blurCanvasRef.current) {
-          const activeImg = activeTool === "crop" ? (rawScreenshotRef.current || img) : img;
+        if (
+          containerRef.current &&
+          canvasRef.current &&
+          blurCanvasRef.current
+        ) {
+          const activeImg =
+            activeTool === "crop" ? rawScreenshotRef.current || img : img;
           const rect = { x: 0, y: 0, w: activeImg.width, h: activeImg.height };
           fitImageToContainer(activeImg, rect);
         } else {
@@ -924,9 +1034,16 @@ export default function EditorCanvas({
         if (initialCropRect) {
           setCropRect(initialCropRect);
         } else {
-          const isQuickFeatureMode = activeTool === "size" || activeTool === "draw" || activeTool === "blur" || activeTool === "text" || activeTool === "arrows";
+          const isQuickFeatureMode =
+            activeTool === "size" ||
+            activeTool === "draw" ||
+            activeTool === "blur" ||
+            activeTool === "text" ||
+            activeTool === "arrows";
           const topH = isQuickFeatureMode ? 0 : Math.round(img.height * 0.04);
-          const bottomH = isQuickFeatureMode ? 0 : Math.round(img.height * 0.05);
+          const bottomH = isQuickFeatureMode
+            ? 0
+            : Math.round(img.height * 0.05);
           const defaultCrop = {
             x: 0,
             y: topH,
@@ -942,7 +1059,11 @@ export default function EditorCanvas({
 
       const tryFit = () => {
         if (!isCurrent) return;
-        if (containerRef.current && canvasRef.current && blurCanvasRef.current) {
+        if (
+          containerRef.current &&
+          canvasRef.current &&
+          blurCanvasRef.current
+        ) {
           // Force activeImage to styled if available, crop handles originalImageRef
           const activeImg = styledImageRef.current || img;
           const rect = { x: 0, y: 0, w: activeImg.width, h: activeImg.height };
@@ -964,9 +1085,10 @@ export default function EditorCanvas({
 
   // Sync originalImageRef whenever activeTool switches/images load
   useEffect(() => {
-    originalImageRef.current = activeTool === "crop"
-      ? (rawScreenshotRef.current || styledImageRef.current)
-      : styledImageRef.current;
+    originalImageRef.current =
+      activeTool === "crop"
+        ? rawScreenshotRef.current || styledImageRef.current
+        : styledImageRef.current;
   }, [activeTool, styledImageRef.current, rawScreenshotRef.current]);
 
   const handleRotate90 = () => {
@@ -974,74 +1096,81 @@ export default function EditorCanvas({
     setIsRotating(true);
     const rawImg = rawScreenshotRef.current || originalImageRef.current;
     if (!rawImg) {
-        setIsRotating(false);
-        return;
+      setIsRotating(false);
+      return;
     }
 
     const rotateSrc = (src: string, cb: (rotatedUrl: string) => void) => {
-        if (!src) {
-            cb("");
-            return;
-        }
-        const img = new Image();
-        if (!src.startsWith("data:")) {
-            img.crossOrigin = "anonymous";
-        }
-        img.onload = () => {
-            const rc = document.createElement("canvas");
-            rc.width = img.height;
-            rc.height = img.width;
-            const rcCtx = rc.getContext("2d");
-            if (!rcCtx) {
-                cb("");
-                return;
-            }
-            rcCtx.imageSmoothingEnabled = true;
-            rcCtx.imageSmoothingQuality = "high";
-            rcCtx.translate(rc.width / 2, rc.height / 2);
-            rcCtx.rotate(Math.PI / 2);
-            rcCtx.drawImage(img, -img.width / 2, -img.height / 2);
-            cb(rc.toDataURL("image/png"));
-        };
-        img.onerror = () => {
-            console.error("Failed to load src for rotation");
-            cb("");
-        };
-        img.src = src;
-    };
-
-    const createRotatedImg = (imgRef: React.MutableRefObject<HTMLImageElement | null>, cb?: (rotatedSrc?: string) => void) => {
-        if (!imgRef.current) {
-            if (cb) cb();
-            return;
-        }
+      if (!src) {
+        cb("");
+        return;
+      }
+      const img = new Image();
+      if (!src.startsWith("data:")) {
+        img.crossOrigin = "anonymous";
+      }
+      img.onload = () => {
         const rc = document.createElement("canvas");
-        rc.width = imgRef.current.height;
-        rc.height = imgRef.current.width;
+        rc.width = img.height;
+        rc.height = img.width;
         const rcCtx = rc.getContext("2d");
         if (!rcCtx) {
-            if (cb) cb();
-            return;
+          cb("");
+          return;
         }
         rcCtx.imageSmoothingEnabled = true;
         rcCtx.imageSmoothingQuality = "high";
         rcCtx.translate(rc.width / 2, rc.height / 2);
         rcCtx.rotate(Math.PI / 2);
-        rcCtx.drawImage(imgRef.current, -imgRef.current.width / 2, -imgRef.current.height / 2);
-        const dataUrl = rc.toDataURL("image/png");
-        const nextImg = new Image();
-        if (!dataUrl.startsWith("data:")) {
-            nextImg.crossOrigin = "anonymous";
-        }
-        nextImg.onload = () => {
-            imgRef.current = nextImg;
-            if (cb) cb(dataUrl);
-        };
-        nextImg.onerror = () => {
-            console.error("Failed to load rotated image");
-            if (cb) cb();
-        };
-        nextImg.src = dataUrl;
+        rcCtx.drawImage(img, -img.width / 2, -img.height / 2);
+        cb(rc.toDataURL("image/png"));
+      };
+      img.onerror = () => {
+        console.error("Failed to load src for rotation");
+        cb("");
+      };
+      img.src = src;
+    };
+
+    const createRotatedImg = (
+      imgRef: React.MutableRefObject<HTMLImageElement | null>,
+      cb?: (rotatedSrc?: string) => void,
+    ) => {
+      if (!imgRef.current) {
+        if (cb) cb();
+        return;
+      }
+      const rc = document.createElement("canvas");
+      rc.width = imgRef.current.height;
+      rc.height = imgRef.current.width;
+      const rcCtx = rc.getContext("2d");
+      if (!rcCtx) {
+        if (cb) cb();
+        return;
+      }
+      rcCtx.imageSmoothingEnabled = true;
+      rcCtx.imageSmoothingQuality = "high";
+      rcCtx.translate(rc.width / 2, rc.height / 2);
+      rcCtx.rotate(Math.PI / 2);
+      rcCtx.drawImage(
+        imgRef.current,
+        -imgRef.current.width / 2,
+        -imgRef.current.height / 2,
+      );
+      const dataUrl = rc.toDataURL("image/png");
+      const nextImg = new Image();
+      if (!dataUrl.startsWith("data:")) {
+        nextImg.crossOrigin = "anonymous";
+      }
+      nextImg.onload = () => {
+        imgRef.current = nextImg;
+        if (cb) cb(dataUrl);
+      };
+      nextImg.onerror = () => {
+        console.error("Failed to load rotated image");
+        if (cb) cb();
+      };
+      nextImg.src = dataUrl;
     };
 
     let completed = 0;
@@ -1049,82 +1178,114 @@ export default function EditorCanvas({
     let newOriginalSrc: string | undefined;
     let newCleanSrc: string | undefined;
     const checkComplete = () => {
-        completed++;
-        if (completed === total) {
-           const W = rawImg.width;
-           const H = rawImg.height;
-           
-           if (newOriginalSrc) {
-               setWorkingOriginalSrc(newOriginalSrc);
-           }
-           if (newCleanSrc) {
-               setCurrentCleanSrc(newCleanSrc);
-           }
+      completed++;
+      if (completed === total) {
+        const W = rawImg.width;
+        const H = rawImg.height;
 
-           if (cropRect) {
-               setCropRect({
-                   x: H - (cropRect.y + cropRect.h),
-                   y: cropRect.x,
-                   w: cropRect.h,
-                   h: cropRect.w
-               });
-           }
-           
-           const manualW = parseInt(canvasWidthInput) || 0;
-           const manualH = parseInt(canvasHeightInput) || 0;
-           setCanvasWidthInput(manualH ? manualH.toString() : "");
-           setCanvasHeightInput(manualW ? manualW.toString() : "");
-           if (manualCanvasSize) {
-               setManualCanvasSize({ width: manualCanvasSize.height, height: manualCanvasSize.width });
-           }
-
-           setPaths(prev => prev.map(p => {
-               const newPoints = p.points.map(pt => ({ x: H - pt.y, y: pt.x }));
-               const newPath2d = new Path2D();
-               if (newPoints.length > 0) {
-                 newPath2d.moveTo(newPoints[0].x, newPoints[0].y);
-                 for (let i = 1; i < newPoints.length; i++) {
-                   newPath2d.lineTo(newPoints[i].x, newPoints[i].y);
-                 }
-               }
-               return { ...p, points: newPoints, path2d: newPath2d };
-           }));
-
-           setTexts(prev => prev.map(t => ({
-               ...t,
-               x: H - t.y,
-               y: t.x,
-               rotation: (t.rotation || 0) + Math.PI / 2
-           })));
-           
-           setShouldCommit(true);
-           if (originalImageRef.current && cropRect) {
-              const isCropMode = activeTool === "crop";
-              const rotatedOriginalImage = originalImageRef.current;
-              const rectToUse = isCropMode
-                ? { x: H - (cropRect.y + cropRect.h), y: cropRect.x, w: cropRect.h, h: cropRect.w }
-                : { x: 0, y: 0, w: rotatedOriginalImage.width, h: rotatedOriginalImage.height };
-              
-              fitImageToContainer(rotatedOriginalImage, rectToUse);
-           }
-           // Use the updated rect immediately in redraw to prevent stale activeRect mapping
-           const isCropView = activeTool === "crop";
-           const currentCropMapped = { x: H - (cropRect.y + cropRect.h), y: cropRect.x, w: cropRect.h, h: cropRect.w };
-           redraw(isCropView ? currentCropMapped : null);
-           setIsRotating(false);
+        if (newOriginalSrc) {
+          setWorkingOriginalSrc(newOriginalSrc);
         }
+        if (newCleanSrc) {
+          setCurrentCleanSrc(newCleanSrc);
+        }
+
+        if (cropRect) {
+          setCropRect({
+            x: H - (cropRect.y + cropRect.h),
+            y: cropRect.x,
+            w: cropRect.h,
+            h: cropRect.w,
+          });
+        }
+
+        const manualW = parseInt(canvasWidthInput) || 0;
+        const manualH = parseInt(canvasHeightInput) || 0;
+        setCanvasWidthInput(manualH ? manualH.toString() : "");
+        setCanvasHeightInput(manualW ? manualW.toString() : "");
+        if (manualCanvasSize) {
+          setManualCanvasSize({
+            width: manualCanvasSize.height,
+            height: manualCanvasSize.width,
+          });
+        }
+
+        setPaths((prev) =>
+          prev.map((p) => {
+            const newPoints = p.points.map((pt) => ({ x: H - pt.y, y: pt.x }));
+            const newPath2d = new Path2D();
+            if (newPoints.length > 0) {
+              newPath2d.moveTo(newPoints[0].x, newPoints[0].y);
+              for (let i = 1; i < newPoints.length; i++) {
+                newPath2d.lineTo(newPoints[i].x, newPoints[i].y);
+              }
+            }
+            return { ...p, points: newPoints, path2d: newPath2d };
+          }),
+        );
+
+        setTexts((prev) =>
+          prev.map((t) => ({
+            ...t,
+            x: H - t.y,
+            y: t.x,
+            rotation: (t.rotation || 0) + Math.PI / 2,
+          })),
+        );
+
+        setShouldCommit(true);
+        if (originalImageRef.current && cropRect) {
+          const isCropMode = activeTool === "crop";
+          const rotatedOriginalImage = originalImageRef.current;
+          const rectToUse = isCropMode
+            ? {
+                x: H - (cropRect.y + cropRect.h),
+                y: cropRect.x,
+                w: cropRect.h,
+                h: cropRect.w,
+              }
+            : {
+                x: 0,
+                y: 0,
+                w: rotatedOriginalImage.width,
+                h: rotatedOriginalImage.height,
+              };
+
+          fitImageToContainer(rotatedOriginalImage, rectToUse);
+        }
+        // Use the updated rect immediately in redraw to prevent stale activeRect mapping
+        const isCropView = activeTool === "crop";
+        const currentCropMapped = {
+          x: H - (cropRect.y + cropRect.h),
+          y: cropRect.x,
+          w: cropRect.h,
+          h: cropRect.w,
+        };
+        redraw(isCropView ? currentCropMapped : null);
+        setIsRotating(false);
+      }
     };
 
-    createRotatedImg(rawScreenshotRef, (url) => { if (url) newOriginalSrc = url; checkComplete(); });
-    rotateSrc(currentCleanSrc || "", (url) => { if (url) newCleanSrc = url; checkComplete(); });
-    createRotatedImg(styledImageRef, () => { checkComplete(); });
-    createRotatedImg(originalImageRef, () => { checkComplete(); });
+    createRotatedImg(rawScreenshotRef, (url) => {
+      if (url) newOriginalSrc = url;
+      checkComplete();
+    });
+    rotateSrc(currentCleanSrc || "", (url) => {
+      if (url) newCleanSrc = url;
+      checkComplete();
+    });
+    createRotatedImg(styledImageRef, () => {
+      checkComplete();
+    });
+    createRotatedImg(originalImageRef, () => {
+      checkComplete();
+    });
   };
 
   useEffect(() => {
     // Only re-style when the active block isn't initializing (to avoid looping on mount)
     if (!currentCleanSrc) return;
-    
+
     // We update the dynamic layout styling purely for the preview representation of the current layout with the new size!
     const timer = setTimeout(async () => {
       try {
@@ -1144,7 +1305,7 @@ export default function EditorCanvas({
           manualImageScale,
           false,
           resizeMode,
-          resizerBg
+          resizerBg,
         );
         const img = new Image();
         if (!newPreviewSrc.startsWith("data:")) {
@@ -1157,7 +1318,12 @@ export default function EditorCanvas({
           styledImageRef.current = img;
           if (activeTool !== "crop") {
             originalImageRef.current = img;
-            fitImageToContainer(img, { x: 0, y: 0, w: img.width, h: img.height });
+            fitImageToContainer(img, {
+              x: 0,
+              y: 0,
+              w: img.width,
+              h: img.height,
+            });
           }
 
           const newW = img.width;
@@ -1172,7 +1338,7 @@ export default function EditorCanvas({
                 x: t.x * scaleX,
                 y: t.y * scaleY,
                 size: Math.round(t.size * Math.min(scaleX, scaleY)),
-              }))
+              })),
             );
 
             setPaths((prev) =>
@@ -1194,7 +1360,7 @@ export default function EditorCanvas({
                   points: scaledPoints,
                   path2d: newPath2d,
                 };
-              })
+              }),
             );
           }
         };
@@ -1208,12 +1374,24 @@ export default function EditorCanvas({
     }, 10);
 
     return () => clearTimeout(timer);
-  }, [currentCleanSrc, workingOriginalSrc, cropRect, styleName, layoutName, customBg, manualCanvasSize, manualImageOffset, manualImageScale, resizeMode, resizerBg]);
+  }, [
+    currentCleanSrc,
+    workingOriginalSrc,
+    cropRect,
+    styleName,
+    layoutName,
+    customBg,
+    manualCanvasSize,
+    manualImageOffset,
+    manualImageScale,
+    resizeMode,
+    resizerBg,
+  ]);
 
   const handleAutoDetectSensitive = async () => {
     const rawImg = rawScreenshotRef.current || originalImageRef.current;
     if (!rawImg || isDetectingSensitive) return;
-    
+
     setIsDetectingSensitive(true);
     try {
       const tempCanvas = document.createElement("canvas");
@@ -1221,81 +1399,97 @@ export default function EditorCanvas({
       tempCanvas.height = rawImg.height;
       const tCtx = tempCanvas.getContext("2d");
       if (!tCtx) throw new Error("Could not get 2d context for temp canvas");
-      
+
       tCtx.drawImage(rawImg, 0, 0);
       const dataUrl = tempCanvas.toDataURL("image/jpeg", 0.7);
       const base64 = dataUrl.split(",")[1];
-      const mimeType = dataUrl.substring(dataUrl.indexOf(":")+1, dataUrl.indexOf(";"));
+      const mimeType = dataUrl.substring(
+        dataUrl.indexOf(":") + 1,
+        dataUrl.indexOf(";"),
+      );
 
       const apiKey = process.env.GEMINI_API_KEY || "";
       if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
-      
+
       const { GoogleGenAI, Type } = await import("@google/genai");
       const ai = new GoogleGenAI({ apiKey });
-      
+
       const response = await ai.models.generateContent({
         model: "gemini-3.1-pro-preview",
         contents: [
-            {
-                inlineData: {
-                    mimeType: mimeType,
-                    data: base64
-                }
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: base64,
             },
-            {
-                text: "Analyze this image and identify all bounding boxes for sensitive information like email addresses, phone numbers, full names, account numbers, or financial data. Be very precise with the bounding boxes. Ensure they cover the sensitive text. The coordinates x and y are the top left corner, w is width and h is height. Your output space is normalized 0-1000 so coordinates should be integers from 0 to 1000 where 1000 x 1000 covers the entire image."
-            }
+          },
+          {
+            text: "Analyze this image and identify all bounding boxes for sensitive information like email addresses, phone numbers, full names, account numbers, or financial data. Be very precise with the bounding boxes. Ensure they cover the sensitive text. The coordinates x and y are the top left corner, w is width and h is height. Your output space is normalized 0-1000 so coordinates should be integers from 0 to 1000 where 1000 x 1000 covers the entire image.",
+          },
         ],
         config: {
-             responseMimeType: "application/json",
-             responseSchema: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        x: { type: Type.NUMBER, description: "X coordinate of top-left corner (0-1000 space)" },
-                        y: { type: Type.NUMBER, description: "Y coordinate of top-left corner (0-1000 space)" },
-                        w: { type: Type.NUMBER, description: "Width (0-1000 space)" },
-                        h: { type: Type.NUMBER, description: "Height (0-1000 space)" },
-                        type: { type: Type.STRING, description: "Type of sensitive info detected, e.g. email, phone" }
-                    },
-                    required: ["x", "y", "w", "h", "type"]
-                }
-             }
-        }
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                x: {
+                  type: Type.NUMBER,
+                  description: "X coordinate of top-left corner (0-1000 space)",
+                },
+                y: {
+                  type: Type.NUMBER,
+                  description: "Y coordinate of top-left corner (0-1000 space)",
+                },
+                w: { type: Type.NUMBER, description: "Width (0-1000 space)" },
+                h: { type: Type.NUMBER, description: "Height (0-1000 space)" },
+                type: {
+                  type: Type.STRING,
+                  description:
+                    "Type of sensitive info detected, e.g. email, phone",
+                },
+              },
+              required: ["x", "y", "w", "h", "type"],
+            },
+          },
+        },
       });
-      
+
       const boxesStr = response.text || "[]";
       const boxes = JSON.parse(boxesStr);
-      
+
       if (boxes && boxes.length > 0) {
         const newPaths: DrawingPath[] = boxes.map((box: any) => {
-            const x = (box.x / 1000) * rawImg.width;
-            const y = (box.y / 1000) * rawImg.height;
-            const w = (box.w / 1000) * rawImg.width;
-            const h = (box.h / 1000) * rawImg.height;
-            
-            const blurStrokeWidth = h; // use the height of the box as the width of our stroke
-            const p2d = new Path2D();
-            const middleY = y + h / 2;
-            
-            // Draw a line horizontally through the box
-            p2d.moveTo(x, middleY);
-            p2d.lineTo(x + w, middleY);
-            
-            return {
-                points: [{x, y: middleY}, {x: x+w, y: middleY}],
-                path2d: p2d,
-                color: "transparent",
-                width: blurStrokeWidth * 1.5, 
-                isBlur: true
-            };
+          const x = (box.x / 1000) * rawImg.width;
+          const y = (box.y / 1000) * rawImg.height;
+          const w = (box.w / 1000) * rawImg.width;
+          const h = (box.h / 1000) * rawImg.height;
+
+          const blurStrokeWidth = h; // use the height of the box as the width of our stroke
+          const p2d = new Path2D();
+          const middleY = y + h / 2;
+
+          // Draw a line horizontally through the box
+          p2d.moveTo(x, middleY);
+          p2d.lineTo(x + w, middleY);
+
+          return {
+            points: [
+              { x, y: middleY },
+              { x: x + w, y: middleY },
+            ],
+            path2d: p2d,
+            color: "transparent",
+            width: blurStrokeWidth * 1.5,
+            isBlur: true,
+          };
         });
-        
-        setPaths(prev => {
-            const combined = [...prev, ...newPaths];
-            setShouldCommit(true);
-            return combined;
+
+        setPaths((prev) => {
+          const combined = [...prev, ...newPaths];
+          setShouldCommit(true);
+          return combined;
         });
       } else {
         alert("No sensitive information detected.");
@@ -1311,13 +1505,23 @@ export default function EditorCanvas({
   // Handle resizing of container (with ResizeObserver for dynamic transitions) and tool change fitting
   useEffect(() => {
     if (originalImageRef.current) {
-      const rect = { x: 0, y: 0, w: originalImageRef.current.width, h: originalImageRef.current.height };
+      const rect = {
+        x: 0,
+        y: 0,
+        w: originalImageRef.current.width,
+        h: originalImageRef.current.height,
+      };
       fitImageToContainer(originalImageRef.current, rect);
     }
 
     const handleResize = () => {
       if (originalImageRef.current) {
-        const rect = { x: 0, y: 0, w: originalImageRef.current.width, h: originalImageRef.current.height };
+        const rect = {
+          x: 0,
+          y: 0,
+          w: originalImageRef.current.width,
+          h: originalImageRef.current.height,
+        };
         fitImageToContainer(originalImageRef.current, rect);
       }
     };
@@ -1326,14 +1530,22 @@ export default function EditorCanvas({
     let observer: ResizeObserver | null = null;
     if (containerRef.current) {
       observer = new ResizeObserver((entries) => {
-        if (
-          originalImageRef.current &&
-          entries[0].contentRect.width > 0
-        ) {
-          const rect = activeTool === "crop"
-            ? { x: 0, y: 0, w: originalImageRef.current.width, h: originalImageRef.current.height }
-            : { x: 0, y: 0, w: originalImageRef.current.width, h: originalImageRef.current.height };
-          
+        if (originalImageRef.current && entries[0].contentRect.width > 0) {
+          const rect =
+            activeTool === "crop"
+              ? {
+                  x: 0,
+                  y: 0,
+                  w: originalImageRef.current.width,
+                  h: originalImageRef.current.height,
+                }
+              : {
+                  x: 0,
+                  y: 0,
+                  w: originalImageRef.current.width,
+                  h: originalImageRef.current.height,
+                };
+
           fitImageToContainer(originalImageRef.current, rect);
         }
       });
@@ -1434,10 +1646,11 @@ export default function EditorCanvas({
     const canvasObj = canvasRef.current;
     const blurCanvasObj = blurCanvasRef.current;
 
-    canvasObj.width = finalW;
-    canvasObj.height = finalH;
-    blurCanvasObj.width = finalW;
-    blurCanvasObj.height = finalH;
+    const dpr = getDPR();
+    canvasObj.width = finalW * dpr;
+    canvasObj.height = finalH * dpr;
+    blurCanvasObj.width = finalW * dpr;
+    blurCanvasObj.height = finalH * dpr;
     blurCanvasObj.setAttribute("data-dirty", "true");
 
     setCanvasSize({ width: destW, height: destH });
@@ -1510,7 +1723,7 @@ export default function EditorCanvas({
     currentCrop?: { x: number; y: number; w: number; h: number } | null,
     explicitPaths?: DrawingPath[],
     explicitTexts?: TextItem[],
-    hideSelectionBoxes?: boolean
+    hideSelectionBoxes?: boolean,
   ) => {
     const canvas = canvasRef.current;
     const img = originalImageRef.current;
@@ -1526,14 +1739,22 @@ export default function EditorCanvas({
     }
     if (!activeRect) return;
 
-    const hasBlurPaths = explicitPaths ? explicitPaths.some((p) => p.isBlur) : latestPathsRef.current.some((p) => p.isBlur);
+    const hasBlurPaths = explicitPaths
+      ? explicitPaths.some((p) => p.isBlur)
+      : latestPathsRef.current.some((p) => p.isBlur);
     const needBlur = activeTool === "blur" || hasBlurPaths;
 
-    if (needBlur && blurCanvasRef.current?.getAttribute("data-dirty") === "true") {
+    if (
+      needBlur &&
+      blurCanvasRef.current?.getAttribute("data-dirty") === "true"
+    ) {
       const bCanvas = blurCanvasRef.current;
       const bCtx = bCanvas.getContext("2d");
       if (bCtx) {
-        const blurRadius = Math.max(25, Math.round((activeRect?.w || img.width) * 0.04));
+        const blurRadius = Math.max(
+          25,
+          Math.round((activeRect?.w || img.width) * 0.04),
+        );
         bCtx.clearRect(0, 0, bCanvas.width, bCanvas.height);
         bCtx.filter = `blur(${blurRadius}px)`;
         bCtx.drawImage(
@@ -1555,9 +1776,15 @@ export default function EditorCanvas({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const topPad = 0;
+    const dpr = getDPR();
+    const cw = canvas.width / dpr;
+    const ch = canvas.height / dpr;
 
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(dpr, dpr);
+
+    const topPad = 0;
 
     // Load config for background drawing
     const sName = styleName || "Minimal";
@@ -1570,18 +1797,19 @@ export default function EditorCanvas({
 
     if (manualCanvasSize) {
       if (resizeMode === "stretch") {
-        drawW = canvas.width;
-        drawH = canvas.height;
+        drawW = cw;
+        drawH = ch;
         drawX = manualImageOffset.x;
         drawY = manualImageOffset.y;
       } else {
         const isFitBorder = resizeMode === "fit_border";
         const scaleFunc = isFitBorder ? Math.min : Math.max;
-        const scale = scaleFunc(canvas.width / activeRect.w, canvas.height / activeRect.h) * manualImageScale;
+        const scale =
+          scaleFunc(cw / activeRect.w, ch / activeRect.h) * manualImageScale;
         drawW = activeRect.w * scale;
         drawH = activeRect.h * scale;
-        drawX = (canvas.width - drawW) / 2 + manualImageOffset.x;
-        drawY = (canvas.height - drawH) / 2 + manualImageOffset.y;
+        drawX = (cw - drawW) / 2 + manualImageOffset.x;
+        drawY = (ch - drawH) / 2 + manualImageOffset.y;
       }
     }
 
@@ -1589,17 +1817,17 @@ export default function EditorCanvas({
       // In custom dimension/resizing mode
       if (resizeMode === "fit_border") {
         if (resizerBg === "blur" && blurCanvasRef.current) {
-          ctx.drawImage(blurCanvasRef.current, 0, 0, canvas.width, canvas.height);
+          ctx.drawImage(blurCanvasRef.current, 0, 0, cw, ch);
         } else if (resizerBg !== "transparent") {
           ctx.fillStyle = resizerBg;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillRect(0, 0, cw, ch);
         }
       } else {
         // Other resize modes (fit_no_border, cover, stretch)
         if (customBg) {
           if (customBg.includes(",")) {
             const colors = customBg.split(",");
-            const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            const grad = ctx.createLinearGradient(0, 0, cw, ch);
             colors.forEach((color, i, arr) => {
               grad.addColorStop(i / (arr.length - 1), color.trim());
             });
@@ -1607,10 +1835,10 @@ export default function EditorCanvas({
           } else {
             ctx.fillStyle = customBg;
           }
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillRect(0, 0, cw, ch);
         } else if (styleName !== "Original" || layoutName !== "None") {
           if (config.bgGradient) {
-            const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            const grad = ctx.createLinearGradient(0, 0, cw, ch);
             config.bgGradient.forEach((color, i, arr) => {
               grad.addColorStop(i / (arr.length - 1), color);
             });
@@ -1618,7 +1846,7 @@ export default function EditorCanvas({
           } else {
             ctx.fillStyle = config.bgColor || "#FFFFFF";
           }
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillRect(0, 0, cw, ch);
         }
       }
     } else {
@@ -1626,7 +1854,7 @@ export default function EditorCanvas({
       if (customBg) {
         if (customBg.includes(",")) {
           const colors = customBg.split(",");
-          const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+          const grad = ctx.createLinearGradient(0, 0, cw, ch);
           colors.forEach((color, i, arr) => {
             grad.addColorStop(i / (arr.length - 1), color.trim());
           });
@@ -1634,10 +1862,10 @@ export default function EditorCanvas({
         } else {
           ctx.fillStyle = customBg;
         }
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, cw, ch);
       } else {
         if (config.bgGradient) {
-          const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+          const grad = ctx.createLinearGradient(0, 0, cw, ch);
           config.bgGradient.forEach((color, i, arr) => {
             grad.addColorStop(i / (arr.length - 1), color);
           });
@@ -1646,7 +1874,7 @@ export default function EditorCanvas({
           ctx.fillStyle = config.bgColor || "#FFFFFF";
         }
         if (styleName !== "Original" || layoutName !== "None") {
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillRect(0, 0, cw, ch);
         }
       }
     }
@@ -1690,7 +1918,8 @@ export default function EditorCanvas({
         }
 
         // Draw selected highlight outline indicator if it's currently selected
-        const isEditingThisPath = !hideSelectionBoxes && editingPathIndex === idx;
+        const isEditingThisPath =
+          !hideSelectionBoxes && editingPathIndex === idx;
         if (isEditingThisPath && p.points.length > 0) {
           ctx.save();
 
@@ -1709,8 +1938,8 @@ export default function EditorCanvas({
           const pad = 8;
           const rx = minX - pad;
           const ry = minY - pad;
-          const rw = Math.max(16, (maxX - minX) + pad * 2);
-          const rh = Math.max(16, (maxY - minY) + pad * 2);
+          const rw = Math.max(16, maxX - minX + pad * 2);
+          const rh = Math.max(16, maxY - minY + pad * 2);
 
           // Draw a soft translucent dark shadow for maximum contrast on any image background
           ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
@@ -1729,10 +1958,10 @@ export default function EditorCanvas({
             { x: rx, y: ry },
             { x: rx + rw, y: ry },
             { x: rx, y: ry + rh },
-            { x: rx + rw, y: ry + rh }
+            { x: rx + rw, y: ry + rh },
           ];
 
-          corners.forEach(corner => {
+          corners.forEach((corner) => {
             // White highlight halo
             ctx.beginPath();
             ctx.arc(corner.x, corner.y, 4.5, 0, 2 * Math.PI);
@@ -1751,13 +1980,13 @@ export default function EditorCanvas({
             const end = p.points[p.points.length - 1];
             [
               { pt: start, color: "#10B981" }, // Green for tail
-              { pt: end, color: "#EF4444" }    // Red for pointer tip
+              { pt: end, color: "#EF4444" }, // Red for pointer tip
             ].forEach((node) => {
               ctx.beginPath();
               ctx.arc(node.pt.x, node.pt.y, 5, 0, 2 * Math.PI);
               ctx.fillStyle = "#FFFFFF";
               ctx.fill();
-              
+
               ctx.beginPath();
               ctx.arc(node.pt.x, node.pt.y, 3.5, 0, 2 * Math.PI);
               ctx.fillStyle = node.color;
@@ -1773,22 +2002,33 @@ export default function EditorCanvas({
       const textsToDraw = explicitTexts || latestTextsRef.current;
       textsToDraw.forEach((rawT, idx) => {
         // If we are currently editing this item and the modal is open, use the live state values instead of stale array values
-        const t = (editingTextIndex === idx && showTextModal) ? {
-          ...rawT,
-          text: currentText,
-          color: currentTextColor,
-          size: currentTextSize,
-          fontName: currentTextFont,
-          rotation: currentTextRotation,
-          hasShadow: currentTextShadow,
-          shadowColor: currentTextShadowColor,
-          bgColor: currentTextBgColor,
-          positionMode: textPositionMode,
-          y: textPositionMode === "Top" ? (currentTextSize + 10) : (textPositionMode === "Bottom" ? (canvas.height - 20) : rawT.y)
-        } : rawT;
+        const t =
+          editingTextIndex === idx && showTextModal
+            ? {
+                ...rawT,
+                text: currentText,
+                color: currentTextColor,
+                size: currentTextSize,
+                fontName: currentTextFont,
+                rotation: currentTextRotation,
+                hasShadow: currentTextShadow,
+                shadowColor: currentTextShadowColor,
+                bgColor: currentTextBgColor,
+                positionMode: textPositionMode,
+                y:
+                  textPositionMode === "Top"
+                    ? currentTextSize + 10
+                    : textPositionMode === "Bottom"
+                      ? canvas.height - 20
+                      : rawT.y,
+              }
+            : rawT;
 
         if (t.opacity !== undefined && t.opacity !== null) {
-          const parsedOpacity = typeof t.opacity === "string" ? parseFloat(t.opacity) : Number(t.opacity);
+          const parsedOpacity =
+            typeof t.opacity === "string"
+              ? parseFloat(t.opacity)
+              : Number(t.opacity);
           ctx.globalAlpha = isNaN(parsedOpacity) ? 1.0 : parsedOpacity;
         } else {
           ctx.globalAlpha = 1.0;
@@ -1822,7 +2062,10 @@ export default function EditorCanvas({
               t.logoImg = img;
             }
           } else if (t.logoImg) {
-            const aspect = t.logoImg.naturalHeight > 0 ? (t.logoImg.naturalWidth / t.logoImg.naturalHeight) : 1.0;
+            const aspect =
+              t.logoImg.naturalHeight > 0
+                ? t.logoImg.naturalWidth / t.logoImg.naturalHeight
+                : 1.0;
             const drawW = t.size * aspect;
             const drawH = t.size;
             ctx.drawImage(t.logoImg, -drawW / 2, -drawH / 2, drawW, drawH);
@@ -1838,9 +2081,9 @@ export default function EditorCanvas({
 
             if (t.hasShadow !== false) {
               ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.4)";
-              ctx.shadowBlur = Math.max(6, t.size * 0.15);
-              ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
-              ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
+              ctx.shadowBlur = Math.max(4, t.size * 0.05);
+              ctx.shadowOffsetX = Math.max(2, t.size * 0.04);
+              ctx.shadowOffsetY = Math.max(2, t.size * 0.04);
             } else {
               ctx.shadowColor = "transparent";
               ctx.shadowBlur = 0;
@@ -1872,49 +2115,52 @@ export default function EditorCanvas({
             ctx.textBaseline = "middle";
             ctx.fillText(t.text, 0, 0);
           } else {
-            // Emoji high-quality rendering: Render the emoji at a high native size
-            // and scale it using Canvas's high-quality imageSmoothingQuality to prevent pixelation.
-            const nativeRenderSize = Math.max(512, Math.min(2048, Math.round(t.size)));
-            const offscreen = document.createElement("canvas");
-            offscreen.width = nativeRenderSize * 1.5;
-            offscreen.height = nativeRenderSize * 1.5;
-            const oCtx = offscreen.getContext("2d");
-            if (oCtx) {
-              oCtx.font = `bold ${nativeRenderSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
-              oCtx.textBaseline = "middle";
-              oCtx.textAlign = "center";
-              oCtx.imageSmoothingEnabled = true;
-              oCtx.imageSmoothingQuality = "high";
-              oCtx.fillText(t.text, offscreen.width / 2, offscreen.height / 2);
+            // High-quality vector emoji rendering via Twemoji
+            if (!t.emojiImg) {
+              const cp = Array.from(t.text)
+                .map((c) => c.codePointAt(0)?.toString(16))
+                .filter((c) => c && c !== "fe0f");
+              const url = `https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/${cp.join(
+                "-",
+              )}.svg`;
+              const img = new Image();
+              img.crossOrigin = "anonymous";
+              img.onload = () => {
+                t.emojiImg = img;
+                redraw();
+              };
+              img.onerror = () => {
+                t.emojiImg = "failed" as any;
+                redraw();
+              };
+              img.src = url;
+              t.emojiImg = "loading" as any;
+            }
 
-              ctx.save();
-              if (t.hasShadow) {
-                ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-                ctx.shadowBlur = Math.max(6, t.size * 0.15);
-                ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
-                ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
-              }
-              ctx.imageSmoothingEnabled = true;
-              ctx.imageSmoothingQuality = "high";
-              
-              const ratio = t.size / nativeRenderSize;
-              const drawW = offscreen.width * ratio;
-              const drawH = offscreen.height * ratio;
-              ctx.drawImage(offscreen, -drawW / 2, -drawH / 2, drawW, drawH);
-              ctx.restore();
-            } else {
-              // Fallback
+            ctx.save();
+            if (t.hasShadow !== false) {
+              ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.45)";
+              ctx.shadowBlur = Math.max(2, t.size * 0.04);
+              ctx.shadowOffsetX = Math.max(1.5, t.size * 0.02);
+              ctx.shadowOffsetY = Math.max(1.5, t.size * 0.02);
+            }
+
+            if (
+              t.emojiImg &&
+              t.emojiImg instanceof HTMLImageElement &&
+              t.emojiImg.complete
+            ) {
+              const drawW = t.size * 1.1;
+              const drawH = t.size * 1.1;
+              ctx.drawImage(t.emojiImg, -drawW / 2, -drawH / 2, drawW, drawH);
+            } else if (t.emojiImg === "failed") {
+              // Fallback to text if SVG failed to load
               ctx.font = `${t.size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
               ctx.textBaseline = "middle";
               ctx.textAlign = "center";
-              if (t.hasShadow) {
-                ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-                ctx.shadowBlur = Math.max(6, t.size * 0.15);
-                ctx.shadowOffsetX = Math.max(3, t.size * 0.08);
-                ctx.shadowOffsetY = Math.max(3, t.size * 0.08);
-              }
               ctx.fillText(t.text, 0, 0);
             }
+            ctx.restore();
           }
         } else {
           // Standard text
@@ -1924,9 +2170,15 @@ export default function EditorCanvas({
             const textWidth = metrics.width;
             let spanLeft = textWidth / 2;
             let spanRight = textWidth / 2;
-            if ('actualBoundingBoxLeft' in metrics) {
-              spanLeft = Math.max(spanLeft, Math.abs(metrics.actualBoundingBoxLeft));
-              spanRight = Math.max(spanRight, Math.abs(metrics.actualBoundingBoxRight));
+            if ("actualBoundingBoxLeft" in metrics) {
+              spanLeft = Math.max(
+                spanLeft,
+                Math.abs(metrics.actualBoundingBoxLeft),
+              );
+              spanRight = Math.max(
+                spanRight,
+                Math.abs(metrics.actualBoundingBoxRight),
+              );
             }
             const padX = t.size * 0.4;
             const padY = t.size * 0.3; // middle baseline padding
@@ -1934,14 +2186,14 @@ export default function EditorCanvas({
             const rightEdge = spanRight + padX;
             const rectW = rightEdge - leftEdge;
             const rectH = t.size + padY * 2;
-            
+
             ctx.fillStyle = t.bgColor;
             if (ctx.roundRect) {
               ctx.beginPath();
-              ctx.roundRect(leftEdge, -rectH/2, rectW, rectH, t.size * 0.15);
+              ctx.roundRect(leftEdge, -rectH / 2, rectW, rectH, t.size * 0.15);
               ctx.fill();
             } else {
-              ctx.fillRect(leftEdge, -rectH/2, rectW, rectH);
+              ctx.fillRect(leftEdge, -rectH / 2, rectW, rectH);
             }
           }
 
@@ -1961,15 +2213,19 @@ export default function EditorCanvas({
           }
           ctx.fillText(t.text, 0, 0);
         }
-        
+
         ctx.restore();
       });
 
       // Draw active selected text bounding box with interactive handles (Delete & Resize/Rotate)
-      if (!hideSelectionBoxes && selectedTextIndex !== null && selectedTextIndex < latestTextsRef.current.length) {
+      if (
+        !hideSelectionBoxes &&
+        selectedTextIndex !== null &&
+        selectedTextIndex < latestTextsRef.current.length
+      ) {
         const t = latestTextsRef.current[selectedTextIndex];
         const bounds = getTextBounds(t);
-        
+
         ctx.save();
         ctx.translate(t.x, t.y);
         if (t.rotation) {
@@ -2042,9 +2298,14 @@ export default function EditorCanvas({
       }
 
       // Draw temporary preview text if modal is open and we are adding a brand new text
-      if (showTextModal && editingTextIndex < 0 && currentText.trim() && activeRect) {
+      if (
+        showTextModal &&
+        editingTextIndex < 0 &&
+        currentText.trim() &&
+        activeRect
+      ) {
         const size = currentTextSize;
-        const x = canvas.width / 2;
+        const x = cw / 2;
         let y = activeRect.h / 2;
 
         if (textPositionMode === "Top") y = size + 10;
@@ -2069,9 +2330,15 @@ export default function EditorCanvas({
           const textWidth = metrics.width;
           let spanLeft = textWidth / 2;
           let spanRight = textWidth / 2;
-          if ('actualBoundingBoxLeft' in metrics) {
-            spanLeft = Math.max(spanLeft, Math.abs(metrics.actualBoundingBoxLeft));
-            spanRight = Math.max(spanRight, Math.abs(metrics.actualBoundingBoxRight));
+          if ("actualBoundingBoxLeft" in metrics) {
+            spanLeft = Math.max(
+              spanLeft,
+              Math.abs(metrics.actualBoundingBoxLeft),
+            );
+            spanRight = Math.max(
+              spanRight,
+              Math.abs(metrics.actualBoundingBoxRight),
+            );
           }
           const padX = size * 0.4;
           const padY = size * 0.3; // middle baseline padding
@@ -2079,17 +2346,17 @@ export default function EditorCanvas({
           const rightEdge = spanRight + padX;
           const rectW = rightEdge - leftEdge;
           const rectH = size + padY * 2;
-          
+
           ctx.fillStyle = currentTextBgColor;
           if (ctx.roundRect) {
             ctx.beginPath();
-            ctx.roundRect(leftEdge, -rectH/2, rectW, rectH, size * 0.15);
+            ctx.roundRect(leftEdge, -rectH / 2, rectW, rectH, size * 0.15);
             ctx.fill();
           } else {
-            ctx.fillRect(leftEdge, -rectH/2, rectW, rectH);
+            ctx.fillRect(leftEdge, -rectH / 2, rectW, rectH);
           }
         }
-        
+
         ctx.fillStyle = currentTextColor;
 
         if (currentTextShadow) {
@@ -2108,7 +2375,7 @@ export default function EditorCanvas({
 
         ctx.fillText(currentText, 0, 0);
         ctx.restore();
-        
+
         ctx.globalAlpha = 1.0;
       }
     }
@@ -2121,11 +2388,20 @@ export default function EditorCanvas({
       const isColorDarkObj = (color: string): boolean => {
         if (!color) return false;
         const bg = color.toLowerCase().trim();
-        if (bg.includes("white") || bg === "#ffffff" || bg === "#fff" || bg === "transparent") return false;
-        if (bg.includes("black") || bg === "#000000" || bg === "#000") return true;
+        if (
+          bg.includes("white") ||
+          bg === "#ffffff" ||
+          bg === "#fff" ||
+          bg === "transparent"
+        )
+          return false;
+        if (bg.includes("black") || bg === "#000000" || bg === "#000")
+          return true;
         if (bg.startsWith("#")) {
           const hex = bg.slice(1);
-          let r = 0, g = 0, b = 0;
+          let r = 0,
+            g = 0,
+            b = 0;
           if (hex.length === 3) {
             r = parseInt(hex[0] + hex[0], 16);
             g = parseInt(hex[1] + hex[1], 16);
@@ -2166,7 +2442,12 @@ export default function EditorCanvas({
           }
           return false;
         }
-        if (sName.includes("Dark") || sName.includes("Cosmic") || sName.includes("Navy") || sName.includes("Steel")) {
+        if (
+          sName.includes("Dark") ||
+          sName.includes("Cosmic") ||
+          sName.includes("Navy") ||
+          sName.includes("Steel")
+        ) {
           return true;
         }
         const styleConfig = Styles[sName];
@@ -2188,25 +2469,23 @@ export default function EditorCanvas({
         : "rgba(0, 0, 0, 0.35)";
 
       // Set font size based on final canvas width
-      const referenceWidth = canvas.width;
+      const referenceWidth = cw;
       ctx.font = `${Math.max(12, referenceWidth * 0.024)}px sans-serif`;
       ctx.textAlign = "right";
 
       if (lName === "None" && !manualCanvasSize) {
         const styleConfig = Styles[sName];
-        const paddingVal = Math.max(img.width, img.height) * (styleConfig ? styleConfig.paddingFactor : 0);
+        const paddingVal =
+          Math.max(img.width, img.height) *
+          (styleConfig ? styleConfig.paddingFactor : 0);
         ctx.fillText(
           "Edited with Photy",
-          paddingVal + img.width - canvas.width * 0.015,
-          paddingVal + img.height - canvas.height * 0.015,
+          paddingVal + img.width - cw * 0.015,
+          paddingVal + img.height - ch * 0.015,
         );
       } else {
         // Use 4% margin
-        ctx.fillText(
-          "Edited with Photy",
-          canvas.width - canvas.width * 0.04,
-          canvas.height - canvas.height * 0.04,
-        );
+        ctx.fillText("Edited with Photy", cw - cw * 0.04, ch - ch * 0.04);
       }
       ctx.restore();
     }
@@ -2214,10 +2493,17 @@ export default function EditorCanvas({
     if (activeTool === "crop") {
       // Draw crop overlay (darken outside the crop region)
       ctx.fillStyle = "rgba(0,0,0,0.65)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, cw, ch);
 
-      let sx: number | undefined, sy: number | undefined, w: number | undefined, h: number | undefined;
-      if (cropDragModeRef.current === "new" && cropStartRef.current && cropEndRef.current) {
+      let sx: number | undefined,
+        sy: number | undefined,
+        w: number | undefined,
+        h: number | undefined;
+      if (
+        cropDragModeRef.current === "new" &&
+        cropStartRef.current &&
+        cropEndRef.current
+      ) {
         sx = Math.min(cropStartRef.current.x, cropEndRef.current.x);
         sy = Math.min(cropStartRef.current.y, cropEndRef.current.y);
         w = Math.abs(cropStartRef.current.x - cropEndRef.current.x);
@@ -2234,25 +2520,20 @@ export default function EditorCanvas({
         h = cropRect.h;
       }
 
-      if (sx !== undefined && sy !== undefined && w !== undefined && h !== undefined) {
+      if (
+        sx !== undefined &&
+        sy !== undefined &&
+        w !== undefined &&
+        h !== undefined
+      ) {
         ctx.clearRect(sx, sy, w, h);
-        
+
         // Redraw just the cropped portion of the image inside the clear area so it's beautifully bright and color-accurate
-        ctx.drawImage(
-          img,
-          sx,
-          sy,
-          w,
-          h,
-          sx,
-          sy,
-          w,
-          h
-        );
+        ctx.drawImage(img, sx, sy, w, h, sx, sy, w, h);
 
         // Core outline of crop box
         ctx.strokeStyle = "#2563EB";
-        ctx.lineWidth = Math.max(2.5, canvas.width * 0.005);
+        ctx.lineWidth = Math.max(2.5, cw * 0.005);
         ctx.strokeRect(sx, sy, w, h);
 
         // Elegant semi-transparent grid lines (thirds) like premium photo editors
@@ -2279,24 +2560,59 @@ export default function EditorCanvas({
         ctx.fillRect(sx - 2, sy - 2, handleSize, handleThickness);
         ctx.fillRect(sx - 2, sy - 2, handleThickness, handleSize);
         // Top-Right
-        ctx.fillRect(sx + w - handleSize + 2, sy - 2, handleSize, handleThickness);
+        ctx.fillRect(
+          sx + w - handleSize + 2,
+          sy - 2,
+          handleSize,
+          handleThickness,
+        );
         ctx.fillRect(sx + w - 2, sy - 2, handleThickness, handleSize);
         // Bottom-Left
         ctx.fillRect(sx - 2, sy + h - 2, handleSize, handleThickness);
-        ctx.fillRect(sx - 2, sy + h - handleSize + 2, handleThickness, handleSize);
+        ctx.fillRect(
+          sx - 2,
+          sy + h - handleSize + 2,
+          handleThickness,
+          handleSize,
+        );
         // Bottom-Right
-        ctx.fillRect(sx + w - handleSize + 2, sy + h - 2, handleSize, handleThickness);
-        ctx.fillRect(sx + w - 2, sy + h - handleSize + 2, handleThickness, handleSize);
+        ctx.fillRect(
+          sx + w - handleSize + 2,
+          sy + h - 2,
+          handleSize,
+          handleThickness,
+        );
+        ctx.fillRect(
+          sx + w - 2,
+          sy + h - handleSize + 2,
+          handleThickness,
+          handleSize,
+        );
       }
     } else if (currentPathRef.current) {
       if (activeTool === "blur") {
-        drawBlurredPath(ctx, currentPathRef.current, brushSize, selectedBlurColor, topPad);
+        drawBlurredPath(
+          ctx,
+          currentPathRef.current,
+          brushSize,
+          selectedBlurColor,
+          topPad,
+        );
       } else if (activeTool === "draw") {
         ctx.strokeStyle = selectedDrawColor;
         ctx.lineWidth = brushSize;
         ctx.stroke(currentPathRef.current);
-      } else if (activeTool === "arrows" && drawingPointsRef.current.length >= 2) {
-        drawShape(ctx, selectedShapeTool, drawingPointsRef.current, selectedDrawColor, brushSize);
+      } else if (
+        activeTool === "arrows" &&
+        drawingPointsRef.current.length >= 2
+      ) {
+        drawShape(
+          ctx,
+          selectedShapeTool,
+          drawingPointsRef.current,
+          selectedDrawColor,
+          brushSize,
+        );
       }
     }
   };
@@ -2304,11 +2620,33 @@ export default function EditorCanvas({
   // Trigger redraw when state changes for live preview
   useEffect(() => {
     redraw();
-  }, [currentText, currentTextFont, currentTextColor, currentTextBgColor, currentTextShadow, currentTextShadowColor, currentTextRotation, textPositionMode, texts, showTextModal, activeTool, selectedTextIndex, selectedShapeTool]);
+  }, [
+    currentText,
+    currentTextFont,
+    currentTextColor,
+    currentTextBgColor,
+    currentTextShadow,
+    currentTextShadowColor,
+    currentTextRotation,
+    textPositionMode,
+    texts,
+    showTextModal,
+    activeTool,
+    selectedTextIndex,
+    selectedShapeTool,
+  ]);
 
   useEffect(() => {
     redraw();
-  }, [paths, brushSize, selectedDrawColor, selectedBlurColor, brightness, selectedShapeTool, editingPathIndex]);
+  }, [
+    paths,
+    brushSize,
+    selectedDrawColor,
+    selectedBlurColor,
+    brightness,
+    selectedShapeTool,
+    editingPathIndex,
+  ]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -2331,8 +2669,9 @@ export default function EditorCanvas({
       clientY = (e as React.MouseEvent).clientY;
     }
 
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const dpr = getDPR();
+    const scaleX = canvas.width / dpr / rect.width;
+    const scaleY = canvas.height / dpr / rect.height;
 
     return {
       x: (clientX - rect.left) * scaleX,
@@ -2347,22 +2686,32 @@ export default function EditorCanvas({
 
       if (draggingTextIndex !== null) {
         isPinchingTextRef.current = true;
-        textInitialAngleRef.current = Math.atan2(touch2.clientY - touch1.clientY, touch2.clientX - touch1.clientX);
-        textInitialBaseRotationRef.current = texts[draggingTextIndex].rotation || 0;
-        textInitialDistRef.current = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+        textInitialAngleRef.current = Math.atan2(
+          touch2.clientY - touch1.clientY,
+          touch2.clientX - touch1.clientX,
+        );
+        textInitialBaseRotationRef.current =
+          texts[draggingTextIndex].rotation || 0;
+        textInitialDistRef.current = Math.hypot(
+          touch2.clientX - touch1.clientX,
+          touch2.clientY - touch1.clientY,
+        );
         textInitialSizeRef.current = texts[draggingTextIndex].size;
         textInitialMidpointRef.current = {
           x: (touch1.clientX + touch2.clientX) / 2,
-          y: (touch1.clientY + touch2.clientY) / 2
+          y: (touch1.clientY + touch2.clientY) / 2,
         };
         textInitialPosRef.current = {
           x: texts[draggingTextIndex].x,
-          y: texts[draggingTextIndex].y
+          y: texts[draggingTextIndex].y,
         };
         return;
       }
 
-      const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+      const dist = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY,
+      );
       isPinchZoomingRef.current = true;
       setIsDrawing(false);
       currentPathRef.current = null;
@@ -2373,8 +2722,8 @@ export default function EditorCanvas({
         zoomInitialDistanceRef.current = dist;
         zoomInitialScaleRef.current = manualImageScale;
         zoomStartRef.current = {
-          x: ((touch1.clientX + touch2.clientX) / 2) - manualImageOffset.x,
-          y: ((touch1.clientY + touch2.clientY) / 2) - manualImageOffset.y
+          x: (touch1.clientX + touch2.clientX) / 2 - manualImageOffset.x,
+          y: (touch1.clientY + touch2.clientY) / 2 - manualImageOffset.y,
         };
         return;
       }
@@ -2382,8 +2731,8 @@ export default function EditorCanvas({
       zoomInitialDistanceRef.current = dist;
       zoomInitialScaleRef.current = zoomScale;
       zoomStartRef.current = {
-        x: ((touch1.clientX + touch2.clientX) / 2) - zoomOffset.x,
-        y: ((touch1.clientY + touch2.clientY) / 2) - zoomOffset.y
+        x: (touch1.clientX + touch2.clientX) / 2 - zoomOffset.x,
+        y: (touch1.clientY + touch2.clientY) / 2 - zoomOffset.y,
       };
       return;
     }
@@ -2400,7 +2749,10 @@ export default function EditorCanvas({
         const onText = texts.some((t) => {
           if (t.isSticker) {
             const hitSize = Math.max(t.size * 1.5, 44);
-            const width = t.stickerType === "badge" ? Math.max(t.text.length * (t.size * 0.6), hitSize) + 20 : hitSize;
+            const width =
+              t.stickerType === "badge"
+                ? Math.max(t.text.length * (t.size * 0.6), hitSize) + 20
+                : hitSize;
             return (
               pt.x > t.x - width / 2 &&
               pt.x < t.x + width / 2 &&
@@ -2441,7 +2793,7 @@ export default function EditorCanvas({
       const dx = pt.x - parentText.x;
       const dy = pt.y - parentText.y;
       const rot = parentText.rotation || 0;
-      
+
       // Convert clicked screen point to parent text's local/rotated coords
       const localX = dx * Math.cos(-rot) - dy * Math.sin(-rot);
       const localY = dx * Math.sin(-rot) + dy * Math.cos(-rot);
@@ -2474,10 +2826,16 @@ export default function EditorCanvas({
         initialTextSizeRef.current = parentText.size;
         initialTextRotationRef.current = parentText.rotation || 0;
 
-        const currentDist = Math.hypot(pt.x - parentText.x, pt.y - parentText.y);
+        const currentDist = Math.hypot(
+          pt.x - parentText.x,
+          pt.y - parentText.y,
+        );
         initialPointerDistRef.current = currentDist > 0 ? currentDist : 1;
 
-        const currentAngle = Math.atan2(pt.y - parentText.y, pt.x - parentText.x);
+        const currentAngle = Math.atan2(
+          pt.y - parentText.y,
+          pt.x - parentText.x,
+        );
         initialPointerAngleRef.current = currentAngle;
         return;
       }
@@ -2561,7 +2919,7 @@ export default function EditorCanvas({
         textDragModeRef.current = "image_pan" as any;
         dragOffsetRef.current = {
           x: pt.x - manualImageOffset.x,
-          y: pt.y - manualImageOffset.y
+          y: pt.y - manualImageOffset.y,
         };
         return;
       }
@@ -2570,7 +2928,8 @@ export default function EditorCanvas({
     // Check if we hit the resize handles of the currently selected path first
     if (editingPathIndex >= 0 && editingPathIndex < paths.length) {
       const p = paths[editingPathIndex];
-      if (p.shapeType) { // Allow modifying all shape types by endpoints
+      if (p.shapeType) {
+        // Allow modifying all shape types by endpoints
         if (p.points.length >= 2) {
           const start = p.points[0];
           const end = p.points[p.points.length - 1];
@@ -2612,12 +2971,24 @@ export default function EditorCanvas({
 
     if (activeTool === "crop") {
       const threshold = Math.max(30, canvasRef.current!.width * 0.05);
-      const cr = cropRect || { x: 0, y: 0, w: canvasRef.current!.width, h: canvasRef.current!.height };
-      
-      const isTL = Math.abs(pt.x - cr.x) < threshold && Math.abs(pt.y - cr.y) < threshold;
-      const isTR = Math.abs(pt.x - (cr.x + cr.w)) < threshold && Math.abs(pt.y - cr.y) < threshold;
-      const isBL = Math.abs(pt.x - cr.x) < threshold && Math.abs(pt.y - (cr.y + cr.h)) < threshold;
-      const isBR = Math.abs(pt.x - (cr.x + cr.w)) < threshold && Math.abs(pt.y - (cr.y + cr.h)) < threshold;
+      const cr = cropRect || {
+        x: 0,
+        y: 0,
+        w: canvasRef.current!.width,
+        h: canvasRef.current!.height,
+      };
+
+      const isTL =
+        Math.abs(pt.x - cr.x) < threshold && Math.abs(pt.y - cr.y) < threshold;
+      const isTR =
+        Math.abs(pt.x - (cr.x + cr.w)) < threshold &&
+        Math.abs(pt.y - cr.y) < threshold;
+      const isBL =
+        Math.abs(pt.x - cr.x) < threshold &&
+        Math.abs(pt.y - (cr.y + cr.h)) < threshold;
+      const isBR =
+        Math.abs(pt.x - (cr.x + cr.w)) < threshold &&
+        Math.abs(pt.y - (cr.y + cr.h)) < threshold;
 
       if (isTL) {
         cropDragModeRef.current = "tl";
@@ -2628,10 +2999,22 @@ export default function EditorCanvas({
       } else if (isBR) {
         cropDragModeRef.current = "br";
       } else {
-        const nearTop = Math.abs(pt.y - cr.y) < threshold && pt.x >= cr.x - threshold && pt.x <= cr.x + cr.w + threshold;
-        const nearBottom = Math.abs(pt.y - (cr.y + cr.h)) < threshold && pt.x >= cr.x - threshold && pt.x <= cr.x + cr.w + threshold;
-        const nearLeft = Math.abs(pt.x - cr.x) < threshold && pt.y >= cr.y - threshold && pt.y <= cr.y + cr.h + threshold;
-        const nearRight = Math.abs(pt.x - (cr.x + cr.w)) < threshold && pt.y >= cr.y - threshold && pt.y <= cr.y + cr.h + threshold;
+        const nearTop =
+          Math.abs(pt.y - cr.y) < threshold &&
+          pt.x >= cr.x - threshold &&
+          pt.x <= cr.x + cr.w + threshold;
+        const nearBottom =
+          Math.abs(pt.y - (cr.y + cr.h)) < threshold &&
+          pt.x >= cr.x - threshold &&
+          pt.x <= cr.x + cr.w + threshold;
+        const nearLeft =
+          Math.abs(pt.x - cr.x) < threshold &&
+          pt.y >= cr.y - threshold &&
+          pt.y <= cr.y + cr.h + threshold;
+        const nearRight =
+          Math.abs(pt.x - (cr.x + cr.w)) < threshold &&
+          pt.y >= cr.y - threshold &&
+          pt.y <= cr.y + cr.h + threshold;
 
         let bestEdge: "t" | "b" | "l" | "r" | null = null;
         let minDist = Infinity;
@@ -2668,7 +3051,11 @@ export default function EditorCanvas({
         if (bestEdge) {
           cropDragModeRef.current = bestEdge;
         } else {
-          const isInside = pt.x > cr.x + threshold && pt.x < cr.x + cr.w - threshold && pt.y > cr.y + threshold && pt.y < cr.y + cr.h - threshold;
+          const isInside =
+            pt.x > cr.x + threshold &&
+            pt.x < cr.x + cr.w - threshold &&
+            pt.y > cr.y + threshold &&
+            pt.y < cr.y + cr.h - threshold;
           if (isInside) {
             cropDragModeRef.current = "move";
           } else {
@@ -2705,25 +3092,38 @@ export default function EditorCanvas({
       const touch2 = e.touches[1];
 
       if (isPinchingTextRef.current && draggingTextIndex !== null) {
-        const currentAngle = Math.atan2(touch2.clientY - touch1.clientY, touch2.clientX - touch1.clientX);
+        const currentAngle = Math.atan2(
+          touch2.clientY - touch1.clientY,
+          touch2.clientX - touch1.clientX,
+        );
         const deltaAngle = currentAngle - textInitialAngleRef.current;
-        
-        const currentDist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
-        const factor = textInitialDistRef.current ? currentDist / textInitialDistRef.current : 1;
-        const newSize = Math.max(10, Math.min(2000, textInitialSizeRef.current * factor));
-        
+
+        const currentDist = Math.hypot(
+          touch2.clientX - touch1.clientX,
+          touch2.clientY - touch1.clientY,
+        );
+        const factor = textInitialDistRef.current
+          ? currentDist / textInitialDistRef.current
+          : 1;
+        const newSize = Math.max(
+          10,
+          Math.min(2000, textInitialSizeRef.current * factor),
+        );
+
         const rect = canvasRef.current!.getBoundingClientRect();
         const scaleX = canvasRef.current!.width / rect.width;
         const scaleY = canvasRef.current!.height / rect.height;
 
         const currentMidpoint = {
           x: (touch1.clientX + touch2.clientX) / 2,
-          y: (touch1.clientY + touch2.clientY) / 2
+          y: (touch1.clientY + touch2.clientY) / 2,
         };
 
-        const deltaX = (currentMidpoint.x - textInitialMidpointRef.current.x) * scaleX;
-        const deltaY = (currentMidpoint.y - textInitialMidpointRef.current.y) * scaleY;
-        
+        const deltaX =
+          (currentMidpoint.x - textInitialMidpointRef.current.x) * scaleX;
+        const deltaY =
+          (currentMidpoint.y - textInitialMidpointRef.current.y) * scaleY;
+
         const nextTexts = [...texts];
         if (nextTexts[draggingTextIndex]) {
           nextTexts[draggingTextIndex] = {
@@ -2746,24 +3146,36 @@ export default function EditorCanvas({
       setSuggestedShape(null);
       if (zoomInitialDistanceRef.current && zoomStartRef.current) {
         if (activeTool === "size") {
-          const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+          const dist = Math.hypot(
+            touch2.clientX - touch1.clientX,
+            touch2.clientY - touch1.clientY,
+          );
           const factor = dist / zoomInitialDistanceRef.current;
-          const newScale = Math.max(0.1, Math.min(10, zoomInitialScaleRef.current * factor));
+          const newScale = Math.max(
+            0.1,
+            Math.min(10, zoomInitialScaleRef.current * factor),
+          );
           setManualImageScale(newScale);
 
           const midX = (touch1.clientX + touch2.clientX) / 2;
           const midY = (touch1.clientY + touch2.clientY) / 2;
           setManualImageOffset({
             x: midX - zoomStartRef.current.x,
-            y: midY - zoomStartRef.current.y
+            y: midY - zoomStartRef.current.y,
           });
           redraw();
           return;
         }
 
-        const dist = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
+        const dist = Math.hypot(
+          touch2.clientX - touch1.clientX,
+          touch2.clientY - touch1.clientY,
+        );
         const factor = dist / zoomInitialDistanceRef.current;
-        const newScale = Math.max(1, Math.min(6, zoomInitialScaleRef.current * factor));
+        const newScale = Math.max(
+          1,
+          Math.min(6, zoomInitialScaleRef.current * factor),
+        );
         setZoomScale(newScale);
 
         if (newScale > 1) {
@@ -2771,7 +3183,7 @@ export default function EditorCanvas({
           const midY = (touch1.clientY + touch2.clientY) / 2;
           setZoomOffset({
             x: midX - zoomStartRef.current.x,
-            y: midY - zoomStartRef.current.y
+            y: midY - zoomStartRef.current.y,
           });
         } else {
           setZoomOffset({ x: 0, y: 0 });
@@ -2786,31 +3198,41 @@ export default function EditorCanvas({
 
     const pt = getCanvasPoint(e);
 
-    if (isDraggingPathRef.current && editingPathIndex >= 0 && editingPathIndex < paths.length) {
+    if (
+      isDraggingPathRef.current &&
+      editingPathIndex >= 0 &&
+      editingPathIndex < paths.length
+    ) {
       e.preventDefault();
       const dx = pt.x - pathDragStartRef.current.x;
       const dy = pt.y - pathDragStartRef.current.y;
-      
+
       const newPaths = [...paths];
       const p = newPaths[editingPathIndex];
       const originalPoints = lastPathPointsRef.current;
-      
+
       let movedPoints = originalPoints;
       const mode = pathDragEndpointRef.current || "move";
 
       if (mode === "start" && originalPoints.length >= 2) {
-         movedPoints = [...originalPoints];
-         movedPoints[0] = { x: originalPoints[0].x + dx, y: originalPoints[0].y + dy };
+        movedPoints = [...originalPoints];
+        movedPoints[0] = {
+          x: originalPoints[0].x + dx,
+          y: originalPoints[0].y + dy,
+        };
       } else if (mode === "end" && originalPoints.length >= 2) {
-         movedPoints = [...originalPoints];
-         movedPoints[movedPoints.length - 1] = { x: originalPoints[movedPoints.length - 1].x + dx, y: originalPoints[movedPoints.length - 1].y + dy };
+        movedPoints = [...originalPoints];
+        movedPoints[movedPoints.length - 1] = {
+          x: originalPoints[movedPoints.length - 1].x + dx,
+          y: originalPoints[movedPoints.length - 1].y + dy,
+        };
       } else {
-         movedPoints = originalPoints.map(point => ({
-           x: point.x + dx,
-           y: point.y + dy
-         }));
+        movedPoints = originalPoints.map((point) => ({
+          x: point.x + dx,
+          y: point.y + dy,
+        }));
       }
-      
+
       const newPath2D = new Path2D();
       if (movedPoints.length > 0) {
         newPath2D.moveTo(movedPoints[0].x, movedPoints[0].y);
@@ -2818,13 +3240,13 @@ export default function EditorCanvas({
           newPath2D.lineTo(movedPoints[i].x, movedPoints[i].y);
         }
       }
-      
+
       newPaths[editingPathIndex] = {
         ...p,
         points: movedPoints,
-        path2d: newPath2D
+        path2d: newPath2D,
       };
-      
+
       setPaths(newPaths);
       redraw(undefined, newPaths);
       return;
@@ -2834,7 +3256,7 @@ export default function EditorCanvas({
       e.preventDefault();
       setManualImageOffset({
         x: pt.x - dragOffsetRef.current.x,
-        y: pt.y - dragOffsetRef.current.y
+        y: pt.y - dragOffsetRef.current.y,
       });
       redraw();
       return;
@@ -2847,12 +3269,21 @@ export default function EditorCanvas({
         if (textDragModeRef.current === "resize_rotate") {
           const parentText = nextTexts[draggingTextIndex];
           const rCurrent = Math.hypot(pt.x - parentText.x, pt.y - parentText.y);
-          const sizeNew = Math.max(12, Math.round(initialTextSizeRef.current * (rCurrent / initialPointerDistRef.current)));
-          
-          const currentAngle = Math.atan2(pt.y - parentText.y, pt.x - parentText.x);
+          const sizeNew = Math.max(
+            12,
+            Math.round(
+              initialTextSizeRef.current *
+                (rCurrent / initialPointerDistRef.current),
+            ),
+          );
+
+          const currentAngle = Math.atan2(
+            pt.y - parentText.y,
+            pt.x - parentText.x,
+          );
           const angleDiff = currentAngle - initialPointerAngleRef.current;
           const rotationNew = initialTextRotationRef.current + angleDiff;
-          
+
           nextTexts[draggingTextIndex] = {
             ...parentText,
             size: sizeNew,
@@ -2886,56 +3317,58 @@ export default function EditorCanvas({
         const dy = pt.y - dragStartPointRef.current.y;
         const startRect = dragStartCropRectRef.current;
         let newRect = { ...startRect };
-        
+
         if (cropDragModeRef.current === "move") {
-           newRect.x += dx;
-           newRect.y += dy;
+          newRect.x += dx;
+          newRect.y += dy;
         } else {
-           if (cropDragModeRef.current.includes("t")) {
-               newRect.y += dy;
-               newRect.h -= dy;
-           }
-           if (cropDragModeRef.current.includes("b")) {
-               newRect.h += dy;
-           }
-           if (cropDragModeRef.current.includes("l")) {
-               newRect.x += dx;
-               newRect.w -= dx;
-           }
-           if (cropDragModeRef.current.includes("r")) {
-               newRect.w += dx;
-           }
+          if (cropDragModeRef.current.includes("t")) {
+            newRect.y += dy;
+            newRect.h -= dy;
+          }
+          if (cropDragModeRef.current.includes("b")) {
+            newRect.h += dy;
+          }
+          if (cropDragModeRef.current.includes("l")) {
+            newRect.x += dx;
+            newRect.w -= dx;
+          }
+          if (cropDragModeRef.current.includes("r")) {
+            newRect.w += dx;
+          }
         }
-        
+
         // fix negative w/h
         if (newRect.w < 20) {
-            if (cropDragModeRef.current.includes("l")) newRect.x -= (20 - newRect.w);
-            newRect.w = 20;
+          if (cropDragModeRef.current.includes("l"))
+            newRect.x -= 20 - newRect.w;
+          newRect.w = 20;
         }
         if (newRect.h < 20) {
-            if (cropDragModeRef.current.includes("t")) newRect.y -= (20 - newRect.h);
-            newRect.h = 20;
+          if (cropDragModeRef.current.includes("t"))
+            newRect.y -= 20 - newRect.h;
+          newRect.h = 20;
         }
 
         const img = originalImageRef.current;
         if (img) {
           // Restrict to bounds
           if (newRect.x < 0) {
-             if (cropDragModeRef.current.includes("l")) newRect.w += newRect.x;
-             newRect.x = 0;
+            if (cropDragModeRef.current.includes("l")) newRect.w += newRect.x;
+            newRect.x = 0;
           }
           if (newRect.y < 0) {
-             if (cropDragModeRef.current.includes("t")) newRect.h += newRect.y;
-             newRect.y = 0;
+            if (cropDragModeRef.current.includes("t")) newRect.h += newRect.y;
+            newRect.y = 0;
           }
           if (newRect.x + newRect.w > img.width) {
-             newRect.w = img.width - newRect.x;
+            newRect.w = img.width - newRect.x;
           }
           if (newRect.y + newRect.h > img.height) {
-             newRect.h = img.height - newRect.y;
+            newRect.h = img.height - newRect.y;
           }
         }
-        
+
         tempCropRectRef.current = newRect;
       }
     } else if (currentPathRef.current) {
@@ -2951,7 +3384,7 @@ export default function EditorCanvas({
 
   const handlePointerUp = (e?: React.MouseEvent | React.TouchEvent) => {
     isPinchingTextRef.current = false;
-    
+
     if (e && "touches" in e) {
       if (e.touches.length === 0) {
         if (isPinchZoomingRef.current) {
@@ -2969,12 +3402,12 @@ export default function EditorCanvas({
         if (activeTool === "size") {
           zoomStartRef.current = {
             x: touch.clientX - manualImageOffset.x,
-            y: touch.clientY - manualImageOffset.y
+            y: touch.clientY - manualImageOffset.y,
           };
         } else {
           zoomStartRef.current = {
             x: touch.clientX - zoomOffset.x,
-            y: touch.clientY - zoomOffset.y
+            y: touch.clientY - zoomOffset.y,
           };
         }
         zoomInitialDistanceRef.current = null;
@@ -3010,31 +3443,38 @@ export default function EditorCanvas({
     if (!isDrawing) return;
     setIsDrawing(false);
 
-    if (
-      activeTool === "crop" &&
-      originalImageRef.current
-    ) {
+    if (activeTool === "crop" && originalImageRef.current) {
       let newRect: { x: number; y: number; w: number; h: number } | null = null;
-      if (cropDragModeRef.current === "new" && cropStartRef.current && cropEndRef.current) {
+      if (
+        cropDragModeRef.current === "new" &&
+        cropStartRef.current &&
+        cropEndRef.current
+      ) {
         const sx = Math.min(cropStartRef.current.x, cropEndRef.current.x);
         const sy = Math.min(cropStartRef.current.y, cropEndRef.current.y);
         const w = Math.abs(cropStartRef.current.x - cropEndRef.current.x);
         const h = Math.abs(cropStartRef.current.y - cropEndRef.current.y);
-  
+
         // Check if crop area is reasonably large, else ignore
         if (w > 20 && h > 20) {
           const img = originalImageRef.current;
           const xCoord = Math.max(0, Math.min(img.width - 20, Math.round(sx)));
           const yCoord = Math.max(0, Math.min(img.height - 20, Math.round(sy)));
-          const wVal = Math.max(20, Math.min(img.width - xCoord, Math.round(w)));
-          const hVal = Math.max(20, Math.min(img.height - yCoord, Math.round(h)));
-  
+          const wVal = Math.max(
+            20,
+            Math.min(img.width - xCoord, Math.round(w)),
+          );
+          const hVal = Math.max(
+            20,
+            Math.min(img.height - yCoord, Math.round(h)),
+          );
+
           newRect = { x: xCoord, y: yCoord, w: wVal, h: hVal };
         }
       } else if (cropDragModeRef.current !== "new" && tempCropRectRef.current) {
-         newRect = tempCropRectRef.current;
+        newRect = tempCropRectRef.current;
       }
-      
+
       if (newRect && cropRect) {
         const oldSetup = getScreenshotCenterAndScale(cropRect);
         const newSetup = getScreenshotCenterAndScale(newRect);
@@ -3103,7 +3543,7 @@ export default function EditorCanvas({
         setCropRect(newRect);
         setShouldCommit(true);
       }
-      
+
       cropStartRef.current = null;
       cropEndRef.current = null;
       tempCropRectRef.current = null;
@@ -3111,7 +3551,9 @@ export default function EditorCanvas({
     } else if (currentPathRef.current && canvasRef.current) {
       const isArrowTool = activeTool === "arrows";
       const color =
-        (activeTool === "draw" || isArrowTool) ? selectedDrawColor : selectedBlurColor;
+        activeTool === "draw" || isArrowTool
+          ? selectedDrawColor
+          : selectedBlurColor;
       const width = brushSize;
 
       // Only add paths that have substantive movement to avoid "junk" dots when tapping to deselect
@@ -3160,9 +3602,12 @@ export default function EditorCanvas({
   const handleAddText = () => {
     if (!canvasRef.current || !currentText.trim() || !cropRect) return;
     const canvas = canvasRef.current;
+    const dpr = getDPR();
+    const cw = canvas.width / dpr;
+    const ch = canvas.height / dpr;
 
-    const designW = canvas.width > 100 ? canvas.width : (cropRect ? cropRect.w : 1080);
-    const designH = canvas.height > 100 ? canvas.height : (cropRect ? cropRect.h : 1080);
+    const designW = cw > 100 ? cw : cropRect ? cropRect.w : 1080;
+    const designH = ch > 100 ? ch : cropRect ? cropRect.h : 1080;
 
     const size = currentTextSize;
     let x = designW / 2;
@@ -3184,7 +3629,7 @@ export default function EditorCanvas({
     }
 
     const newText: TextItem = {
-      ... (editingTextIndex >= 0 ? texts[editingTextIndex] : {}),
+      ...(editingTextIndex >= 0 ? texts[editingTextIndex] : {}),
       text: currentText,
       x,
       y,
@@ -3242,9 +3687,13 @@ export default function EditorCanvas({
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
 
+    const dpr = getDPR();
+    const cw = canvas.width / dpr;
+    const ch = canvas.height / dpr;
+
     const size = selectedStickerSize;
-    let x = canvas.width / 2;
-    let y = canvas.height / 2;
+    let x = cw / 2;
+    let y = ch / 2;
 
     if (editingTextIndex >= 0) {
       x = texts[editingTextIndex].x;
@@ -3300,7 +3749,7 @@ export default function EditorCanvas({
       const nextTexts = [...texts];
       nextTexts[editingTextIndex] = {
         ...nextTexts[editingTextIndex],
-        size: newSize
+        size: newSize,
       };
       setTexts(nextTexts);
       redraw(undefined, undefined, nextTexts);
@@ -3313,7 +3762,7 @@ export default function EditorCanvas({
       const nextTexts = [...texts];
       nextTexts[editingTextIndex] = {
         ...nextTexts[editingTextIndex],
-        rotation: newRotRad
+        rotation: newRotRad,
       };
       setTexts(nextTexts);
       redraw(undefined, undefined, nextTexts);
@@ -3328,7 +3777,7 @@ export default function EditorCanvas({
       nextTexts[editingTextIndex] = {
         ...t,
         badgeBg: t.stickerType === "badge" ? newColor : undefined,
-        color: t.stickerType === "badge" ? t.color : newColor
+        color: t.stickerType === "badge" ? t.color : newColor,
       };
       setTexts(nextTexts);
       redraw(undefined, undefined, nextTexts);
@@ -3339,7 +3788,10 @@ export default function EditorCanvas({
     setSelectedStickerTextColor(newColor);
     if (editingTextIndex >= 0) {
       const nextTexts = [...texts];
-      nextTexts[editingTextIndex] = { ...nextTexts[editingTextIndex], color: newColor };
+      nextTexts[editingTextIndex] = {
+        ...nextTexts[editingTextIndex],
+        color: newColor,
+      };
       setTexts(nextTexts);
       redraw(undefined, undefined, nextTexts);
     }
@@ -3349,7 +3801,10 @@ export default function EditorCanvas({
     setSelectedStickerShadow(val);
     if (editingTextIndex >= 0) {
       const nextTexts = [...texts];
-      nextTexts[editingTextIndex] = { ...nextTexts[editingTextIndex], hasShadow: val };
+      nextTexts[editingTextIndex] = {
+        ...nextTexts[editingTextIndex],
+        hasShadow: val,
+      };
       setTexts(nextTexts);
       redraw(undefined, undefined, nextTexts);
     }
@@ -3359,7 +3814,10 @@ export default function EditorCanvas({
     setSelectedStickerShadowColor(color);
     if (editingTextIndex >= 0) {
       const nextTexts = [...texts];
-      nextTexts[editingTextIndex] = { ...nextTexts[editingTextIndex], shadowColor: color };
+      nextTexts[editingTextIndex] = {
+        ...nextTexts[editingTextIndex],
+        shadowColor: color,
+      };
       setTexts(nextTexts);
       redraw(undefined, undefined, nextTexts);
     }
@@ -3369,7 +3827,10 @@ export default function EditorCanvas({
     setSelectedStickerBgColor(color);
     if (editingTextIndex >= 0) {
       const nextTexts = [...texts];
-      nextTexts[editingTextIndex] = { ...nextTexts[editingTextIndex], bgColor: color };
+      nextTexts[editingTextIndex] = {
+        ...nextTexts[editingTextIndex],
+        bgColor: color,
+      };
       setTexts(nextTexts);
       redraw(undefined, undefined, nextTexts);
     }
@@ -3381,7 +3842,7 @@ export default function EditorCanvas({
       const nextTexts = [...texts];
       nextTexts[editingTextIndex] = {
         ...nextTexts[editingTextIndex],
-        text: newText
+        text: newText,
       };
       setTexts(nextTexts);
       redraw(undefined, undefined, nextTexts);
@@ -3394,7 +3855,7 @@ export default function EditorCanvas({
       const nextTexts = [...texts];
       nextTexts[editingTextIndex] = {
         ...nextTexts[editingTextIndex],
-        fontName: newFont
+        fontName: newFont,
       };
       setTexts(nextTexts);
       redraw(undefined, undefined, nextTexts);
@@ -3448,13 +3909,13 @@ export default function EditorCanvas({
         manualImageScale,
         false,
         resizeMode,
-        resizerBg
+        resizerBg,
       );
 
       // 3. Load both images into refs so the editor instantly switches to the new styled mockup and raw base
       const updatedStyledImg = new Image();
       const updatedRawImg = new Image();
-      
+
       let loadedCount = 0;
       const onImageLoaded = () => {
         loadedCount++;
@@ -3474,7 +3935,12 @@ export default function EditorCanvas({
 
           // Force a redraw with the new image loaded. Since we now set the styled image,
           // the canvas fits the newly generated styled mockup, which is perfect and scaled!
-          fitImageToContainer(updatedStyledImg, { x: 0, y: 0, w: updatedStyledImg.width, h: updatedStyledImg.height });
+          fitImageToContainer(updatedStyledImg, {
+            x: 0,
+            y: 0,
+            w: updatedStyledImg.width,
+            h: updatedStyledImg.height,
+          });
         }
       };
 
@@ -3497,7 +3963,6 @@ export default function EditorCanvas({
         setIsApplyingCrop(false);
       };
       updatedRawImg.src = cleanDataUrl;
-
     } catch (err) {
       console.error("Error applying and saving crop:", err);
       setIsApplyingCrop(false);
@@ -3505,7 +3970,10 @@ export default function EditorCanvas({
   };
 
   const handleSave = () => {
-    const rawImg = rawScreenshotRef.current || styledImageRef.current || originalImageRef.current;
+    const rawImg =
+      rawScreenshotRef.current ||
+      styledImageRef.current ||
+      originalImageRef.current;
     if (canvasRef.current && rawImg && cropRect) {
       // Create clean cropped base from raw unstyled screenshot
       const cleanCanvas = document.createElement("canvas");
@@ -3530,19 +3998,19 @@ export default function EditorCanvas({
         );
         cCtx.restore();
         const cleanDataUrl = cleanCanvas.toDataURL("image/png");
-        
+
         // Redraw without bounding boxes to capture clean preview
         redraw(undefined, undefined, undefined, true);
         let previewDataUrl = canvasRef.current.toDataURL("image/png");
         // Put bounding boxes back
         redraw();
-        
+
         if (activeTool === "crop") {
           // If we are currently cropping, canvas has dark overlay UI.
           // Don't save the UI into the preview.
           previewDataUrl = cleanDataUrl;
         }
-        
+
         setCurrentCleanSrc(cleanDataUrl);
 
         onSave(
@@ -3557,20 +4025,31 @@ export default function EditorCanvas({
           manualImageScale,
           resizeMode,
           resizerBg,
-          canvasRef.current ? { width: canvasRef.current.width, height: canvasRef.current.height } : undefined
+          canvasRef.current
+            ? {
+                width: canvasRef.current.width,
+                height: canvasRef.current.height,
+              }
+            : undefined,
         );
       }
     }
   };
 
   return (
-    <div 
+    <div
       className="flex flex-col h-full bg-black text-white absolute inset-0 z-50"
-      style={{ paddingBottom: (!isPremium) ? 'calc(env(safe-area-inset-bottom) + 56px)' : undefined }}
+      style={{
+        paddingBottom: !isPremium
+          ? "calc(env(safe-area-inset-bottom) + 56px)"
+          : undefined,
+      }}
     >
       <canvas ref={blurCanvasRef} className="hidden" />
 
-      <div className={`flex items-center justify-between p-4 bg-[#111] z-10 border-b border-white/10 pt-safe shrink-0`}>
+      <div
+        className={`flex items-center justify-between p-4 bg-[#111] z-10 border-b border-white/10 pt-safe shrink-0`}
+      >
         <button
           onClick={onCancel}
           className="p-2 hover:bg-white/10 rounded-full transition-colors"
@@ -3587,8 +4066,10 @@ export default function EditorCanvas({
           >
             <Undo className="w-5 h-5" />
           </button>
-          
-          <span className="font-medium text-sm tracking-wide text-white px-2">EDITOR</span>
+
+          <span className="font-medium text-sm tracking-wide text-white px-2">
+            EDITOR
+          </span>
 
           <button
             onClick={redo}
@@ -3626,7 +4107,9 @@ export default function EditorCanvas({
           style={{
             transform: `translate(${zoomOffset.x}px, ${zoomOffset.y}px) scale(${zoomScale})`,
             transformOrigin: "center center",
-            transition: isPinchZoomingRef.current ? "none" : "transform 0.15s ease-out",
+            transition: isPinchZoomingRef.current
+              ? "none"
+              : "transform 0.15s ease-out",
           }}
         >
           <canvas
@@ -3643,7 +4126,9 @@ export default function EditorCanvas({
               if (activeTool === "size") {
                 e.preventDefault();
                 const zoomFactor = -e.deltaY * 0.005;
-                setManualImageScale(prev => Math.max(0.1, Math.min(10, prev + zoomFactor)));
+                setManualImageScale((prev) =>
+                  Math.max(0.1, Math.min(10, prev + zoomFactor)),
+                );
                 setTimeout(() => redraw(), 0);
               }
             }}
@@ -3656,74 +4141,90 @@ export default function EditorCanvas({
             onTouchEnd={handlePointerUp}
           />
 
-          {activeTool === "crop" && (() => {
-            const canvas = canvasRef.current;
-            if (!canvas) return null;
-            
-            let sx: number | undefined, sy: number | undefined, w: number | undefined, h: number | undefined;
-            if (cropDragModeRef.current === "new" && cropStartRef.current && cropEndRef.current) {
-              sx = Math.min(cropStartRef.current.x, cropEndRef.current.x);
-              sy = Math.min(cropStartRef.current.y, cropEndRef.current.y);
-              w = Math.abs(cropStartRef.current.x - cropEndRef.current.x);
-              h = Math.abs(cropStartRef.current.y - cropEndRef.current.y);
-            } else if (tempCropRectRef.current) {
-              sx = tempCropRectRef.current.x;
-              sy = tempCropRectRef.current.y;
-              w = tempCropRectRef.current.w;
-              h = tempCropRectRef.current.h;
-            } else if (cropRect) {
-              sx = cropRect.x;
-              sy = cropRect.y;
-              w = cropRect.w;
-              h = cropRect.h;
-            }
+          {activeTool === "crop" &&
+            (() => {
+              const canvas = canvasRef.current;
+              if (!canvas) return null;
 
-            if (sx === undefined || sy === undefined || w === undefined || h === undefined || w < 25 || h < 25) return null;
+              let sx: number | undefined,
+                sy: number | undefined,
+                w: number | undefined,
+                h: number | undefined;
+              if (
+                cropDragModeRef.current === "new" &&
+                cropStartRef.current &&
+                cropEndRef.current
+              ) {
+                sx = Math.min(cropStartRef.current.x, cropEndRef.current.x);
+                sy = Math.min(cropStartRef.current.y, cropEndRef.current.y);
+                w = Math.abs(cropStartRef.current.x - cropEndRef.current.x);
+                h = Math.abs(cropStartRef.current.y - cropEndRef.current.y);
+              } else if (tempCropRectRef.current) {
+                sx = tempCropRectRef.current.x;
+                sy = tempCropRectRef.current.y;
+                w = tempCropRectRef.current.w;
+                h = tempCropRectRef.current.h;
+              } else if (cropRect) {
+                sx = cropRect.x;
+                sy = cropRect.y;
+                w = cropRect.w;
+                h = cropRect.h;
+              }
 
-            // Convert to CSS pixels
-            const cssX = (sx / canvas.width) * canvasSize.width;
-            const cssY = (sy / canvas.height) * canvasSize.height;
-            const cssW = (w / canvas.width) * canvasSize.width;
-            const cssH = (h / canvas.height) * canvasSize.height;
+              if (
+                sx === undefined ||
+                sy === undefined ||
+                w === undefined ||
+                h === undefined ||
+                w < 25 ||
+                h < 25
+              )
+                return null;
 
-            return (
-              <div
-                style={{
-                  position: "absolute",
-                  left: cssX,
-                  top: cssY,
-                  width: cssW,
-                  height: cssH,
-                  pointerEvents: "none",
-                  zIndex: 25,
-                }}
-                className="flex items-center justify-center font-sans"
-              >
-                <button
-                  disabled={isApplyingCrop}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    handleApplySaveCrop();
+              // Convert to CSS pixels
+              const cssX = (sx / canvas.width) * canvasSize.width;
+              const cssY = (sy / canvas.height) * canvasSize.height;
+              const cssW = (w / canvas.width) * canvasSize.width;
+              const cssH = (h / canvas.height) * canvasSize.height;
+
+              return (
+                <div
+                  style={{
+                    position: "absolute",
+                    left: cssX,
+                    top: cssY,
+                    width: cssW,
+                    height: cssH,
+                    pointerEvents: "none",
+                    zIndex: 25,
                   }}
-                  style={{ pointerEvents: "auto" }}
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 text-white font-bold text-xs uppercase tracking-wide rounded-lg shadow-2xl flex items-center gap-1.5 border border-emerald-400/40 hover:scale-105 active:scale-95 transition-all whitespace-nowrap cursor-pointer pointer-events-auto"
+                  className="flex items-center justify-center font-sans"
                 >
-                  {isApplyingCrop ? (
-                    <>
-                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-3.5 h-3.5 stroke-[3]" />
-                      Save Crop
-                    </>
-                  )}
-                </button>
-              </div>
-            );
-          })()}
+                  <button
+                    disabled={isApplyingCrop}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      handleApplySaveCrop();
+                    }}
+                    style={{ pointerEvents: "auto" }}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 text-white font-bold text-xs uppercase tracking-wide rounded-lg shadow-2xl flex items-center gap-1.5 border border-emerald-400/40 hover:scale-105 active:scale-95 transition-all whitespace-nowrap cursor-pointer pointer-events-auto"
+                  >
+                    {isApplyingCrop ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        Save Crop
+                      </>
+                    )}
+                  </button>
+                </div>
+              );
+            })()}
         </div>
 
         {/* Path Deletion Prompt */}
@@ -3798,7 +4299,11 @@ export default function EditorCanvas({
                   const next = [...prev];
                   const last = next[next.length - 1];
                   if (!last) return prev;
-                  next[next.length - 1] = { ...last, path2d: newRefined, points: newPoints };
+                  next[next.length - 1] = {
+                    ...last,
+                    path2d: newRefined,
+                    points: newPoints,
+                  };
                   redraw(undefined, next);
                   return next;
                 });
@@ -3825,125 +4330,189 @@ export default function EditorCanvas({
           </div>
 
           <div className="flex flex-col gap-2.5 min-h-[190px]">
-            {texts.length > 0 ? (() => {
-              const activeIdx = selectedTextIndex !== null && selectedTextIndex < texts.length 
-                ? selectedTextIndex 
-                : texts.length - 1;
-              const selectedWatermark = texts[activeIdx];
-              
-              // Helper to handle property changes and ensure selection
-              const updateActive = (updater: (item: TextItem) => void) => {
-                const next = [...texts];
-                updater(next[activeIdx]);
-                setTexts(next);
-                if (selectedTextIndex !== activeIdx) setSelectedTextIndex(activeIdx);
-                redraw(undefined, undefined, next);
-              };
+            {texts.length > 0 ? (
+              (() => {
+                const activeIdx =
+                  selectedTextIndex !== null && selectedTextIndex < texts.length
+                    ? selectedTextIndex
+                    : texts.length - 1;
+                const selectedWatermark = texts[activeIdx];
 
-              return (
-                <div className="flex flex-col gap-2">
-                  <div className="flex justify-between items-center w-full">
-                    <span className="text-[9px] font-extrabold text-gray-400 tracking-wider flex-1 uppercase">
-                      {selectedWatermark.isLogo ? "Logo Image" : "Watermark Text"}
-                    </span>
-                    <button
-                      onClick={() => {
-                        const next = [...texts];
-                        next.splice(activeIdx, 1);
-                        setTexts(next);
-                        setSelectedTextIndex(null);
-                        redraw(undefined, undefined, next);
-                      }}
-                      className="flex items-center gap-1 text-red-400/80 hover:text-red-400 bg-red-400/10 hover:bg-red-400/20 px-2 py-1 rounded-md transition-colors"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      <span className="text-[10px] font-bold">Remove</span>
-                    </button>
+                // Helper to handle property changes and ensure selection
+                const updateActive = (updater: (item: TextItem) => void) => {
+                  const next = [...texts];
+                  updater(next[activeIdx]);
+                  setTexts(next);
+                  if (selectedTextIndex !== activeIdx)
+                    setSelectedTextIndex(activeIdx);
+                  redraw(undefined, undefined, next);
+                };
+
+                return (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center w-full">
+                      <span className="text-[9px] font-extrabold text-gray-400 tracking-wider flex-1 uppercase">
+                        {selectedWatermark.isLogo
+                          ? "Logo Image"
+                          : "Watermark Text"}
+                      </span>
+                      <button
+                        onClick={() => {
+                          const next = [...texts];
+                          next.splice(activeIdx, 1);
+                          setTexts(next);
+                          setSelectedTextIndex(null);
+                          redraw(undefined, undefined, next);
+                        }}
+                        className="flex items-center gap-1 text-red-400/80 hover:text-red-400 bg-red-400/10 hover:bg-red-400/20 px-2 py-1 rounded-md transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span className="text-[10px] font-bold">Remove</span>
+                      </button>
+                    </div>
+
+                    {!selectedWatermark.isLogo && (
+                      <div className="flex flex-col gap-0.5">
+                        <input
+                          type="text"
+                          value={selectedWatermark.text}
+                          onChange={(e) =>
+                            updateActive((item) => {
+                              item.text = e.target.value;
+                            })
+                          }
+                          className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs outline-none focus:ring-1 focus:ring-blue-500 font-medium"
+                          placeholder="Enter watermark text"
+                        />
+                      </div>
+                    )}
+
+                    {!selectedWatermark.isLogo && (
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[9px] font-extrabold text-gray-400 tracking-wider uppercase">
+                          Text Color
+                        </span>
+                        <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                          {textColors.map((color) => (
+                            <button
+                              key={color}
+                              onClick={() =>
+                                updateActive((item) => {
+                                  item.color = color;
+                                })
+                              }
+                              className={`w-5 h-5 shrink-0 rounded-full border transition-transform duration-150 ${
+                                selectedWatermark.color === color
+                                  ? "border-blue-500 scale-110 ring-2 ring-blue-500/30"
+                                  : "border-white/10"
+                              }`}
+                              style={{ backgroundColor: color }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Sizing, Opacity and Rotation adjustments in super compact columns */}
+                    <div className="grid grid-cols-3 gap-2 mt-0.5 shadow-sm">
+                      <div className="flex flex-col gap-1 bg-white/[0.04] px-2.5 py-1.5 rounded-xl border border-white/5">
+                        <div className="flex justify-between items-center text-[8px] font-extrabold text-gray-400 tracking-wider">
+                          <span>SIZE</span>
+                          <span className="text-white font-mono text-[9px]">
+                            {selectedWatermark.size}px
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={10}
+                          max={
+                            canvasRef.current
+                              ? Math.round(
+                                  Math.min(
+                                    canvasRef.current.width,
+                                    canvasRef.current.height,
+                                  ) * (selectedWatermark.isLogo ? 0.82 : 0.62),
+                                )
+                              : selectedWatermark.isLogo
+                                ? 650
+                                : 300
+                          }
+                          value={selectedWatermark.size}
+                          onChange={(e) =>
+                            updateActive((item) => {
+                              item.size = parseInt(e.target.value);
+                            })
+                          }
+                          className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1 bg-white/[0.04] px-2.5 py-1.5 rounded-xl border border-white/5">
+                        <div className="flex justify-between items-center text-[8px] font-extrabold text-gray-400 tracking-wider">
+                          <span>OPACITY</span>
+                          <span className="text-white font-mono text-[9px]">
+                            {Math.round(
+                              (selectedWatermark.opacity !== undefined
+                                ? selectedWatermark.opacity
+                                : 1.0) * 100,
+                            )}
+                            %
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0.1}
+                          max={1.0}
+                          step={0.05}
+                          value={
+                            selectedWatermark.opacity !== undefined
+                              ? selectedWatermark.opacity
+                              : 1.0
+                          }
+                          onChange={(e) =>
+                            updateActive((item) => {
+                              item.opacity = parseFloat(e.target.value);
+                            })
+                          }
+                          className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1 bg-white/[0.04] px-2.5 py-1.5 rounded-xl border border-white/5">
+                        <div className="flex justify-between items-center text-[8px] font-extrabold text-gray-400 tracking-wider">
+                          <span>ROTATE</span>
+                          <span className="text-white font-mono text-[9px]">
+                            {Math.round(
+                              ((selectedWatermark.rotation || 0) * 180) /
+                                Math.PI,
+                            )}
+                            °
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={-180}
+                          max={180}
+                          value={Math.round(
+                            ((selectedWatermark.rotation || 0) * 180) / Math.PI,
+                          )}
+                          onChange={(e) =>
+                            updateActive((item) => {
+                              item.rotation =
+                                (parseInt(e.target.value) * Math.PI) / 180;
+                            })
+                          }
+                          className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        />
+                      </div>
+                    </div>
                   </div>
-
-                  {!selectedWatermark.isLogo && (
-                    <div className="flex flex-col gap-0.5">
-                      <input
-                        type="text"
-                        value={selectedWatermark.text}
-                        onChange={(e) => updateActive((item) => { item.text = e.target.value; })}
-                        className="w-full bg-zinc-900 border border-white/10 rounded-xl px-3 py-1.5 text-white text-xs outline-none focus:ring-1 focus:ring-blue-500 font-medium"
-                        placeholder="Enter watermark text"
-                      />
-                    </div>
-                  )}
-
-                  {!selectedWatermark.isLogo && (
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[9px] font-extrabold text-gray-400 tracking-wider uppercase">Text Color</span>
-                      <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                        {textColors.map((color) => (
-                          <button
-                            key={color}
-                            onClick={() => updateActive((item) => { item.color = color; })}
-                            className={`w-5 h-5 shrink-0 rounded-full border transition-transform duration-150 ${
-                              selectedWatermark.color === color ? "border-blue-500 scale-110 ring-2 ring-blue-500/30" : "border-white/10"
-                            }`}
-                            style={{ backgroundColor: color }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Sizing, Opacity and Rotation adjustments in super compact columns */}
-                  <div className="grid grid-cols-3 gap-2 mt-0.5 shadow-sm">
-                    <div className="flex flex-col gap-1 bg-white/[0.04] px-2.5 py-1.5 rounded-xl border border-white/5">
-                      <div className="flex justify-between items-center text-[8px] font-extrabold text-gray-400 tracking-wider">
-                        <span>SIZE</span>
-                        <span className="text-white font-mono text-[9px]">{selectedWatermark.size}px</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={10}
-                        max={canvasRef.current ? Math.round(Math.min(canvasRef.current.width, canvasRef.current.height) * (selectedWatermark.isLogo ? 0.82 : 0.62)) : (selectedWatermark.isLogo ? 650 : 300)}
-                        value={selectedWatermark.size}
-                        onChange={(e) => updateActive((item) => { item.size = parseInt(e.target.value); })}
-                        className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                      />
-                    </div>
-
-                    <div className="flex flex-col gap-1 bg-white/[0.04] px-2.5 py-1.5 rounded-xl border border-white/5">
-                      <div className="flex justify-between items-center text-[8px] font-extrabold text-gray-400 tracking-wider">
-                        <span>OPACITY</span>
-                        <span className="text-white font-mono text-[9px]">{Math.round((selectedWatermark.opacity !== undefined ? selectedWatermark.opacity : 1.0) * 100)}%</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0.1}
-                        max={1.0}
-                        step={0.05}
-                        value={selectedWatermark.opacity !== undefined ? selectedWatermark.opacity : 1.0}
-                        onChange={(e) => updateActive((item) => { item.opacity = parseFloat(e.target.value); })}
-                        className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                      />
-                    </div>
-
-                    <div className="flex flex-col gap-1 bg-white/[0.04] px-2.5 py-1.5 rounded-xl border border-white/5">
-                      <div className="flex justify-between items-center text-[8px] font-extrabold text-gray-400 tracking-wider">
-                        <span>ROTATE</span>
-                        <span className="text-white font-mono text-[9px]">{Math.round((selectedWatermark.rotation || 0) * 180 / Math.PI)}°</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={-180}
-                        max={180}
-                        value={Math.round((selectedWatermark.rotation || 0) * 180 / Math.PI)}
-                        onChange={(e) => updateActive((item) => { item.rotation = parseInt(e.target.value) * Math.PI / 180; })}
-                        className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-              );
-            })() : (
+                );
+              })()
+            ) : (
               <div className="text-center py-3 px-4 bg-white/5 rounded-xl border border-dashed border-white/10 text-[11px] text-gray-400 my-auto leading-relaxed">
-                No watermarks added yet. Click the buttons below to add text or a logo!
+                No watermarks added yet. Click the buttons below to add text or
+                a logo!
               </div>
             )}
           </div>
@@ -3973,12 +4542,19 @@ export default function EditorCanvas({
                       const src = event.target?.result as string;
                       const img = new Image();
                       img.onload = () => {
+                        const dpr = getDPR();
+                        const cw = canvasRef.current
+                          ? canvasRef.current.width / dpr
+                          : 500;
+                        const ch = canvasRef.current
+                          ? canvasRef.current.height / dpr
+                          : 500;
                         const newLogo: TextItem = {
                           text: "Logo",
-                          x: canvasRef.current ? canvasRef.current.width / 2 : 250,
-                          y: canvasRef.current ? canvasRef.current.height / 2 : 250,
+                          x: cw / 2,
+                          y: ch / 2,
                           color: "transparent",
-                          size: Math.round(Math.min(canvasRef.current ? canvasRef.current.width : 500, canvasRef.current ? canvasRef.current.height : 500) * 0.25) || 120,
+                          size: Math.round(Math.min(cw, ch) * 0.25) || 120,
                           positionMode: "Default",
                           fontName: "Default",
                           isLogo: true,
@@ -4005,8 +4581,19 @@ export default function EditorCanvas({
 
               <button
                 onClick={() => {
-                  const designW = canvasRef.current && canvasRef.current.width > 100 ? canvasRef.current.width : (cropRect ? cropRect.w : 1080);
-                  const designH = canvasRef.current && canvasRef.current.height > 100 ? canvasRef.current.height : (cropRect ? cropRect.h : 1080);
+                  const dpr = getDPR();
+                  const designW =
+                    canvasRef.current && canvasRef.current.width > 100
+                      ? canvasRef.current.width / dpr
+                      : cropRect
+                        ? cropRect.w
+                        : 1080;
+                  const designH =
+                    canvasRef.current && canvasRef.current.height > 100
+                      ? canvasRef.current.height / dpr
+                      : cropRect
+                        ? cropRect.h
+                        : 1080;
                   const baseSize = designW;
                   const newTxt: TextItem = {
                     text: "Draft Watermark",
@@ -4052,30 +4639,40 @@ export default function EditorCanvas({
             active={false}
             disabled={isRotating}
             onClick={handleRotate90}
-            icon={isRotating ? <Loader2 className="animate-spin" /> : <RotateCw />}
+            icon={
+              isRotating ? <Loader2 className="animate-spin" /> : <RotateCw />
+            }
             label="Rotate"
           />
           <ToolButton
             active={activeTool === "crop"}
-            onClick={() => setActiveTool(activeTool === "crop" ? "none" : "crop")}
+            onClick={() =>
+              setActiveTool(activeTool === "crop" ? "none" : "crop")
+            }
             icon={<Crop />}
             label="Crop"
           />
           <ToolButton
             active={activeTool === "draw"}
-            onClick={() => setActiveTool(activeTool === "draw" ? "none" : "draw")}
+            onClick={() =>
+              setActiveTool(activeTool === "draw" ? "none" : "draw")
+            }
             icon={<PenTool />}
             label="Draw"
           />
           <ToolButton
             active={activeTool === "arrows"}
-            onClick={() => setActiveTool(activeTool === "arrows" ? "none" : "arrows")}
+            onClick={() =>
+              setActiveTool(activeTool === "arrows" ? "none" : "arrows")
+            }
             icon={<ArrowRight />}
             label="Arrows"
           />
           <ToolButton
             active={activeTool === "blur"}
-            onClick={() => setActiveTool(activeTool === "blur" ? "none" : "blur")}
+            onClick={() =>
+              setActiveTool(activeTool === "blur" ? "none" : "blur")
+            }
             icon={<Droplets />}
             label="Blur"
           />
@@ -4086,7 +4683,11 @@ export default function EditorCanvas({
                 setActiveTool("none");
                 setShowTextModal(false);
               } else {
-                if (selectedTextIndex !== null && selectedTextIndex >= 0 && selectedTextIndex < texts.length) {
+                if (
+                  selectedTextIndex !== null &&
+                  selectedTextIndex >= 0 &&
+                  selectedTextIndex < texts.length
+                ) {
                   const t = texts[selectedTextIndex];
                   setEditingTextIndex(selectedTextIndex);
                   setCurrentText(t.text);
@@ -4170,7 +4771,9 @@ export default function EditorCanvas({
               setManualCanvasSize(null);
               if (originalImageRef.current) {
                 setCanvasWidthInput(originalImageRef.current.width.toString());
-                setCanvasHeightInput(originalImageRef.current.height.toString());
+                setCanvasHeightInput(
+                  originalImageRef.current.height.toString(),
+                );
               }
               if (rawScreenshotRef.current) {
                 const rect = {
@@ -4217,7 +4820,9 @@ export default function EditorCanvas({
 
       {/* Floating Color Selector for Draw and Blur */}
       <AnimatePresence>
-        {(activeTool === "draw" || activeTool === "blur" || activeTool === "arrows") && (
+        {(activeTool === "draw" ||
+          activeTool === "blur" ||
+          activeTool === "arrows") && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
@@ -4247,7 +4852,10 @@ export default function EditorCanvas({
                       : "bg-black/20 border border-white/5 text-gray-300 hover:text-white"
                   }`}
                 >
-                  <div className="w-2 h-2 rounded-full border border-white/30 shrink-0 shadow-sm animate-pulse" style={{ backgroundColor: selectedDrawColor }} />
+                  <div
+                    className="w-2 h-2 rounded-full border border-white/30 shrink-0 shadow-sm animate-pulse"
+                    style={{ backgroundColor: selectedDrawColor }}
+                  />
                   Color
                 </button>
                 <button
@@ -4259,7 +4867,9 @@ export default function EditorCanvas({
                       : "bg-black/20 border border-white/5 text-gray-400 hover:text-white"
                   }`}
                 >
-                  <span className="text-[8px] text-[#60a5fa] font-extrabold select-none shrink-0 bg-blue-500/10 px-1 rounded">{brushSize}px</span>
+                  <span className="text-[8px] text-[#60a5fa] font-extrabold select-none shrink-0 bg-blue-500/10 px-1 rounded">
+                    {brushSize}px
+                  </span>
                   Size
                 </button>
               </div>
@@ -4284,7 +4894,9 @@ export default function EditorCanvas({
                     }`}
                   >
                     <ArrowRight className="w-4 h-4 flex-shrink-0" />
-                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">Arrow</span>
+                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">
+                      Arrow
+                    </span>
                   </button>
 
                   <button
@@ -4302,11 +4914,17 @@ export default function EditorCanvas({
                         : "bg-black/15 text-gray-400 hover:text-white"
                     }`}
                   >
-                    <svg className="w-4 h-4 flex items-center justify-center flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                    <svg
+                      className="w-4 h-4 flex items-center justify-center flex-shrink-0"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
                       <path d="M4.5,19.5 C4.5,19.5 12,12 15,9 C12,12 4.5,19.5 4.5,19.5 Z" />
                       <polygon points="12,7 20,4 17,12 14,9" />
                     </svg>
-                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">Tapered</span>
+                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">
+                      Tapered
+                    </span>
                   </button>
 
                   <button
@@ -4324,12 +4942,22 @@ export default function EditorCanvas({
                         : "bg-black/15 text-gray-400 hover:text-white"
                     }`}
                   >
-                    <svg className="w-4 h-4 flex items-center justify-center flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg
+                      className="w-4 h-4 flex items-center justify-center flex-shrink-0"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
                       <line x1="5" y1="19" x2="19" y2="5" />
                       <polyline points="14,5 19,5 19,10" />
                       <polyline points="10,19 5,19 5,14" />
                     </svg>
-                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">Double End</span>
+                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">
+                      Double End
+                    </span>
                   </button>
 
                   <button
@@ -4348,7 +4976,9 @@ export default function EditorCanvas({
                     }`}
                   >
                     <div className="w-4 h-0.5 bg-current my-1.5 flex-shrink-0" />
-                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">Line</span>
+                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">
+                      Line
+                    </span>
                   </button>
 
                   <button
@@ -4367,7 +4997,9 @@ export default function EditorCanvas({
                     }`}
                   >
                     <Square className="w-4 h-4 p-0.5 flex-shrink-0" />
-                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">Rectangle</span>
+                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">
+                      Rectangle
+                    </span>
                   </button>
 
                   <button
@@ -4386,102 +5018,115 @@ export default function EditorCanvas({
                     }`}
                   >
                     <Circle className="w-4 h-4 p-0.5 flex-shrink-0" />
-                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">Circle</span>
+                    <span className="text-[9px] font-medium tracking-tight whitespace-nowrap">
+                      Circle
+                    </span>
                   </button>
                 </div>
               </div>
             )}
 
-            {((activeTool === "draw" || activeTool === "blur") || (activeTool === "arrows" && arrowSubTab === "color")) && (
+            {(activeTool === "draw" ||
+              activeTool === "blur" ||
+              (activeTool === "arrows" && arrowSubTab === "color")) && (
               <div className="flex flex-col gap-1 w-full animate-fadeIn">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-extrabold tracking-widest text-[#60a5fa] uppercase">
-                    {activeTool === "draw" ? "DRAW COLOR" : activeTool === "arrows" ? "ARROW & SHAPE COLOR" : "BLUR TINT OVERLAY"}
+                    {activeTool === "draw"
+                      ? "DRAW COLOR"
+                      : activeTool === "arrows"
+                        ? "ARROW & SHAPE COLOR"
+                        : "BLUR TINT OVERLAY"}
                   </span>
-                  {activeTool === "blur" && selectedBlurColor !== "transparent" && (
-                    <button
-                      onClick={() => {
-                        setSelectedBlurColor("transparent");
-                        setTimeout(() => redraw(), 0);
-                      }}
-                      className="text-[10px] text-blue-400 font-extrabold tracking-wider uppercase hover:underline"
-                    >
-                      Clear Tint
-                    </button>
-                  )}
+                  {activeTool === "blur" &&
+                    selectedBlurColor !== "transparent" && (
+                      <button
+                        onClick={() => {
+                          setSelectedBlurColor("transparent");
+                          setTimeout(() => redraw(), 0);
+                        }}
+                        className="text-[10px] text-blue-400 font-extrabold tracking-wider uppercase hover:underline"
+                      >
+                        Clear Tint
+                      </button>
+                    )}
                 </div>
                 <div className="flex gap-2 text-center items-center overflow-x-auto py-1.5 no-scrollbar scroll-smooth">
-                  {(activeTool === "draw" || activeTool === "arrows") ? (
-                    textColors.map((color) => (
-                      <button
-                        key={color}
-                        onClick={() => {
-                          setSelectedDrawColor(color);
-                          setTimeout(() => redraw(), 0);
-                        }}
-                        className={`w-7 h-7 shrink-0 rounded-full border-2 transition-all relative flex items-center justify-center ${
-                          selectedDrawColor === color
-                            ? "border-blue-500 scale-110 shadow-lg ring-2 ring-blue-500/20"
-                            : "border-transparent opacity-80 hover:opacity-100 hover:scale-105"
-                        }`}
-                        style={{ backgroundColor: color }}
-                      >
-                        {selectedDrawColor === color && (
-                          <div className="w-1.5 h-1.5 rounded-full bg-black invert select-none" />
-                        )}
-                      </button>
-                    ))
-                  ) : (
-                    // Blur tint options: first one is transparent (No Tint), followed by standard colors
-                    ["transparent", ...textColors].map((color) => (
-                      <button
-                        key={color}
-                        onClick={() => {
-                          setSelectedBlurColor(color);
-                          setTimeout(() => redraw(), 0);
-                        }}
-                        className={`w-7 h-7 shrink-0 rounded-full border-2 transition-all relative flex items-center justify-center ${
-                          selectedBlurColor === color
-                            ? "border-blue-500 scale-110 shadow-lg ring-2 ring-blue-500/20"
-                            : "border-transparent opacity-80 hover:opacity-100 hover:scale-105"
-                        }`}
-                        style={
-                          color === "transparent"
-                            ? {
-                                background:
-                                  "linear-gradient(45deg, #3f3f46 25%, transparent 25%), linear-gradient(-45deg, #3f3f46 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #3f3f46 75%), linear-gradient(-45deg, transparent 75%, #3f3f46 75%)",
-                                backgroundSize: "6px 6px",
-                                backgroundPosition: "0 0, 0 3px, 3px -3px, -3px 0",
-                                backgroundColor: "#1c1c1e",
-                              }
-                            : { backgroundColor: color }
-                        }
-                        title={color === "transparent" ? "No Tint" : color}
-                      >
-                        {color === "transparent" ? (
-                          <span className="text-[10px] font-extrabold text-white/50 select-none">
-                            Ø
-                          </span>
-                        ) : (
-                          selectedBlurColor === color && (
+                  {activeTool === "draw" || activeTool === "arrows"
+                    ? textColors.map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => {
+                            setSelectedDrawColor(color);
+                            setTimeout(() => redraw(), 0);
+                          }}
+                          className={`w-7 h-7 shrink-0 rounded-full border-2 transition-all relative flex items-center justify-center ${
+                            selectedDrawColor === color
+                              ? "border-blue-500 scale-110 shadow-lg ring-2 ring-blue-500/20"
+                              : "border-transparent opacity-80 hover:opacity-100 hover:scale-105"
+                          }`}
+                          style={{ backgroundColor: color }}
+                        >
+                          {selectedDrawColor === color && (
                             <div className="w-1.5 h-1.5 rounded-full bg-black invert select-none" />
-                          )
-                        )}
-                      </button>
-                    ))
-                  )}
+                          )}
+                        </button>
+                      ))
+                    : // Blur tint options: first one is transparent (No Tint), followed by standard colors
+                      ["transparent", ...textColors].map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => {
+                            setSelectedBlurColor(color);
+                            setTimeout(() => redraw(), 0);
+                          }}
+                          className={`w-7 h-7 shrink-0 rounded-full border-2 transition-all relative flex items-center justify-center ${
+                            selectedBlurColor === color
+                              ? "border-blue-500 scale-110 shadow-lg ring-2 ring-blue-500/20"
+                              : "border-transparent opacity-80 hover:opacity-100 hover:scale-105"
+                          }`}
+                          style={
+                            color === "transparent"
+                              ? {
+                                  background:
+                                    "linear-gradient(45deg, #3f3f46 25%, transparent 25%), linear-gradient(-45deg, #3f3f46 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #3f3f46 75%), linear-gradient(-45deg, transparent 75%, #3f3f46 75%)",
+                                  backgroundSize: "6px 6px",
+                                  backgroundPosition:
+                                    "0 0, 0 3px, 3px -3px, -3px 0",
+                                  backgroundColor: "#1c1c1e",
+                                }
+                              : { backgroundColor: color }
+                          }
+                          title={color === "transparent" ? "No Tint" : color}
+                        >
+                          {color === "transparent" ? (
+                            <span className="text-[10px] font-extrabold text-white/50 select-none">
+                              Ø
+                            </span>
+                          ) : (
+                            selectedBlurColor === color && (
+                              <div className="w-1.5 h-1.5 rounded-full bg-black invert select-none" />
+                            )
+                          )}
+                        </button>
+                      ))}
                 </div>
               </div>
             )}
 
-            {((activeTool === "draw" || activeTool === "blur") || (activeTool === "arrows" && arrowSubTab === "thickness")) && (
+            {(activeTool === "draw" ||
+              activeTool === "blur" ||
+              (activeTool === "arrows" && arrowSubTab === "thickness")) && (
               /* Premium Brush Size Control Slider */
               <div className="flex items-center justify-between gap-4 mt-1 w-full bg-transparent p-0 animate-fadeIn">
                 <span className="text-[10px] font-extrabold tracking-widest text-[#60a5fa] uppercase shrink-0">
-                  {activeTool === "arrows" ? "THICKNESS" : "BRUSH SIZE"}: {brushSize}px
+                  {activeTool === "arrows" ? "THICKNESS" : "BRUSH SIZE"}:{" "}
+                  {brushSize}px
                 </span>
                 <div className="flex-1 flex items-center gap-3">
-                  <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">Min</span>
+                  <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">
+                    Min
+                  </span>
                   <input
                     type="range"
                     min="12"
@@ -4493,7 +5138,9 @@ export default function EditorCanvas({
                     }}
                     className="w-full h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                   />
-                  <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">Max</span>
+                  <span className="text-[9px] font-extrabold text-gray-500 uppercase select-none">
+                    Max
+                  </span>
                 </div>
               </div>
             )}
@@ -4560,7 +5207,9 @@ export default function EditorCanvas({
                   }}
                   className="flex flex-col items-center justify-center min-w-[60px] px-3 py-1.5 bg-[#1c1c1e] hover:bg-[#2c2c2e] active:bg-[#3c3c3e] border border-white/10 rounded-xl transition-colors shrink-0"
                 >
-                  <span className="text-xs font-bold text-white">{preset.label}</span>
+                  <span className="text-xs font-bold text-white">
+                    {preset.label}
+                  </span>
                   {preset.desc && (
                     <span className="text-[9px] text-gray-500 font-medium">
                       {preset.desc}
@@ -4700,7 +5349,9 @@ export default function EditorCanvas({
                       // Recalculate dimensions for the new fitting mode immediately
                       if (originalImageRef.current) {
                         const img = originalImageRef.current;
-                        const aspect = cropRect ? (cropRect.w / cropRect.h) : (img.width / img.height);
+                        const aspect = cropRect
+                          ? cropRect.w / cropRect.h
+                          : img.width / img.height;
                         let w = parseInt(canvasWidthInput) || img.width;
                         let h = parseInt(canvasHeightInput) || img.height;
                         if (mode.id === "fit_no_border") {
@@ -4722,8 +5373,12 @@ export default function EditorCanvas({
                         : "bg-black/20 border-white/10 text-gray-300 hover:bg-black/40 hover:text-white"
                     }`}
                   >
-                    <span className="text-[10px] font-extrabold block">{mode.label}</span>
-                    <span className="text-[8px] opacity-75 leading-tight block mt-1">{mode.desc}</span>
+                    <span className="text-[10px] font-extrabold block">
+                      {mode.label}
+                    </span>
+                    <span className="text-[8px] opacity-75 leading-tight block mt-1">
+                      {mode.desc}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -4737,13 +5392,43 @@ export default function EditorCanvas({
                 </label>
                 <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
                   {[
-                    { id: "transparent", label: "Transparent", class: "bg-neutral-800 border-dashed border-white/30 text-gray-400" },
-                    { id: "#FFFFFF", label: "White", class: "bg-white border-white/20 text-black" },
-                    { id: "#000000", label: "Black", class: "bg-black border-white/10 text-white" },
-                    { id: "#1E293B", label: "Dark Blue", class: "bg-slate-800 text-white" },
-                    { id: "#3B82F6", label: "Vibrant Blue", class: "bg-blue-500 text-white" },
-                    { id: "#EF4444", label: "Modern Red", class: "bg-red-500 text-white" },
-                    { id: "blur", label: "Blurred Backdrop", class: "bg-gradient-to-tr from-cyan-500/50 to-indigo-500/50 text-white font-semibold" },
+                    {
+                      id: "transparent",
+                      label: "Transparent",
+                      class:
+                        "bg-neutral-800 border-dashed border-white/30 text-gray-400",
+                    },
+                    {
+                      id: "#FFFFFF",
+                      label: "White",
+                      class: "bg-white border-white/20 text-black",
+                    },
+                    {
+                      id: "#000000",
+                      label: "Black",
+                      class: "bg-black border-white/10 text-white",
+                    },
+                    {
+                      id: "#1E293B",
+                      label: "Dark Blue",
+                      class: "bg-slate-800 text-white",
+                    },
+                    {
+                      id: "#3B82F6",
+                      label: "Vibrant Blue",
+                      class: "bg-blue-500 text-white",
+                    },
+                    {
+                      id: "#EF4444",
+                      label: "Modern Red",
+                      class: "bg-red-500 text-white",
+                    },
+                    {
+                      id: "blur",
+                      label: "Blurred Backdrop",
+                      class:
+                        "bg-gradient-to-tr from-cyan-500/50 to-indigo-500/50 text-white font-semibold",
+                    },
                   ].map((bg) => {
                     const isSelected = resizerBg === bg.id;
                     return (
@@ -4764,7 +5449,7 @@ export default function EditorCanvas({
                 </div>
               </div>
             )}
- 
+
             {/* Quick Presets for Common Sizes */}
             <div className="flex flex-col gap-1.5 bg-white/5 border border-white/5 p-3 rounded-2xl">
               <label className="text-[9px] font-extrabold text-gray-500 uppercase tracking-widest pl-1">
@@ -4775,7 +5460,7 @@ export default function EditorCanvas({
                   { label: "Insta Post", w: 1080, h: 1080 },
                   { label: "Insta Story", w: 1080, h: 1920 },
                   { label: "FB Post", w: 1080, h: 1080 },
-                  { label: "Play Store", w: 1080, h: 1920 }
+                  { label: "Play Store", w: 1080, h: 1920 },
                 ].map((preset, idx) => {
                   const isSelected = selectedPresetLabel === preset.label;
                   return (
@@ -4783,10 +5468,15 @@ export default function EditorCanvas({
                       key={idx}
                       type="button"
                       onClick={() => {
-                        const aspect = cropRect ? (cropRect.w / cropRect.h) : (originalImageRef.current ? (originalImageRef.current.width / originalImageRef.current.height) : 1);
+                        const aspect = cropRect
+                          ? cropRect.w / cropRect.h
+                          : originalImageRef.current
+                            ? originalImageRef.current.width /
+                              originalImageRef.current.height
+                            : 1;
                         let finalW = preset.w;
                         let finalH = preset.h;
-                        
+
                         if (resizeMode === "fit_no_border") {
                           const targetAspect = preset.w / preset.h;
                           if (aspect > targetAspect) {
@@ -4797,12 +5487,12 @@ export default function EditorCanvas({
                             finalW = Math.round(preset.h * aspect);
                           }
                         }
-                        
+
                         setCanvasWidthInput(finalW.toString());
                         setCanvasHeightInput(finalH.toString());
                         setSelectedPresetLabel(preset.label);
                         setManualCanvasSize({ width: finalW, height: finalH });
-                        
+
                         setTimeout(() => {
                           if (originalImageRef.current && cropRect) {
                             fitImageToContainer(
@@ -4818,14 +5508,18 @@ export default function EditorCanvas({
                           : "bg-black/20 border-white/10 text-gray-300 hover:bg-black/40 hover:text-white"
                       }`}
                     >
-                      <span className="truncate w-full block">{preset.label}</span>
-                      <span className="text-[7.5px] opacity-65 font-mono block mt-0.5 mt-auto">{preset.w}×{preset.h}</span>
+                      <span className="truncate w-full block">
+                        {preset.label}
+                      </span>
+                      <span className="text-[7.5px] opacity-65 font-mono block mt-0.5 mt-auto">
+                        {preset.w}×{preset.h}
+                      </span>
                     </button>
                   );
                 })}
               </div>
             </div>
- 
+
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[9px] font-extrabold text-gray-500 uppercase tracking-wider pl-1">
@@ -4842,7 +5536,9 @@ export default function EditorCanvas({
                     if (!isNaN(w) && w > 0) {
                       const img = originalImageRef.current;
                       if (img) {
-                        const aspect = cropRect ? (cropRect.w / cropRect.h) : (img.width / img.height);
+                        const aspect = cropRect
+                          ? cropRect.w / cropRect.h
+                          : img.width / img.height;
                         if (resizeMode === "fit_no_border") {
                           const h = Math.round(w / aspect);
                           setCanvasHeightInput(h.toString());
@@ -4883,7 +5579,9 @@ export default function EditorCanvas({
                     if (!isNaN(h) && h > 0) {
                       const img = originalImageRef.current;
                       if (img) {
-                        const aspect = cropRect ? (cropRect.w / cropRect.h) : (img.width / img.height);
+                        const aspect = cropRect
+                          ? cropRect.w / cropRect.h
+                          : img.width / img.height;
                         if (resizeMode === "fit_no_border") {
                           const w = Math.round(h * aspect);
                           setCanvasWidthInput(w.toString());
@@ -4954,10 +5652,17 @@ export default function EditorCanvas({
                     style={{
                       fontFamily: fontCSSMap[currentTextFont] || "sans-serif",
                       color: currentTextColor,
-                      backgroundColor: currentTextBgColor === "transparent" 
-                        ? (currentTextColor === "#FFFFFF" || currentTextColor.toLowerCase() === "#fff" || currentTextColor === "white" ? "#cbd5e1" : "white") 
-                        : currentTextBgColor,
-                      textShadow: currentTextShadow ? `2px 2px 4px ${currentTextShadowColor}` : "none",
+                      backgroundColor:
+                        currentTextBgColor === "transparent"
+                          ? currentTextColor === "#FFFFFF" ||
+                            currentTextColor.toLowerCase() === "#fff" ||
+                            currentTextColor === "white"
+                            ? "#cbd5e1"
+                            : "white"
+                          : currentTextBgColor,
+                      textShadow: currentTextShadow
+                        ? `2px 2px 4px ${currentTextShadowColor}`
+                        : "none",
                     }}
                   />
                 </div>
@@ -4967,7 +5672,9 @@ export default function EditorCanvas({
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest pl-1">
                       Font Size
                     </label>
-                    <span className="text-xs font-mono font-bold text-blue-600">{currentTextSize}px</span>
+                    <span className="text-xs font-mono font-bold text-blue-600">
+                      {currentTextSize}px
+                    </span>
                   </div>
                   <input
                     type="range"
@@ -4985,13 +5692,15 @@ export default function EditorCanvas({
                     { id: "font", label: "Font" },
                     { id: "color", label: "Color" },
                     { id: "bg", label: "Background" },
-                    { id: "shadow", label: "Shadow" }
-                  ].map(tab => (
+                    { id: "shadow", label: "Shadow" },
+                  ].map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setActiveTextTab(tab.id as any)}
                       className={`flex-1 min-w-[70px] whitespace-nowrap text-xs font-bold px-2 py-1.5 rounded-md transition-all ${
-                        activeTextTab === tab.id ? "bg-white shadow-sm text-blue-600" : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                        activeTextTab === tab.id
+                          ? "bg-white shadow-sm text-blue-600"
+                          : "text-gray-500 hover:text-gray-700 hover:bg-gray-200"
                       }`}
                     >
                       {tab.label}
@@ -5014,7 +5723,9 @@ export default function EditorCanvas({
                               ? "bg-blue-600 text-white border-blue-600 shadow-md scale-[1.02] font-semibold"
                               : "bg-white text-gray-750 border-gray-200 hover:bg-gray-50 hover:border-gray-300"
                           }`}
-                          style={{ fontFamily: fontCSSMap[font] || "sans-serif" }}
+                          style={{
+                            fontFamily: fontCSSMap[font] || "sans-serif",
+                          }}
                         >
                           {font}
                         </button>
@@ -5052,16 +5763,26 @@ export default function EditorCanvas({
                         Background
                       </span>
                       <button
-                        onClick={() => setCurrentTextBgColor(currentTextBgColor === "transparent" ? "#000000" : "transparent")}
+                        onClick={() =>
+                          setCurrentTextBgColor(
+                            currentTextBgColor === "transparent"
+                              ? "#000000"
+                              : "transparent",
+                          )
+                        }
                         role="switch"
                         aria-checked={currentTextBgColor !== "transparent"}
                         className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          currentTextBgColor !== "transparent" ? "bg-blue-600" : "bg-gray-200"
+                          currentTextBgColor !== "transparent"
+                            ? "bg-blue-600"
+                            : "bg-gray-200"
                         }`}
                       >
                         <span
                           className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                            currentTextBgColor !== "transparent" ? "translate-x-5" : "translate-x-0"
+                            currentTextBgColor !== "transparent"
+                              ? "translate-x-5"
+                              : "translate-x-0"
                           }`}
                         />
                       </button>
@@ -5107,7 +5828,9 @@ export default function EditorCanvas({
                       >
                         <span
                           className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                            currentTextShadow ? "translate-x-5" : "translate-x-0"
+                            currentTextShadow
+                              ? "translate-x-5"
+                              : "translate-x-0"
                           }`}
                         />
                       </button>
@@ -5118,7 +5841,11 @@ export default function EditorCanvas({
                         Shadow Color
                       </label>
                       <div className="flex gap-2 justify-start flex-wrap">
-                        {["rgba(0,0,0,0.6)", "rgba(255,255,255,0.8)", ...textColors].map((color) => (
+                        {[
+                          "rgba(0,0,0,0.6)",
+                          "rgba(255,255,255,0.8)",
+                          ...textColors,
+                        ].map((color) => (
                           <button
                             key={color}
                             onClick={() => {
@@ -5170,272 +5897,423 @@ export default function EditorCanvas({
           </motion.div>
         )}
 
-        {showStickerPanel && (() => {
-          const POPULAR_EMOJIS = [
-            // Birthday, Wedding & Celebration
-            "🎂", "🎁", "🎈", "🥳", "🎉", "🧁", "💍", "💒", "👰", "🤵", "🥂", "💖",
-            // Music
-            "🎵", "🎶", "🎸", "🎹", "🎧", "🎤", "🥁", "🎷", "🎺", "🎻",
-            // Tech & Interaction Controls
-            "🔥", "🚀", "💡", "✨", "⭐", "💯", "✔️", "❌", "❤️", "👍", "👏",
-            "😂", "😍", "🤔", "😱", "📱", "💻", "🎯", "📢", "⬇️", "➡️", "💥", "🌈",
-            "🏆", "🌟", "🔔", "📎", "🔒", "🎨", "🧪", "🍕", "☕", "🎮", "⚡", "💎",
-            // Hand Gestures & Directional Pointers
-            "👇", "👉", "👈", "👆", "✊", "✌️", "🤟", "✋", "🖖", "✍️", "🙌", "🙏",
-            "🏹", "📍", "📌", "🚩", "🔍", "🔎", "👀", "🗣️", "💬", "💭", "🗯️", "✉️",
-            // App state / Indicators
-            "🟢", "🟡", "🔴", "🔵", "🟣", "⚫", "⚪", "🟩", "🟨", "🟥", "🟧", "🟪",
-            "📈", "📉", "📊", "📁", "📂", "📅", "📆", "⏰", "⏱️", "⏳", "🔋", "🔌",
-            // Symbols & Alerts
-            "⚠️", "🛑", "🚫", "❔", "❓", "‼️", "ℹ️", "🆗", "🆒", "🆕", "🆙", "🆓",
-            "👑", "🎩", "🎒", "🎓", "🔑", "🛡️", "🔗", "🧩", "⚙️", "🛠️",
-            // Fun Expression Emojis
-            "😎", "🤓", "🤩", "🤯", "🤖", "👾", "👽", "🦄", "🐱", "🐶", "🦊",
-            "🐼", "🐨", "🦁", "🦖", "🐉", "🍁", "🍀", "🌸", "🌻", "☀️", "🌙", "☁️"
-          ];
+        {showStickerPanel &&
+          (() => {
+            const POPULAR_EMOJIS = [
+              // Birthday, Wedding & Celebration
+              "🎂",
+              "🎁",
+              "🎈",
+              "🥳",
+              "🎉",
+              "🧁",
+              "💍",
+              "💒",
+              "👰",
+              "🤵",
+              "🥂",
+              "💖",
+              // Music
+              "🎵",
+              "🎶",
+              "🎸",
+              "🎹",
+              "🎧",
+              "🎙️",
+              "🥁",
+              "🎷",
+              "🎺",
+              "🎻",
+              // Tech & Interaction Controls
+              "🔥",
+              "🚀",
+              "💡",
+              "✨",
+              "⭐",
+              "💯",
+              "✔️",
+              "❌",
+              "❤️",
+              "👍",
+              "👏",
+              "😂",
+              "😍",
+              "🤔",
+              "😱",
+              "📱",
+              "💻",
+              "🎯",
+              "📢",
+              "⬇️",
+              "➡️",
+              "💥",
+              "🌈",
+              "🏆",
+              "🌟",
+              "🔔",
+              "📎",
+              "🔒",
+              "🎨",
+              "🧪",
+              "🍕",
+              "☕",
+              "🎮",
+              "⚡",
+              "💎",
+              // Hand Gestures & Directional Pointers
+              "👇",
+              "👉",
+              "👈",
+              "👆",
+              "✊",
+              "✌️",
+              "🤟",
+              "✋",
+              "🖖",
+              "✍️",
+              "🙌",
+              "🙏",
+              "🏹",
+              "📍",
+              "📌",
+              "🚩",
+              "🔍",
+              "🔎",
+              "👀",
+              "🗣️",
+              "💬",
+              "💭",
+              "🗯️",
+              "✉️",
+              // App state / Indicators
+              "🟢",
+              "🟡",
+              "🔴",
+              "🔵",
+              "🟣",
+              "⚫",
+              "⚪",
+              "🟩",
+              "🟨",
+              "🟥",
+              "🟧",
+              "🟪",
+              "📈",
+              "📉",
+              "📊",
+              "📁",
+              "📂",
+              "📅",
+              "📆",
+              "⏰",
+              "⏱️",
+              "⏳",
+              "🔋",
+              "🔌",
+              // Symbols & Alerts
+              "⚠️",
+              "🛑",
+              "🚫",
+              "❔",
+              "❓",
+              "‼️",
+              "ℹ️",
+              "🆗",
+              "🆒",
+              "🆕",
+              "🆙",
+              "🆓",
+              "👑",
+              "🎩",
+              "🎒",
+              "🎓",
+              "🔑",
+              "🛡️",
+              "🔗",
+              "🧩",
+              "⚙️",
+              "🛠️",
+              // Fun Expression Emojis
+              "😎",
+              "🤓",
+              "🤩",
+              "🤯",
+              "🤖",
+              "👾",
+              "👽",
+              "🦄",
+              "🐱",
+              "🐶",
+              "🦊",
+              "🐼",
+              "🐨",
+              "🦁",
+              "🦖",
+              "🐉",
+              "🍁",
+              "🍀",
+              "🌸",
+              "🌻",
+              "☀️",
+              "🌙",
+              "☁️",
+            ];
 
-          const PRESET_BADGES = [
-            "Happy birthday", "Hbd", "Happy Anniversary", "Happy wedding", "My love", "I love you"
-          ];
+            const PRESET_BADGES = [
+              "Happy birthday",
+              "Hbd",
+              "Happy Anniversary",
+              "Happy wedding",
+              "My love",
+              "I love you",
+            ];
 
-          const BADGE_COLORS = [
-            "#FF3366", // Rose
-            "#2563EB", // Blue
-            "#FF5722", // Orange
-            "#10B981", // Emerald
-            "#8B5CF6", // Purple
-            "#F59E0B", // Yellow
-            "#000000", // Black
-            "#888888", // Gray
-            "#FFFFFF", // White
-          ];
+            const BADGE_COLORS = [
+              "#FF3366", // Rose
+              "#2563EB", // Blue
+              "#FF5722", // Orange
+              "#10B981", // Emerald
+              "#8B5CF6", // Purple
+              "#F59E0B", // Yellow
+              "#000000", // Black
+              "#888888", // Gray
+              "#FFFFFF", // White
+            ];
 
-          const isEditing = editingTextIndex >= 0;
-          const currentEditingItem = isEditing ? texts[editingTextIndex] : null;
+            const isEditing = editingTextIndex >= 0;
+            const currentEditingItem = isEditing
+              ? texts[editingTextIndex]
+              : null;
 
-          return (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="absolute inset-x-0 bottom-0 z-[60] flex items-end justify-center pb-24"
-            >
-              <div className="bg-white/95 backdrop-blur-md w-full max-w-[420px] mx-4 rounded-3xl p-5 shadow-2xl text-black border border-gray-200">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-bold">
-                    {isEditing ? "Edit Sticker / Emoji" : "Add Sticker & Emoji"}
-                  </h3>
-                  <button
-                    onClick={() => {
-                      setShowStickerPanel(false);
-                      setEditingTextIndex(-1);
-                      setActiveTool("none");
-                    }}
-                    className="p-1 rounded-full hover:bg-gray-100 text-gray-500"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                {/* Tabs selection (Only if we are NOT editing, or we show current type) */}
-                {!isEditing ? (
-                  <div className="flex bg-gray-100 p-1 rounded-xl mb-4">
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="absolute inset-x-0 bottom-0 z-[60] flex items-end justify-center pb-24"
+              >
+                <div className="bg-white/95 backdrop-blur-md w-full max-w-[420px] mx-4 rounded-3xl p-5 shadow-2xl text-black border border-gray-200">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold">
+                      {isEditing
+                        ? "Edit Sticker / Emoji"
+                        : "Add Sticker & Emoji"}
+                    </h3>
                     <button
-                      onClick={() => setSelectedStickerTab("emoji")}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        selectedStickerTab === "emoji"
-                          ? "bg-white text-black shadow-sm"
-                          : "text-gray-500 hover:text-gray-800"
-                      }`}
+                      onClick={() => {
+                        setShowStickerPanel(false);
+                        setEditingTextIndex(-1);
+                        setActiveTool("none");
+                      }}
+                      className="p-1 rounded-full hover:bg-gray-100 text-gray-500"
                     >
-                      😃 Emojis
-                    </button>
-                    <button
-                      onClick={() => setSelectedStickerTab("badge")}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        selectedStickerTab === "badge"
-                          ? "bg-white text-black shadow-sm"
-                          : "text-gray-500 hover:text-gray-800"
-                      }`}
-                    >
-                      🏷️ Badges / Tags
+                      <X className="w-5 h-5" />
                     </button>
                   </div>
-                ) : (
-                  <div className="text-xs font-bold text-gray-400 bg-gray-50 rounded-xl px-3 py-1.5 mb-4 text-center font-sans">
-                    Editing <strong>{currentEditingItem?.stickerType === "badge" ? "Badge Tag" : "Emoji Sticker"}</strong>
-                  </div>
-                )}
 
-                <div className="space-y-4 max-h-[48vh] overflow-y-auto pr-1 no-scrollbar">
-                  
-                  {/* Emoji selection tab */}
-                  {((!isEditing && selectedStickerTab === "emoji") || (isEditing && currentEditingItem?.stickerType === "emoji")) && (
-                    <div>
-                      <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                        Select Emoji
-                      </label>
-                      <div className="grid grid-cols-6 gap-2 bg-gray-50 p-2.5 rounded-2xl border border-gray-100 max-h-[140px] overflow-y-auto">
-                        {POPULAR_EMOJIS.map((emoji) => (
-                          <button
-                            key={emoji}
-                            onClick={() => {
-                              if (isEditing) {
-                                handleUpdateActiveStickerText(emoji);
-                              } else {
-                                handleAddSticker(emoji, "emoji");
-                              }
-                            }}
-                            className={`text-2xl p-1.5 hover:scale-125 hover:bg-white rounded-lg transition-all active:scale-95 ${
-                              selectedStickerText === emoji ? "bg-blue-100 border border-blue-400" : ""
-                            }`}
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
+                  {/* Tabs selection (Only if we are NOT editing, or we show current type) */}
+                  {!isEditing ? (
+                    <div className="flex bg-gray-100 p-1 rounded-xl mb-4">
+                      <button
+                        onClick={() => setSelectedStickerTab("emoji")}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          selectedStickerTab === "emoji"
+                            ? "bg-white text-black shadow-sm"
+                            : "text-gray-500 hover:text-gray-800"
+                        }`}
+                      >
+                        😃 Emojis
+                      </button>
+                      <button
+                        onClick={() => setSelectedStickerTab("badge")}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          selectedStickerTab === "badge"
+                            ? "bg-white text-black shadow-sm"
+                            : "text-gray-500 hover:text-gray-800"
+                        }`}
+                      >
+                        🏷️ Badges / Tags
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-xs font-bold text-gray-400 bg-gray-50 rounded-xl px-3 py-1.5 mb-4 text-center font-sans">
+                      Editing{" "}
+                      <strong>
+                        {currentEditingItem?.stickerType === "badge"
+                          ? "Badge Tag"
+                          : "Emoji Sticker"}
+                      </strong>
                     </div>
                   )}
 
-                  {/* Badge selection tab */}
-                  {((!isEditing && selectedStickerTab === "badge") || (isEditing && currentEditingItem?.stickerType === "badge")) && (
-                    <div className="space-y-3">
+                  <div className="space-y-4 max-h-[48vh] overflow-y-auto pr-1 no-scrollbar">
+                    {/* Emoji selection tab */}
+                    {((!isEditing && selectedStickerTab === "emoji") ||
+                      (isEditing &&
+                        currentEditingItem?.stickerType === "emoji")) && (
                       <div>
-                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                          Badge Label
+                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                          Select Emoji
                         </label>
-                        <input
-                          className="w-full border border-gray-300 rounded-full px-4 py-3 outline-none focus:ring-2 ring-blue-500 font-bold text-sm text-center uppercase transition-all"
-                          placeholder="Type sticker text..."
-                          maxLength={15}
-                          value={selectedStickerText}
-                          onChange={(e) => handleUpdateActiveStickerText(e.target.value.toUpperCase())}
-                          style={{
-                            fontFamily: fontCSSMap[selectedStickerFont] || "sans-serif",
-                            color: selectedStickerTextColor,
-                            backgroundColor: selectedStickerColor === "transparent" 
-                              ? (selectedStickerTextColor === "#FFFFFF" || selectedStickerTextColor.toLowerCase() === "#fff" || selectedStickerTextColor === "white" ? "#cbd5e1" : "white") 
-                              : selectedStickerColor,
-                            boxShadow: selectedStickerShadow ? `0px 4px 12px ${selectedStickerShadowColor.replace('0.4', '0.2')}` : "none",
-                          }}
-                        />
+                        <div className="grid grid-cols-6 gap-2 bg-gray-50 p-2.5 rounded-2xl border border-gray-100 max-h-[140px] overflow-y-auto">
+                          {POPULAR_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={() => {
+                                if (isEditing) {
+                                  handleUpdateActiveStickerText(emoji);
+                                } else {
+                                  handleAddSticker(emoji, "emoji");
+                                }
+                              }}
+                              className={`text-2xl p-1.5 hover:scale-125 hover:bg-white rounded-lg transition-all active:scale-95 ${
+                                selectedStickerText === emoji
+                                  ? "bg-blue-100 border border-blue-400"
+                                  : ""
+                              }`}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
                       </div>
+                    )}
 
-                      {/* Segmented Tabs for Categories */}
-                      <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar border-b border-gray-100 mb-4">
-                        {["Presets", "Font", "Color", "Background", "Shadow"].map((tab) => (
-                          <button
-                            key={tab}
-                            onClick={() => setExpandedBadgeSection(tab)}
-                            className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all whitespace-nowrap ${
-                              expandedBadgeSection === tab
-                                ? "bg-white text-blue-600 shadow-sm border border-gray-100"
-                                : "text-gray-400 hover:text-gray-600"
-                            }`}
-                          >
-                            {tab}
-                          </button>
-                        ))}
-                      </div>
+                    {/* Badge selection tab */}
+                    {((!isEditing && selectedStickerTab === "badge") ||
+                      (isEditing &&
+                        currentEditingItem?.stickerType === "badge")) && (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                            Badge Label
+                          </label>
+                          <input
+                            className="w-full border border-gray-300 rounded-full px-4 py-3 outline-none focus:ring-2 ring-blue-500 font-bold text-sm text-center uppercase transition-all"
+                            placeholder="Type sticker text..."
+                            maxLength={15}
+                            value={selectedStickerText}
+                            onChange={(e) =>
+                              handleUpdateActiveStickerText(
+                                e.target.value.toUpperCase(),
+                              )
+                            }
+                            style={{
+                              fontFamily:
+                                fontCSSMap[selectedStickerFont] || "sans-serif",
+                              color: selectedStickerTextColor,
+                              backgroundColor:
+                                selectedStickerColor === "transparent"
+                                  ? selectedStickerTextColor === "#FFFFFF" ||
+                                    selectedStickerTextColor.toLowerCase() ===
+                                      "#fff" ||
+                                    selectedStickerTextColor === "white"
+                                    ? "#cbd5e1"
+                                    : "white"
+                                  : selectedStickerColor,
+                              boxShadow: selectedStickerShadow
+                                ? `0px 4px 12px ${selectedStickerShadowColor.replace("0.4", "0.2")}`
+                                : "none",
+                            }}
+                          />
+                        </div>
 
-                      {/* Tab Contents */}
-                      <div className="min-h-[140px]">
-                        {expandedBadgeSection === "Presets" && (
-                          <div className="space-y-3">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Quick Presets</label>
-                            <div className="grid grid-cols-3 gap-2">
-                              {PRESET_BADGES.map((badge) => (
-                                <button
-                                  key={badge}
-                                  onClick={() => handleUpdateActiveStickerText(badge)}
-                                  className={`px-2 py-2 rounded-xl text-[10px] font-extrabold transition-all border ${
-                                    selectedStickerText === badge
-                                      ? "bg-black text-white border-black shadow-md scale-105"
-                                      : "bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-100"
-                                  }`}
-                                >
-                                  {badge}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                        {/* Segmented Tabs for Categories */}
+                        <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar border-b border-gray-100 mb-4">
+                          {[
+                            "Presets",
+                            "Font",
+                            "Color",
+                            "Background",
+                            "Shadow",
+                          ].map((tab) => (
+                            <button
+                              key={tab}
+                              onClick={() => setExpandedBadgeSection(tab)}
+                              className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all whitespace-nowrap ${
+                                expandedBadgeSection === tab
+                                  ? "bg-white text-blue-600 shadow-sm border border-gray-100"
+                                  : "text-gray-400 hover:text-gray-600"
+                              }`}
+                            >
+                              {tab}
+                            </button>
+                          ))}
+                        </div>
 
-                        {expandedBadgeSection === "Font" && (
-                          <div className="space-y-3">
-                            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Text Font Style</label>
-                            <div className="grid grid-cols-2 gap-2">
-                              {fontNames.slice(0, 8).map((f) => (
-                                <button
-                                  key={f}
-                                  onClick={() => handleUpdateActiveStickerFont(f)}
-                                  className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all border text-left flex justify-between items-center ${
-                                    selectedStickerFont === f
-                                      ? "bg-blue-50 text-blue-600 border-blue-200 shadow-sm"
-                                      : "bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-100"
-                                  }`}
-                                  style={{ fontFamily: fontCSSMap[f] }}
-                                >
-                                  <span className="truncate">{f}</span>
-                                  {selectedStickerFont === f && <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {expandedBadgeSection === "Color" && (
-                          <div className="space-y-4">
-                            <div>
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Text Color</label>
-                              <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans">
-                                {textColors.map((color) => (
+                        {/* Tab Contents */}
+                        <div className="min-h-[140px]">
+                          {expandedBadgeSection === "Presets" && (
+                            <div className="space-y-3">
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                                Quick Presets
+                              </label>
+                              <div className="grid grid-cols-3 gap-2">
+                                {PRESET_BADGES.map((badge) => (
                                   <button
-                                    key={color}
-                                    onClick={() => handleUpdateActiveStickerTextColor(color)}
-                                    className={`w-8 h-8 shrink-0 rounded-full border-2 transition-transform ${
-                                      selectedStickerTextColor === color
-                                        ? "border-blue-500 scale-110 shadow-md"
-                                        : "border-gray-100 opacity-80"
+                                    key={badge}
+                                    onClick={() =>
+                                      handleUpdateActiveStickerText(badge)
+                                    }
+                                    className={`px-2 py-2 rounded-xl text-[10px] font-extrabold transition-all border ${
+                                      selectedStickerText === badge
+                                        ? "bg-black text-white border-black shadow-md scale-105"
+                                        : "bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-100"
                                     }`}
-                                    style={{ backgroundColor: color }}
-                                  />
+                                  >
+                                    {badge}
+                                  </button>
                                 ))}
                               </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {expandedBadgeSection === "Background" && (
-                          <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Enable Background</label>
-                              <button
-                                onClick={() => {
-                                  if (selectedStickerColor !== "transparent") {
-                                    handleUpdateActiveStickerColor("transparent");
-                                  } else {
-                                    handleUpdateActiveStickerColor("#FF3366"); // Default or last color
-                                  }
-                                }}
-                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                  selectedStickerColor !== "transparent" ? "bg-blue-600" : "bg-gray-200"
-                                }`}
-                              >
-                                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${selectedStickerColor !== "transparent" ? "translate-x-4" : "translate-x-0"}`} />
-                              </button>
+                          {expandedBadgeSection === "Font" && (
+                            <div className="space-y-3">
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
+                                Text Font Style
+                              </label>
+                              <div className="grid grid-cols-2 gap-2">
+                                {fontNames.slice(0, 8).map((f) => (
+                                  <button
+                                    key={f}
+                                    onClick={() =>
+                                      handleUpdateActiveStickerFont(f)
+                                    }
+                                    className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all border text-left flex justify-between items-center ${
+                                      selectedStickerFont === f
+                                        ? "bg-blue-50 text-blue-600 border-blue-200 shadow-sm"
+                                        : "bg-gray-50 text-gray-600 border-gray-100 hover:bg-gray-100"
+                                    }`}
+                                    style={{ fontFamily: fontCSSMap[f] }}
+                                  >
+                                    <span className="truncate">{f}</span>
+                                    {selectedStickerFont === f && (
+                                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                    )}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                            
-                            {selectedStickerColor !== "transparent" && (
+                          )}
+
+                          {expandedBadgeSection === "Color" && (
+                            <div className="space-y-4">
                               <div>
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Background Color</label>
-                                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans border-t border-gray-50 pt-2">
-                                  {BADGE_COLORS.map((color) => (
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                                  Text Color
+                                </label>
+                                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans">
+                                  {textColors.map((color) => (
                                     <button
                                       key={color}
-                                      onClick={() => handleUpdateActiveStickerColor(color)}
+                                      onClick={() =>
+                                        handleUpdateActiveStickerTextColor(
+                                          color,
+                                        )
+                                      }
                                       className={`w-8 h-8 shrink-0 rounded-full border-2 transition-transform ${
-                                        selectedStickerColor === color
+                                        selectedStickerTextColor === color
                                           ? "border-blue-500 scale-110 shadow-md"
                                           : "border-gray-100 opacity-80"
                                       }`}
@@ -5444,87 +6322,160 @@ export default function EditorCanvas({
                                   ))}
                                 </div>
                               </div>
-                            )}
-                          </div>
-                        )}
-
-                        {expandedBadgeSection === "Shadow" && (
-                          <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Enable Shadow</label>
-                              <button
-                                onClick={() => handleUpdateActiveStickerShadow(!selectedStickerShadow)}
-                                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                  selectedStickerShadow ? "bg-blue-600" : "bg-gray-200"
-                                }`}
-                              >
-                                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${selectedStickerShadow ? "translate-x-4" : "translate-x-0"}`} />
-                              </button>
                             </div>
-                            {selectedStickerShadow && (
-                              <div>
-                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Shadow Color</label>
-                                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans border-t border-gray-50 pt-2">
-                                  {["rgba(0,0,0,0.6)", "rgba(255,255,255,0.8)", ...textColors].map((color) => (
-                                    <button
-                                      key={color}
-                                      onClick={() => handleUpdateActiveStickerShadowColor(color)}
-                                      className={`w-7 h-7 shrink-0 rounded-full border transition-transform flex items-center justify-center ${
-                                        selectedStickerShadowColor === color
-                                          ? "border-blue-500 ring-2 ring-blue-500/30 scale-110 shadow-sm"
-                                          : "border-gray-100 opacity-80"
-                                      }`}
-                                      style={{ backgroundColor: color }}
-                                    />
-                                  ))}
-                                </div>
+                          )}
+
+                          {expandedBadgeSection === "Background" && (
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                  Enable Background
+                                </label>
+                                <button
+                                  onClick={() => {
+                                    if (
+                                      selectedStickerColor !== "transparent"
+                                    ) {
+                                      handleUpdateActiveStickerColor(
+                                        "transparent",
+                                      );
+                                    } else {
+                                      handleUpdateActiveStickerColor("#FF3366"); // Default or last color
+                                    }
+                                  }}
+                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                    selectedStickerColor !== "transparent"
+                                      ? "bg-blue-600"
+                                      : "bg-gray-200"
+                                  }`}
+                                >
+                                  <span
+                                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${selectedStickerColor !== "transparent" ? "translate-x-4" : "translate-x-0"}`}
+                                  />
+                                </button>
                               </div>
-                            )}
-                          </div>
-                        )}
+
+                              {selectedStickerColor !== "transparent" && (
+                                <div>
+                                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                                    Background Color
+                                  </label>
+                                  <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans border-t border-gray-50 pt-2">
+                                    {BADGE_COLORS.map((color) => (
+                                      <button
+                                        key={color}
+                                        onClick={() =>
+                                          handleUpdateActiveStickerColor(color)
+                                        }
+                                        className={`w-8 h-8 shrink-0 rounded-full border-2 transition-transform ${
+                                          selectedStickerColor === color
+                                            ? "border-blue-500 scale-110 shadow-md"
+                                            : "border-gray-100 opacity-80"
+                                        }`}
+                                        style={{ backgroundColor: color }}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {expandedBadgeSection === "Shadow" && (
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                  Enable Shadow
+                                </label>
+                                <button
+                                  onClick={() =>
+                                    handleUpdateActiveStickerShadow(
+                                      !selectedStickerShadow,
+                                    )
+                                  }
+                                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                    selectedStickerShadow
+                                      ? "bg-blue-600"
+                                      : "bg-gray-200"
+                                  }`}
+                                >
+                                  <span
+                                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${selectedStickerShadow ? "translate-x-4" : "translate-x-0"}`}
+                                  />
+                                </button>
+                              </div>
+                              {selectedStickerShadow && (
+                                <div>
+                                  <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">
+                                    Shadow Color
+                                  </label>
+                                  <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans border-t border-gray-50 pt-2">
+                                    {[
+                                      "rgba(0,0,0,0.6)",
+                                      "rgba(255,255,255,0.8)",
+                                      ...textColors,
+                                    ].map((color) => (
+                                      <button
+                                        key={color}
+                                        onClick={() =>
+                                          handleUpdateActiveStickerShadowColor(
+                                            color,
+                                          )
+                                        }
+                                        className={`w-7 h-7 shrink-0 rounded-full border transition-transform flex items-center justify-center ${
+                                          selectedStickerShadowColor === color
+                                            ? "border-blue-500 ring-2 ring-blue-500/30 scale-110 shadow-sm"
+                                            : "border-gray-100 opacity-80"
+                                        }`}
+                                        style={{ backgroundColor: color }}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
+                    )}
 
+                    {/* Action Buttons */}
+                    <div className="flex gap-2.5 pt-2">
+                      {isEditing && (
+                        <button
+                          onClick={handleDeleteText}
+                          className="py-2.5 px-4 bg-red-100 text-red-600 hover:bg-red-200 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors"
+                        >
+                          Delete
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setShowStickerPanel(false);
+                          setEditingTextIndex(-1);
+                          setActiveTool("none");
+                        }}
+                        className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-xs uppercase tracking-wide"
+                      >
+                        {isEditing ? "Close" : "Cancel"}
+                      </button>
+                      {!isEditing && selectedStickerTab === "badge" && (
+                        <button
+                          disabled={!selectedStickerText.trim()}
+                          onClick={() =>
+                            handleAddSticker(selectedStickerText, "badge")
+                          }
+                          className="flex-[1.5] py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl font-bold text-xs uppercase tracking-wide shadow-md transition-all active:scale-95"
+                        >
+                          Place Badge
+                        </button>
+                      )}
                     </div>
-                  )}
-
-
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2.5 pt-2">
-                    {isEditing && (
-                      <button
-                        onClick={handleDeleteText}
-                        className="py-2.5 px-4 bg-red-100 text-red-600 hover:bg-red-200 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors"
-                      >
-                        Delete
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setShowStickerPanel(false);
-                        setEditingTextIndex(-1);
-                        setActiveTool("none");
-                      }}
-                      className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-xs uppercase tracking-wide"
-                    >
-                      {isEditing ? "Close" : "Cancel"}
-                    </button>
-                    {!isEditing && selectedStickerTab === "badge" && (
-                      <button
-                        disabled={!selectedStickerText.trim()}
-                        onClick={() => handleAddSticker(selectedStickerText, "badge")}
-                        className="flex-[1.5] py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl font-bold text-xs uppercase tracking-wide shadow-md transition-all active:scale-95"
-                      >
-                        Place Badge
-                      </button>
-                    )}
                   </div>
-
                 </div>
-              </div>
-            </motion.div>
-          );
-        })()}
+              </motion.div>
+            );
+          })()}
       </AnimatePresence>
     </div>
   );

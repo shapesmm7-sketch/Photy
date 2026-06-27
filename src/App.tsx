@@ -24,6 +24,7 @@ import {
   Crown,
   CheckCircle2,
   FileText,
+  Grid,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -51,7 +52,12 @@ import {
   purchasePremium,
   restorePurchases,
 } from "./lib/purchases";
-import { saveRecentEdit, getRecentEdits, RecentEdit, deleteRecentEdit } from "./lib/storage";
+import {
+  saveRecentEdit,
+  getRecentEdits,
+  RecentEdit,
+  deleteRecentEdit,
+} from "./lib/storage";
 import { isNative } from "./lib/isNative";
 import {
   initializeAdMob,
@@ -184,10 +190,16 @@ export default function App() {
         customImageScale,
         true, // highQuality = true
         customResizeMode,
-        customResizerBg
+        customResizerBg,
       );
       if (editorPaths.length > 0 || editorTexts.length > 0) {
-        return await burnEditsToImage(hdBase, editorPaths, editorTexts, true, editorReferenceSize);
+        return await burnEditsToImage(
+          hdBase,
+          editorPaths,
+          editorTexts,
+          true,
+          editorReferenceSize,
+        );
       }
       return hdBase;
     }
@@ -208,7 +220,9 @@ export default function App() {
     y: number;
   }>({ x: 0, y: 0 });
   const [customImageScale, setCustomImageScale] = useState<number>(1);
-  const [customResizeMode, setCustomResizeMode] = useState<"cover" | "fit_no_border" | "fit_border" | "stretch">("stretch");
+  const [customResizeMode, setCustomResizeMode] = useState<
+    "cover" | "fit_no_border" | "fit_border" | "stretch"
+  >("stretch");
   const [customResizerBg, setCustomResizerBg] = useState<string>("transparent");
   const [showEditor, setShowEditor] = useState(false);
 
@@ -240,7 +254,10 @@ export default function App() {
   const [isStitchPhotoModalOpen, setIsStitchPhotoModalOpen] = useState(false);
   const [stitchImages, setStitchImages] = useState<string[]>([]);
   const [docScannerPages, setDocScannerPages] = useState<string[]>([]);
-  const [editingDocPage, setEditingDocPage] = useState<{ index: number; data: string } | null>(null);
+  const [editingDocPage, setEditingDocPage] = useState<{
+    index: number;
+    data: string;
+  } | null>(null);
   const [pdfPageSize, setPdfPageSize] = useState<"A4" | "Letter" | "Original">(
     "A4",
   );
@@ -255,7 +272,10 @@ export default function App() {
   // NEW STATES
   const [editorPaths, setEditorPaths] = useState<any[]>([]);
   const [editorTexts, setEditorTexts] = useState<any[]>([]);
-  const [editorReferenceSize, setEditorReferenceSize] = useState<{ width: number; height: number } | null>(null);
+  const [editorReferenceSize, setEditorReferenceSize] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
   const [selectedStyle, setSelectedStyle] = useState("Original");
   const [selectedLayout, setSelectedLayout] = useState("None");
   const [isPrivacyScanning, setIsPrivacyScanning] = useState(false);
@@ -446,10 +466,12 @@ export default function App() {
     setAdMobPremium(isPremium);
     if (!isPremium) {
       setTimeout(() => {
-        initializeAdMob().then(() => {
-          showBannerAd();
-          admobManager.preloadInterstitial();
-        }).catch(console.error);
+        initializeAdMob()
+          .then(() => {
+            showBannerAd();
+            admobManager.preloadInterstitial();
+          })
+          .catch(console.error);
       }, 500);
     } else {
       hideBannerAd();
@@ -500,7 +522,7 @@ export default function App() {
         customImageScale,
         false, // highQuality = false
         customResizeMode,
-        customResizerBg
+        customResizerBg,
       )
         .then((res) => {
           if (currentOriginalImageRef.current !== originalImageAtStart) {
@@ -523,14 +545,26 @@ export default function App() {
             }
             setProcessedImage(res);
           } else if (styleChanged || layoutChanged || bgChanged) {
-            burnEditsToImage(res, editorPaths, editorTexts, false, editorReferenceSize)
+            burnEditsToImage(
+              res,
+              editorPaths,
+              editorTexts,
+              false,
+              editorReferenceSize,
+            )
               .then((finalCombined) => {
                 setProcessedImage(finalCombined);
               })
               .catch(console.error);
           } else {
             if (editorPaths.length > 0 || editorTexts.length > 0) {
-              burnEditsToImage(res, editorPaths, editorTexts, false, editorReferenceSize)
+              burnEditsToImage(
+                res,
+                editorPaths,
+                editorTexts,
+                false,
+                editorReferenceSize,
+              )
                 .then((finalCombined) => {
                   setProcessedImage(finalCombined);
                 })
@@ -606,7 +640,7 @@ export default function App() {
     // Convert to standard JS array FIRST so the references are stable
     const filesArray = Array.from(filesList);
 
-    if (activeQuickFeature === "stitch" && filesArray.length > 1) {
+    if (activeQuickFeature === "stitch" && filesArray.length > 0) {
       const readers = filesArray.map((f: File) => {
         return new Promise<string>((resolve) => {
           const reader = new FileReader();
@@ -614,13 +648,17 @@ export default function App() {
           reader.readAsDataURL(f);
         });
       });
-      Promise.all(readers).then((srcs) => {
-        setStitchImages(srcs);
-        setIsStitchPhotoModalOpen(true);
-        setAppState("preview");
-        setOriginalImage(null);
-        setCleanImage(null);
-      }).catch(console.error);
+      Promise.all(readers)
+        .then((srcs) => {
+          setStitchImages(srcs);
+          if (activeQuickFeature === "stitch") {
+            setIsStitchPhotoModalOpen(true);
+          }
+          setAppState("preview");
+          setOriginalImage(null);
+          setCleanImage(null);
+        })
+        .catch(console.error);
       // Clear input value so selecting the same file works later
       e.target.value = "";
       return;
@@ -666,11 +704,15 @@ export default function App() {
         setCleanImage(resizedResult);
         setProcessedImage(resizedResult);
 
-        generateThumbnail(resizedResult).then((thumb) => {
-          saveRecentEdit({ originalImage: resizedResult, thumbnail: thumb }).then(() => {
-            getRecentEdits().then(setRecentEdits).catch(console.error);
-          }).catch(console.error);
-        }).catch(console.error);
+        generateThumbnail(resizedResult)
+          .then((thumb) => {
+            saveRecentEdit({ originalImage: resizedResult, thumbnail: thumb })
+              .then(() => {
+                getRecentEdits().then(setRecentEdits).catch(console.error);
+              })
+              .catch(console.error);
+          })
+          .catch(console.error);
 
         if (!activeQuickFeature) {
           const topH = Math.round(height * 0.04);
@@ -782,7 +824,11 @@ export default function App() {
         const cleanBase64 = base64String.includes(",")
           ? base64String.split(",")[1]
           : base64String;
-        await NativeMedia.saveImage({ base64: cleanBase64, filename: defaultFilename, mimeType: "image/png" });
+        await NativeMedia.saveImage({
+          base64: cleanBase64,
+          filename: defaultFilename,
+          mimeType: "image/png",
+        });
         alert(
           "Image saved directly to your phone gallery under 'Pictures/Photy'!",
         );
@@ -862,7 +908,10 @@ export default function App() {
       const hdImage = await generateHighQualityImage();
       if (!hdImage) return;
 
-      if (Capacitor.isNativePlatform() && Capacitor.getPlatform() === "android") {
+      if (
+        Capacitor.isNativePlatform() &&
+        Capacitor.getPlatform() === "android"
+      ) {
         try {
           const NativeMedia = registerPlugin<any>("NativeMedia");
           const cleanBase64 = hdImage.includes(",")
@@ -1026,16 +1075,17 @@ export default function App() {
 
   return (
     <div
-      className={`h-[100dvh] w-full font-sans flex items-center relative overflow-y-auto transition-colors duration-500 flex-col pt-safe ${isDarkMode ? "bg-slate-900 text-white" : appState === "upload" ? "bg-blue-600 text-gray-900" : "bg-[#F1F5F9] text-gray-900"}`}
+      className={`h-[100dvh] w-full font-sans flex items-center relative overflow-y-auto overflow-x-hidden transition-colors duration-500 flex-col pt-safe ${isDarkMode ? "bg-slate-900 text-white" : appState === "upload" ? "bg-blue-600 text-gray-900" : "bg-[#F1F5F9] text-gray-900"}`}
       style={{
-        paddingBottom:
-          !isPremium
-            ? "calc(env(safe-area-inset-bottom) + 56px)"
-            : undefined,
+        paddingBottom: !isPremium
+          ? "calc(env(safe-area-inset-bottom) + 56px)"
+          : undefined,
       }}
     >
       {/* Banner Ads on bottom of landing page, main page, and edit page */}
-      {!isPremium && <AdMobBanner className="fixed bottom-0 left-0 right-0 w-full z-[100]" />}
+      {!isPremium && (
+        <AdMobBanner className="fixed bottom-0 left-0 right-0 w-full z-[100]" />
+      )}
 
       {/* Full-screen simulated AdMob Interstitial Overlay */}
       <AdMobInterstitialContainer />
@@ -1645,21 +1695,35 @@ export default function App() {
 
               <div className="space-y-3">
                 {/* Recent Edits */}
-                <div className={`p-4 rounded-2xl ${isDarkMode ? "bg-slate-700" : "bg-gray-50"}`}>
-                  <h3 className={`text-[10px] font-extrabold uppercase tracking-wider mb-3 ${isDarkMode ? "text-slate-400" : "text-gray-500"}`}>
+                <div
+                  className={`p-4 rounded-2xl ${isDarkMode ? "bg-slate-700" : "bg-gray-50"}`}
+                >
+                  <h3
+                    className={`text-[10px] font-extrabold uppercase tracking-wider mb-3 ${isDarkMode ? "text-slate-400" : "text-gray-500"}`}
+                  >
                     Recent Edits
                   </h3>
                   <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
                     {recentEdits.map((edit, idx) => (
-                      <div key={`${edit.id}-${idx}`} className="relative group shrink-0">
+                      <div
+                        key={`${edit.id}-${idx}`}
+                        className="relative group shrink-0"
+                      >
                         <button
                           onClick={() => handleLoadRecent(edit.originalImage)}
                           className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-all active:scale-95 ${isDarkMode ? "border-slate-600 hover:border-blue-500" : "border-gray-200 hover:border-blue-400"}`}
                         >
-                          <img src={edit.thumbnail} alt="Recent" className="w-full h-full object-cover" />
+                          <img
+                            src={edit.thumbnail}
+                            alt="Recent"
+                            className="w-full h-full object-cover"
+                          />
                         </button>
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteRecent(edit.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteRecent(edit.id);
+                          }}
                           className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-100 transition-opacity z-10 shadow-sm"
                         >
                           <X className="w-3 h-3" />
@@ -1667,7 +1731,9 @@ export default function App() {
                       </div>
                     ))}
                     {recentEdits.length === 0 && (
-                      <div className={`w-full text-center p-3 rounded-lg text-xs font-semibold ${isDarkMode ? "bg-slate-800 text-slate-500" : "bg-white text-gray-400 border border-gray-100"}`}>
+                      <div
+                        className={`w-full text-center p-3 rounded-lg text-xs font-semibold ${isDarkMode ? "bg-slate-800 text-slate-500" : "bg-white text-gray-400 border border-gray-100"}`}
+                      >
                         No recent edits yet
                       </div>
                     )}
@@ -1866,10 +1932,9 @@ export default function App() {
               onClick={() => setShowPremiumModal(false)}
               className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex p-4 overflow-y-auto"
               style={{
-                paddingBottom:
-                  !isPremium
-                    ? "calc(env(safe-area-inset-bottom) + 80px)"
-                    : undefined,
+                paddingBottom: !isPremium
+                  ? "calc(env(safe-area-inset-bottom) + 80px)"
+                  : undefined,
               }}
             >
               <motion.div
@@ -2008,13 +2073,16 @@ export default function App() {
                       if (isPurchasing) return;
                       setIsPurchasing(true);
                       try {
-                        const success = await purchasePremium(selectedPremiumPlan);
+                        const success =
+                          await purchasePremium(selectedPremiumPlan);
                         if (success) {
                           setIsPremium(true);
                           setShowPremiumModal(false);
-                          alert("Welcome to Premium! Ads have been disabled and watermarks removed.");
+                          alert(
+                            "Welcome to Premium! Ads have been disabled and watermarks removed.",
+                          );
                         } else {
-                          // Handled internally if native logic succeeds without explicit error 
+                          // Handled internally if native logic succeeds without explicit error
                           // Or user cancelled
                         }
                       } catch (e: any) {
@@ -2025,7 +2093,7 @@ export default function App() {
                     }}
                     disabled={isPurchasing}
                     className={`w-full mt-6 py-4 rounded-2xl font-black text-lg shadow-xl transition-all ${
-                      isPurchasing 
+                      isPurchasing
                         ? "bg-gray-400 text-gray-200 cursor-not-allowed"
                         : "bg-gray-900 text-white hover:bg-gray-800 hover:-translate-y-0.5"
                     }`}
@@ -2112,7 +2180,7 @@ export default function App() {
                 newImageScale,
                 newResizeMode,
                 newResizerBg,
-                referenceSize
+                referenceSize,
               ) => {
                 if (editingDocPage !== null) {
                   const updatedPages = [...docScannerPages];
@@ -2133,11 +2201,20 @@ export default function App() {
                       activeQuickFeature === "resizer"
                     ) {
                       try {
-                        const effectiveRefSize = referenceSize || editorReferenceSize;
-                        let baseImgForBurn = cleanImage || originalImage || newImgDataUrl;
-                        if (activeQuickFeature === "resizer" || customSize || customCrop) {
+                        const effectiveRefSize =
+                          referenceSize || editorReferenceSize;
+                        let baseImgForBurn =
+                          cleanImage || originalImage || newImgDataUrl;
+                        if (
+                          activeQuickFeature === "resizer" ||
+                          customSize ||
+                          customCrop
+                        ) {
                           baseImgForBurn = await applyStyle(
-                            newOriginalSrc || originalImage || cleanImage || newImgDataUrl,
+                            newOriginalSrc ||
+                              originalImage ||
+                              cleanImage ||
+                              newImgDataUrl,
                             "Original",
                             "None",
                             [],
@@ -2149,7 +2226,7 @@ export default function App() {
                             newImageScale !== undefined ? newImageScale : 1,
                             true,
                             newResizeMode || "stretch",
-                            newResizerBg || "transparent"
+                            newResizerBg || "transparent",
                           );
                         }
                         const hdImage = await burnEditsToImage(
@@ -2157,13 +2234,16 @@ export default function App() {
                           finalPaths,
                           finalTexts,
                           true,
-                          effectiveRefSize
+                          effectiveRefSize,
                         );
                         if (hdImage) {
                           imageToSave = hdImage;
                         }
                       } catch (err) {
-                        console.error("Failed high-quality burn for quick feature:", err);
+                        console.error(
+                          "Failed high-quality burn for quick feature:",
+                          err,
+                        );
                       }
                     }
                     await triggerDownloadOfBase64(
@@ -2253,10 +2333,9 @@ export default function App() {
               }}
               className="absolute inset-0 z-[150] bg-black/60 backdrop-blur-sm flex p-4 overflow-y-auto"
               style={{
-                paddingBottom:
-                  !isPremium
-                    ? "calc(env(safe-area-inset-bottom) + 80px)"
-                    : undefined,
+                paddingBottom: !isPremium
+                  ? "calc(env(safe-area-inset-bottom) + 80px)"
+                  : undefined,
               }}
             >
               <motion.div

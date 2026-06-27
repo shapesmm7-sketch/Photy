@@ -1794,49 +1794,27 @@ export async function burnEditsToImage(
               ctx.textBaseline = "middle";
               ctx.fillText(t.text, 0, 0);
             } else {
-              // Emoji high-quality rendering: Render the emoji at a high native size
-              // and scale it using Canvas's high-quality imageSmoothingQuality to prevent pixelation.
-              const nativeRenderSize = Math.max(512, Math.min(2048, Math.round(scaledSize)));
-              const offscreen = document.createElement("canvas");
-              offscreen.width = nativeRenderSize * 1.5;
-              offscreen.height = nativeRenderSize * 1.5;
-              const oCtx = offscreen.getContext("2d");
-              if (oCtx) {
-                oCtx.font = `bold ${nativeRenderSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
-                oCtx.textBaseline = "middle";
-                oCtx.textAlign = "center";
-                oCtx.imageSmoothingEnabled = true;
-                oCtx.imageSmoothingQuality = "high";
-                oCtx.fillText(t.text, offscreen.width / 2, offscreen.height / 2);
+              // High-quality vector emoji rendering via Twemoji
+              ctx.save();
+              if (t.hasShadow) {
+                ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
+                ctx.shadowBlur = Math.max(4, scaledSize * 0.12);
+                ctx.shadowOffsetX = Math.max(2, scaledSize * 0.06);
+                ctx.shadowOffsetY = Math.max(2, scaledSize * 0.06);
+              }
 
-                ctx.save();
-                if (t.hasShadow) {
-                  ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-                  ctx.shadowBlur = Math.max(4, scaledSize * 0.12);
-                  ctx.shadowOffsetX = Math.max(2, scaledSize * 0.06);
-                  ctx.shadowOffsetY = Math.max(2, scaledSize * 0.06);
-                }
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = "high";
-                
-                const ratio = scaledSize / nativeRenderSize;
-                const drawW = offscreen.width * ratio;
-                const drawH = offscreen.height * ratio;
-                ctx.drawImage(offscreen, -drawW / 2, -drawH / 2, drawW, drawH);
-                ctx.restore();
+              if (t.emojiImg && typeof t.emojiImg !== "string" && t.emojiImg.complete) {
+                const drawW = scaledSize * 1.1;
+                const drawH = scaledSize * 1.1;
+                ctx.drawImage(t.emojiImg, -drawW / 2, -drawH / 2, drawW, drawH);
               } else {
                 // Fallback
                 ctx.font = `${scaledSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
                 ctx.textBaseline = "middle";
                 ctx.textAlign = "center";
-                if (t.hasShadow) {
-                  ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
-                  ctx.shadowBlur = Math.max(4, scaledSize * 0.12);
-                  ctx.shadowOffsetX = Math.max(2, scaledSize * 0.06);
-                  ctx.shadowOffsetY = Math.max(2, scaledSize * 0.06);
-                }
                 ctx.fillText(t.text, 0, 0);
               }
+              ctx.restore();
             }
           } else {
             // Standard text

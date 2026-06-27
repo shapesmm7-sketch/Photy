@@ -52,7 +52,9 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateSuccess, setGenerateSuccess] = useState(false);
-  const [featureGraphicSrc, setFeatureGraphicSrc] = useState<string | null>(null);
+  const [featureGraphicSrc, setFeatureGraphicSrc] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!imageData || !isOpen) return;
@@ -95,9 +97,7 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
     });
   };
 
-  const resizeToFeatureGraphic = (
-    img: HTMLImageElement,
-  ): Promise<string> => {
+  const resizeToFeatureGraphic = (img: HTMLImageElement): Promise<string> => {
     return new Promise((resolve) => {
       const canvas = document.createElement("canvas");
       canvas.width = 1024;
@@ -245,7 +245,9 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
       // Top-level files
       zip.file("appstore.png", await resizeImage(img, 1024), { base64: true });
       zip.file("playstore.png", await resizeImage(img, 512), { base64: true });
-      zip.file("feature_graphic.png", await resizeToFeatureGraphic(img), { base64: true });
+      zip.file("feature_graphic.png", await resizeToFeatureGraphic(img), {
+        base64: true,
+      });
 
       // iOS AppIconset
       const iosFolder = zip.folder("Assets.xcassets/AppIcon.appiconset");
@@ -280,7 +282,7 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
           const fileName = `AppIcons_${new Date().getTime()}.zip`;
           const NativeMedia = registerPlugin<any>("NativeMedia");
           await NativeMedia.saveZip({ base64: zipBase64, filename: fileName });
-          
+
           setGenerateSuccess(true);
           setTimeout(() => setGenerateSuccess(false), 2000);
           return;
@@ -323,7 +325,7 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className={`fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm rounded-3xl shadow-2xl z-[101] overflow-hidden flex flex-col max-h-[90dvh] ${
+            className={`fixed left-1/2 top-[calc(50%-40px)] -translate-x-1/2 -translate-y-1/2 w-full max-w-sm rounded-3xl shadow-2xl z-[101] overflow-hidden flex flex-col max-h-[calc(100dvh-140px)] ${
               isDarkMode ? "bg-slate-900 border border-slate-800" : "bg-white"
             }`}
           >
@@ -376,10 +378,18 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
                   <div className="w-full space-y-3">
                     <div className="grid grid-cols-2 gap-3 pb-1">
                       {/* App Store Icon */}
-                      <div className={`p-2.5 rounded-2xl flex flex-col items-center gap-1.5 border text-center ${
-                        isDarkMode ? "bg-slate-800/40 border-slate-700/50" : "bg-slate-50 border-slate-100"
-                      }`}>
-                        <span className={`text-[10px] font-bold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>App Store (1024²)</span>
+                      <div
+                        className={`p-2.5 rounded-2xl flex flex-col items-center gap-1.5 border text-center ${
+                          isDarkMode
+                            ? "bg-slate-800/40 border-slate-700/50"
+                            : "bg-slate-50 border-slate-100"
+                        }`}
+                      >
+                        <span
+                          className={`text-[10px] font-bold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}
+                        >
+                          App Store (1024²)
+                        </span>
                         <div className="w-16 h-16 rounded-2xl shadow-md overflow-hidden bg-white flex items-center justify-center border border-black/5">
                           <img
                             src={imageData}
@@ -390,10 +400,18 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
                       </div>
 
                       {/* Play Store Icon */}
-                      <div className={`p-2.5 rounded-2xl flex flex-col items-center gap-1.5 border text-center ${
-                        isDarkMode ? "bg-slate-800/40 border-slate-700/50" : "bg-slate-50 border-slate-100"
-                      }`}>
-                        <span className={`text-[10px] font-bold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Play Store (512²)</span>
+                      <div
+                        className={`p-2.5 rounded-2xl flex flex-col items-center gap-1.5 border text-center ${
+                          isDarkMode
+                            ? "bg-slate-800/40 border-slate-700/50"
+                            : "bg-slate-50 border-slate-100"
+                        }`}
+                      >
+                        <span
+                          className={`text-[10px] font-bold ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}
+                        >
+                          Play Store (512²)
+                        </span>
                         <div className="w-16 h-16 rounded-xl shadow-md overflow-hidden bg-white flex items-center justify-center border border-black/5">
                           <img
                             src={imageData}
@@ -404,12 +422,22 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
                       </div>
 
                       {/* Google Play Feature Graphic */}
-                      <div className={`col-span-2 p-3 rounded-2xl flex flex-col items-center gap-2 border text-center ${
-                        isDarkMode ? "bg-slate-800/40 border-slate-700/50" : "bg-slate-50 border-slate-100"
-                      }`}>
+                      <div
+                        className={`col-span-2 p-3 rounded-2xl flex flex-col items-center gap-2 border text-center ${
+                          isDarkMode
+                            ? "bg-slate-800/40 border-slate-700/50"
+                            : "bg-slate-50 border-slate-100"
+                        }`}
+                      >
                         <div className="flex items-center justify-between w-full px-1">
-                          <span className={`text-[10px] font-bold ${isDarkMode ? "text-slate-350" : "text-slate-600"}`}>Google Play Feature Graphic</span>
-                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-mono">1024×500</span>
+                          <span
+                            className={`text-[10px] font-bold ${isDarkMode ? "text-slate-350" : "text-slate-600"}`}
+                          >
+                            Google Play Feature Graphic
+                          </span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-mono">
+                            1024×500
+                          </span>
                         </div>
                         <div className="w-full aspect-[1024/500] rounded-xl shadow-md overflow-hidden bg-white flex items-center justify-center border border-slate-200 dark:border-slate-800 bg-clip-padding">
                           {featureGraphicSrc ? (
@@ -431,7 +459,10 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
                       isDarkMode ? "text-slate-400" : "text-slate-500"
                     }`}
                   >
-                    Automatically generate all required iOS Appiconset dimensions, Android mipmap directories, and store visuals in a single package. Saves hours of manual work processing your app designs.
+                    Automatically generate all required iOS Appiconset
+                    dimensions, Android mipmap directories, and store visuals in
+                    a single package. Saves hours of manual work processing your
+                    app designs.
                   </p>
 
                   <div className="w-full space-y-3">
@@ -480,7 +511,8 @@ export const AppIconModal: React.FC<AppIconModalProps> = ({
                       <p
                         className={`text-xs ${isDarkMode ? "text-slate-400" : "text-blue-600/70"}`}
                       >
-                        playstore.png (512px), appstore.png (1024px), feature_graphic.png (1024×500px)
+                        playstore.png (512px), appstore.png (1024px),
+                        feature_graphic.png (1024×500px)
                       </p>
                     </div>
                   </div>
