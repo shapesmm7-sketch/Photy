@@ -4027,8 +4027,8 @@ export default function EditorCanvas({
           resizerBg,
           canvasRef.current
             ? {
-                width: canvasRef.current.width,
-                height: canvasRef.current.height,
+                width: canvasRef.current.width / getDPR(),
+                height: canvasRef.current.height / getDPR(),
               }
             : undefined,
         );
@@ -5919,6 +5919,7 @@ export default function EditorCanvas({
               "🎸",
               "🎹",
               "🎧",
+              "🎤",
               "🎙️",
               "🥁",
               "🎷",

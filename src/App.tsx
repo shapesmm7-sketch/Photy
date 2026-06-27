@@ -490,12 +490,6 @@ export default function App() {
     };
   }, [isPremium]);
 
-  // Track user customizing choices as active interactions for AdMob Interstitials
-  React.useEffect(() => {
-    if (!originalImage || isPremium) return;
-    admobManager.incrementInteractions();
-  }, [selectedStyle, selectedLayout, customBgColor]);
-
   // Preload all frames on mount
   React.useEffect(() => {
     preloadPhoneFrames();
