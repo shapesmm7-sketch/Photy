@@ -503,77 +503,68 @@ export default function App() {
       const originalImageAtStart = originalImage;
       setZoomScale(1);
       setZoomOffset({ x: 0, y: 0 });
-      applyStyle(
-        originalImage,
-        selectedStyle,
-        selectedLayout,
-        sensitiveAreas,
-        blurStrength,
-        customBgColor,
-        customCropRect,
-        customCanvasSize,
-        customImageOffset,
-        customImageScale,
-        false, // highQuality = false
-        customResizeMode,
-        customResizerBg,
-      )
-        .then((res) => {
-          if (currentOriginalImageRef.current !== originalImageAtStart) {
-            // Discard stale result because a new image was uploaded in the meantime!
-            return;
-          }
-          setBaseStyledImage(res);
 
-          // Only clear manual edits if structural options actually changed in the sidebar
-          const styleChanged = prevStyleRef.current !== selectedStyle;
-          const layoutChanged = prevLayoutRef.current !== selectedLayout;
-          const bgChanged = prevBgRef.current !== customBgColor;
-          const originalImageChanged =
-            prevOriginalImageRef.current !== originalImage;
+      const processPipeline = async () => {
+        try {
+          let baseImageForStyling = originalImage;
 
-          if (originalImageChanged) {
-            if (!activeQuickFeature) {
-              setEditorPaths([]);
-              setEditorTexts([]);
-            }
-            setProcessedImage(res);
-          } else if (styleChanged || layoutChanged || bgChanged) {
-            burnEditsToImage(
-              res,
+          if (editorPaths.length > 0 || editorTexts.length > 0) {
+            baseImageForStyling = await burnEditsToImage(
+              originalImage,
               editorPaths,
               editorTexts,
               false,
               editorReferenceSize,
-            )
-              .then((finalCombined) => {
-                setProcessedImage(finalCombined);
-              })
-              .catch(console.error);
-          } else {
-            if (editorPaths.length > 0 || editorTexts.length > 0) {
-              burnEditsToImage(
-                res,
-                editorPaths,
-                editorTexts,
-                false,
-                editorReferenceSize,
-              )
-                .then((finalCombined) => {
-                  setProcessedImage(finalCombined);
-                })
-                .catch(console.error);
-            } else {
-              setProcessedImage(res);
-            }
+            );
           }
+
+          if (currentOriginalImageRef.current !== originalImageAtStart) {
+            // Discard stale result because a new image was uploaded in the meantime!
+            return;
+          }
+
+          const res = await applyStyle(
+            baseImageForStyling,
+            selectedStyle,
+            selectedLayout,
+            sensitiveAreas,
+            blurStrength,
+            customBgColor,
+            customCropRect,
+            customCanvasSize,
+            customImageOffset,
+            customImageScale,
+            false, // highQuality = false
+            customResizeMode,
+            customResizerBg,
+          );
+
+          if (currentOriginalImageRef.current !== originalImageAtStart) {
+            return;
+          }
+
+          setBaseStyledImage(res);
+
+          const originalImageChanged =
+            prevOriginalImageRef.current !== originalImage;
+
+          if (originalImageChanged && !activeQuickFeature) {
+            setEditorPaths([]);
+            setEditorTexts([]);
+          }
+
+          setProcessedImage(res);
 
           prevOriginalImageRef.current = originalImage;
           prevStyleRef.current = selectedStyle;
           prevLayoutRef.current = selectedLayout;
           prevBgRef.current = customBgColor;
-        })
-        .catch(console.error);
+        } catch (error) {
+          console.error(error);
+        }
+      };
+
+      processPipeline();
     }
   }, [
     originalImage,
@@ -1183,7 +1174,7 @@ export default function App() {
               <p
                 className={`text-[11px] font-black uppercase tracking-wider mb-2.5 ${isDarkMode ? "text-slate-300" : "text-blue-100"}`}
               >
-                Quick Actions
+                {t("quickActions")}
               </p>
               <div className="flex flex-wrap justify-center gap-1.5">
                 <button
@@ -1194,7 +1185,7 @@ export default function App() {
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
                   }`}
                 >
-                  Edit & Markup photo
+                  {t("editMarkup")}
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("split")}
@@ -1204,7 +1195,7 @@ export default function App() {
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
                   }`}
                 >
-                  Split Photo
+                  {t("splitPhoto")}
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("stitch")}
@@ -1214,7 +1205,7 @@ export default function App() {
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
                   }`}
                 >
-                  Stitch Photo
+                  {t("stitchPhoto")}
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("watermark")}
@@ -1224,7 +1215,7 @@ export default function App() {
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
                   }`}
                 >
-                  add watermark
+                  {t("addWatermark")}
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("resizer")}
@@ -1234,7 +1225,7 @@ export default function App() {
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
                   }`}
                 >
-                  image resizer
+                  {t("imageResizer")}
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("converter")}
@@ -1244,7 +1235,7 @@ export default function App() {
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
                   }`}
                 >
-                  image converter
+                  {t("imageConverter")}
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("text")}
@@ -1254,7 +1245,7 @@ export default function App() {
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
                   }`}
                 >
-                  text converter
+                  {t("textConverter")}
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("appicons")}
@@ -1264,7 +1255,7 @@ export default function App() {
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
                   }`}
                 >
-                  app icons
+                  {t("appIcons")}
                 </button>
                 <button
                   onClick={() => handleFeaturedClick("docscanner")}
@@ -1274,7 +1265,7 @@ export default function App() {
                       : "bg-white/15 hover:bg-white/25 text-white border border-white/15"
                   }`}
                 >
-                  Doc Converter
+                  {t("documentScanner")}
                 </button>
               </div>
             </div>
@@ -1309,7 +1300,7 @@ export default function App() {
             key="preview"
             initial={{ opacity: 0, y: 50 }}
             animate={{ opacity: 1, y: 0 }}
-            className="w-full flex-1 min-h-0 md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5 select-none md:my-auto shrink-0"
+            className="w-full flex-1 min-h-0 md:h-[95vh] md:w-[420px] md:rounded-[40px] bg-white flex flex-col shadow-2xl relative overflow-hidden ring-8 ring-gray-900/5 select-none md:my-auto"
           >
             {/* Main Preview Area */}
             <div className="flex-1 min-h-0 bg-[#F1F5F9] p-3 flex items-center justify-center overflow-hidden relative select-none shrink border-b border-gray-100">
@@ -1671,7 +1662,12 @@ export default function App() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className={`absolute bottom-0 left-0 right-0 z-[150] rounded-t-[32px] p-6 pb-12 shadow-2xl max-h-[calc(100vh-120px)] overflow-y-auto ${isDarkMode ? "bg-slate-800" : "bg-white"}`}
+              className={`absolute bottom-0 left-0 right-0 z-[150] rounded-t-[32px] p-6 shadow-2xl max-h-[calc(100vh-120px)] overflow-y-auto ${isDarkMode ? "bg-slate-800" : "bg-white"}`}
+              style={{
+                paddingBottom: !isPremium
+                  ? "calc(env(safe-area-inset-bottom) + 50px + 24px)"
+                  : "calc(env(safe-area-inset-bottom) + 24px)",
+              }}
             >
               <div className="flex justify-between items-center mb-6">
                 <h2
@@ -1695,9 +1691,9 @@ export default function App() {
                   <h3
                     className={`text-[10px] font-extrabold uppercase tracking-wider mb-3 ${isDarkMode ? "text-slate-400" : "text-gray-500"}`}
                   >
-                    Recent Edits
+                    {t("recentEdits")}
                   </h3>
-                  <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                  <div className="flex gap-4 overflow-x-auto pt-3 pb-3 pl-1 pr-3 -mt-2 -ml-1 custom-scrollbar">
                     {recentEdits.map((edit, idx) => (
                       <div
                         key={`${edit.id}-${idx}`}
@@ -1718,9 +1714,9 @@ export default function App() {
                             e.stopPropagation();
                             handleDeleteRecent(edit.id);
                           }}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-100 transition-opacity z-10 shadow-sm"
+                          className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1.5 opacity-100 transition-all z-10 shadow-md cursor-pointer"
                         >
-                          <X className="w-3 h-3" />
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))}
@@ -1728,7 +1724,7 @@ export default function App() {
                       <div
                         className={`w-full text-center p-3 rounded-lg text-xs font-semibold ${isDarkMode ? "bg-slate-800 text-slate-500" : "bg-white text-gray-400 border border-gray-100"}`}
                       >
-                        No recent edits yet
+                        {t("noRecentEdits")}
                       </div>
                     )}
                   </div>
@@ -2137,6 +2133,7 @@ export default function App() {
           >
             <EditorCanvas
               key={`${cleanImage || "editor"}-${editorSessionId}`}
+              language={language}
               imageSrc={baseStyledImage || cleanImage!}
               cleanImageSrc={cleanImage!}
               originalScreenshotSrc={originalImage || undefined}

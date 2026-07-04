@@ -1794,7 +1794,7 @@ export async function burnEditsToImage(
               ctx.textBaseline = "middle";
               ctx.fillText(t.text, 0, 0);
             } else {
-              // High-quality vector emoji rendering via Twemoji
+              // Render native emoji instantly and beautifully with zero delay or network requests!
               ctx.save();
               if (t.hasShadow) {
                 ctx.shadowColor = "rgba(0, 0, 0, 0.4)";
@@ -1803,17 +1803,10 @@ export async function burnEditsToImage(
                 ctx.shadowOffsetY = Math.max(2, scaledSize * 0.06);
               }
 
-              if (t.emojiImg && typeof t.emojiImg !== "string" && t.emojiImg.complete) {
-                const drawW = scaledSize * 1.1;
-                const drawH = scaledSize * 1.1;
-                ctx.drawImage(t.emojiImg, -drawW / 2, -drawH / 2, drawW, drawH);
-              } else {
-                // Fallback
-                ctx.font = `${scaledSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
-                ctx.textBaseline = "middle";
-                ctx.textAlign = "center";
-                ctx.fillText(t.text, 0, 0);
-              }
+              ctx.font = `${scaledSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+              ctx.textBaseline = "middle";
+              ctx.textAlign = "center";
+              ctx.fillText(t.text, 0, 0);
               ctx.restore();
             }
           } else {

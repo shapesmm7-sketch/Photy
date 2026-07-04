@@ -42,6 +42,9 @@ export const initializeAdMob = async () => {
 
 export const showBannerAd = async () => {
   if (!isNative || _isPremium) return;
+  // Android natively hosts the banner inside a LinearLayout to prevent jumping when keyboard opens
+  if (Capacitor.getPlatform() === 'android') return;
+  
   try {
     const options: BannerAdOptions = {
       adId: bannerAdId,
@@ -58,6 +61,7 @@ export const showBannerAd = async () => {
 
 export const hideBannerAd = async () => {
   if (!isNative) return;
+  if (Capacitor.getPlatform() === 'android') return; // Cannot hide native XML banner yet
   try {
     await AdMob.hideBanner();
   } catch (e) {
@@ -206,8 +210,17 @@ export const admobManager = {
 
 // This component reserves space for the banner ad so it doesn't overlap content
 export const AdMobBanner: React.FC<{ className?: string }> = ({ className }) => {
+  if (Capacitor.getPlatform() === 'android') {
+    return null; // Android uses native LinearLayout which automatically constrains the WebView
+  }
   return (
-    <div className={`h-[50px] w-full shrink-0 flex items-center justify-center bg-gray-100 dark:bg-zinc-800 border-t border-gray-200 dark:border-zinc-700 ${className || ''}`}>
+    <div 
+      className={`w-full shrink-0 flex items-center justify-center bg-gray-100 dark:bg-zinc-800 border-t border-gray-200 dark:border-zinc-700 ${className || ''}`}
+      style={{
+        height: 'calc(50px + env(safe-area-inset-bottom))',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
       {/* Empty space reserved for banner */}
     </div>
   );

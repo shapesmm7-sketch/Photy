@@ -184,6 +184,7 @@ interface EditorCanvasProps {
   isPremium?: boolean;
   initialTool?: Tool;
   isWatermarkMode?: boolean;
+  language?: LanguageKey;
 }
 
 function getDistanceToSegment(
@@ -437,14 +438,18 @@ export default function EditorCanvas({
   isPremium = false,
   initialTool = "none",
   isWatermarkMode = false,
+  language = "en",
 }: EditorCanvasProps) {
+  const t = (key: keyof typeof translations.en) =>
+    translations[language][key] || translations.en[key];
+
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const blurCanvasRef = useRef<HTMLCanvasElement>(null);
   const scratchCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const redrawRAF = useRef<number | null>(null);
 
-  const getDPR = () =>
-    typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  const getDPR = () => 1;
   const [activeTool, setActiveTool] = useState<Tool>(initialTool);
   const [isApplyingCrop, setIsApplyingCrop] = useState(false);
   const [isRotating, setIsRotating] = useState(false);
@@ -2115,28 +2120,7 @@ export default function EditorCanvas({
             ctx.textBaseline = "middle";
             ctx.fillText(t.text, 0, 0);
           } else {
-            // High-quality vector emoji rendering via Twemoji
-            if (!t.emojiImg) {
-              const cp = Array.from(t.text)
-                .map((c) => c.codePointAt(0)?.toString(16))
-                .filter((c) => c && c !== "fe0f");
-              const url = `https://cdn.jsdelivr.net/gh/jdecked/twemoji@latest/assets/svg/${cp.join(
-                "-",
-              )}.svg`;
-              const img = new Image();
-              img.crossOrigin = "anonymous";
-              img.onload = () => {
-                t.emojiImg = img;
-                redraw();
-              };
-              img.onerror = () => {
-                t.emojiImg = "failed" as any;
-                redraw();
-              };
-              img.src = url;
-              t.emojiImg = "loading" as any;
-            }
-
+            // Render native emoji instantly and beautifully with zero delay or network requests!
             ctx.save();
             if (t.hasShadow !== false) {
               ctx.shadowColor = t.shadowColor || "rgba(0, 0, 0, 0.45)";
@@ -2145,21 +2129,10 @@ export default function EditorCanvas({
               ctx.shadowOffsetY = Math.max(1.5, t.size * 0.02);
             }
 
-            if (
-              t.emojiImg &&
-              t.emojiImg instanceof HTMLImageElement &&
-              t.emojiImg.complete
-            ) {
-              const drawW = t.size * 1.1;
-              const drawH = t.size * 1.1;
-              ctx.drawImage(t.emojiImg, -drawW / 2, -drawH / 2, drawW, drawH);
-            } else if (t.emojiImg === "failed") {
-              // Fallback to text if SVG failed to load
-              ctx.font = `${t.size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
-              ctx.textBaseline = "middle";
-              ctx.textAlign = "center";
-              ctx.fillText(t.text, 0, 0);
-            }
+            ctx.font = `${t.size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+            ctx.textBaseline = "middle";
+            ctx.textAlign = "center";
+            ctx.fillText(t.text, 0, 0);
             ctx.restore();
           }
         } else {
@@ -3379,7 +3352,11 @@ export default function EditorCanvas({
         drawingPointsRef.current.push(pt);
       }
     }
-    redraw();
+
+    if (redrawRAF.current !== null) {
+      cancelAnimationFrame(redrawRAF.current);
+    }
+    redrawRAF.current = requestAnimationFrame(() => redraw());
   };
 
   const handlePointerUp = (e?: React.MouseEvent | React.TouchEvent) => {
@@ -3870,6 +3847,7 @@ export default function EditorCanvas({
     if (!img) return;
 
     setIsApplyingCrop(true);
+    await new Promise((r) => setTimeout(r, 50));
 
     try {
       // 1. Generate the clean cropped image from raw unstyled screenshot
@@ -4257,7 +4235,14 @@ export default function EditorCanvas({
 
         {/* Refinement Prompt */}
         {suggestedShape && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30">
+          <div
+            className="absolute left-1/2 -translate-x-1/2 z-30"
+            style={{
+              bottom: !isPremium
+                ? "calc(env(safe-area-inset-bottom) + 50px + 24px)"
+                : "calc(env(safe-area-inset-bottom) + 24px)",
+            }}
+          >
             <button
               onClick={() => {
                 if (paths.length === 0 || drawingPointsRef.current.length === 0)
@@ -4319,7 +4304,14 @@ export default function EditorCanvas({
       </div>
 
       {isWatermarkMode && !showAllToolsInWatermark ? (
-        <div className="bg-[#111] p-3 pb-safe border-t border-white/10 flex flex-col gap-2 shrink-0 z-20">
+        <div
+          className="bg-[#111] p-3 border-t border-white/10 flex flex-col gap-2 shrink-0 z-20"
+          style={{
+            paddingBottom: isPremium
+              ? "env(safe-area-inset-bottom)"
+              : "calc(env(safe-area-inset-bottom) + 50px)",
+          }}
+        >
           <div className="flex items-center justify-between shrink-0">
             <span className="text-[10px] font-extrabold tracking-widest text-[#22D3EE] uppercase">
               Watermark Properties
@@ -4634,7 +4626,14 @@ export default function EditorCanvas({
           </div>
         </div>
       ) : (
-        <div className="flex items-center justify-start gap-1 p-3 bg-[#111] pb-safe z-10 border-t border-white/10 overflow-x-auto no-scrollbar shrink-0">
+        <div
+          className="flex items-center justify-start gap-1 p-3 bg-[#111] z-10 border-t border-white/10 overflow-x-auto no-scrollbar shrink-0"
+          style={{
+            paddingBottom: isPremium
+              ? "env(safe-area-inset-bottom)"
+              : "calc(env(safe-area-inset-bottom) + 50px)",
+          }}
+        >
           <ToolButton
             active={false}
             disabled={isRotating}
@@ -4642,7 +4641,7 @@ export default function EditorCanvas({
             icon={
               isRotating ? <Loader2 className="animate-spin" /> : <RotateCw />
             }
-            label="Rotate"
+            label={t("toolRotate")}
           />
           <ToolButton
             active={activeTool === "crop"}
@@ -4650,7 +4649,7 @@ export default function EditorCanvas({
               setActiveTool(activeTool === "crop" ? "none" : "crop")
             }
             icon={<Crop />}
-            label="Crop"
+            label={t("toolCrop")}
           />
           <ToolButton
             active={activeTool === "draw"}
@@ -4658,7 +4657,7 @@ export default function EditorCanvas({
               setActiveTool(activeTool === "draw" ? "none" : "draw")
             }
             icon={<PenTool />}
-            label="Draw"
+            label={t("toolDraw")}
           />
           <ToolButton
             active={activeTool === "arrows"}
@@ -4666,7 +4665,7 @@ export default function EditorCanvas({
               setActiveTool(activeTool === "arrows" ? "none" : "arrows")
             }
             icon={<ArrowRight />}
-            label="Arrows"
+            label={t("toolArrows")}
           />
           <ToolButton
             active={activeTool === "blur"}
@@ -4674,7 +4673,7 @@ export default function EditorCanvas({
               setActiveTool(activeTool === "blur" ? "none" : "blur")
             }
             icon={<Droplets />}
-            label="Blur"
+            label={t("toolBlur")}
           />
           <ToolButton
             active={activeTool === "text"}
@@ -4714,7 +4713,7 @@ export default function EditorCanvas({
               }
             }}
             icon={<Type />}
-            label="Text"
+            label={t("toolText")}
           />
           <ToolButton
             active={activeTool === "sticker"}
@@ -4731,7 +4730,7 @@ export default function EditorCanvas({
               }
             }}
             icon={<Smile />}
-            label="Stickers"
+            label={t("toolStickers")}
           />
           <ToolButton
             active={activeTool === "adjust"}
@@ -4745,7 +4744,7 @@ export default function EditorCanvas({
               }
             }}
             icon={<Sun />}
-            label="Adjust"
+            label={t("toolAdjust")}
           />
           <ToolButton
             active={activeTool === "size"}
@@ -4759,7 +4758,7 @@ export default function EditorCanvas({
               }
             }}
             icon={<Maximize />}
-            label="Size"
+            label={t("toolSize")}
           />
 
           <div className="w-[1px] h-8 bg-white/10 mx-2" />
@@ -6096,9 +6095,7 @@ export default function EditorCanvas({
                 <div className="bg-white/95 backdrop-blur-md w-full max-w-[420px] mx-4 rounded-3xl p-5 shadow-2xl text-black border border-gray-200">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold">
-                      {isEditing
-                        ? "Edit Sticker / Emoji"
-                        : "Add Sticker & Emoji"}
+                      {isEditing ? t("stickerEditEmoji") : t("stickerAddEmoji")}
                     </h3>
                     <button
                       onClick={() => {
@@ -6123,7 +6120,7 @@ export default function EditorCanvas({
                             : "text-gray-500 hover:text-gray-800"
                         }`}
                       >
-                        😃 Emojis
+                        {t("stickerTabEmoji")}
                       </button>
                       <button
                         onClick={() => setSelectedStickerTab("badge")}
@@ -6133,16 +6130,16 @@ export default function EditorCanvas({
                             : "text-gray-500 hover:text-gray-800"
                         }`}
                       >
-                        🏷️ Badges / Tags
+                        {t("stickerTabBadge")}
                       </button>
                     </div>
                   ) : (
                     <div className="text-xs font-bold text-gray-400 bg-gray-50 rounded-xl px-3 py-1.5 mb-4 text-center font-sans">
-                      Editing{" "}
+                      {t("stickerEditing")}
                       <strong>
                         {currentEditingItem?.stickerType === "badge"
-                          ? "Badge Tag"
-                          : "Emoji Sticker"}
+                          ? t("stickerBadgeTag")
+                          : t("stickerEmojiSticker")}
                       </strong>
                     </div>
                   )}
@@ -6154,7 +6151,7 @@ export default function EditorCanvas({
                         currentEditingItem?.stickerType === "emoji")) && (
                       <div>
                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                          Select Emoji
+                          {t("stickerSelectEmoji")}
                         </label>
                         <div className="grid grid-cols-6 gap-2 bg-gray-50 p-2.5 rounded-2xl border border-gray-100 max-h-[140px] overflow-y-auto">
                           {POPULAR_EMOJIS.map((emoji) => (
@@ -6187,11 +6184,11 @@ export default function EditorCanvas({
                       <div className="space-y-3">
                         <div>
                           <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
-                            Badge Label
+                            {t("stickerBadgeLabel")}
                           </label>
                           <input
                             className="w-full border border-gray-300 rounded-full px-4 py-3 outline-none focus:ring-2 ring-blue-500 font-bold text-sm text-center uppercase transition-all"
-                            placeholder="Type sticker text..."
+                            placeholder={t("stickerPlaceholder")}
                             maxLength={15}
                             value={selectedStickerText}
                             onChange={(e) =>
@@ -6222,22 +6219,22 @@ export default function EditorCanvas({
                         {/* Segmented Tabs for Categories */}
                         <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar border-b border-gray-100 mb-4">
                           {[
-                            "Presets",
-                            "Font",
-                            "Color",
-                            "Background",
-                            "Shadow",
+                            { id: "Presets", label: t("stickerTabPresets") },
+                            { id: "Font", label: t("stickerTabFont") },
+                            { id: "Color", label: t("stickerTabColor") },
+                            { id: "Background", label: t("stickerTabBg") },
+                            { id: "Shadow", label: t("stickerTabShadow") },
                           ].map((tab) => (
                             <button
-                              key={tab}
-                              onClick={() => setExpandedBadgeSection(tab)}
+                              key={tab.id}
+                              onClick={() => setExpandedBadgeSection(tab.id)}
                               className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all whitespace-nowrap ${
-                                expandedBadgeSection === tab
+                                expandedBadgeSection === tab.id
                                   ? "bg-white text-blue-600 shadow-sm border border-gray-100"
                                   : "text-gray-400 hover:text-gray-600"
                               }`}
                             >
-                              {tab}
+                              {tab.label}
                             </button>
                           ))}
                         </div>
@@ -6247,7 +6244,7 @@ export default function EditorCanvas({
                           {expandedBadgeSection === "Presets" && (
                             <div className="space-y-3">
                               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                                Quick Presets
+                                {t("stickerQuickPresets")}
                               </label>
                               <div className="grid grid-cols-3 gap-2">
                                 {PRESET_BADGES.map((badge) => (
@@ -6272,7 +6269,7 @@ export default function EditorCanvas({
                           {expandedBadgeSection === "Font" && (
                             <div className="space-y-3">
                               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
-                                Text Font Style
+                                {t("stickerTextFontStyle")}
                               </label>
                               <div className="grid grid-cols-2 gap-2">
                                 {fontNames.slice(0, 8).map((f) => (
@@ -6302,7 +6299,7 @@ export default function EditorCanvas({
                             <div className="space-y-4">
                               <div>
                                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                                  Text Color
+                                  {t("stickerTextColor")}
                                 </label>
                                 <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans">
                                   {textColors.map((color) => (
@@ -6330,7 +6327,7 @@ export default function EditorCanvas({
                             <div className="space-y-4">
                               <div className="flex items-center justify-between">
                                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                  Enable Background
+                                  {t("stickerEnableBg")}
                                 </label>
                                 <button
                                   onClick={() => {
@@ -6359,7 +6356,7 @@ export default function EditorCanvas({
                               {selectedStickerColor !== "transparent" && (
                                 <div>
                                   <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                                    Background Color
+                                    {t("stickerBgColor")}
                                   </label>
                                   <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans border-t border-gray-50 pt-2">
                                     {BADGE_COLORS.map((color) => (
@@ -6386,7 +6383,7 @@ export default function EditorCanvas({
                             <div className="space-y-4">
                               <div className="flex items-center justify-between">
                                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                                  Enable Shadow
+                                  {t("stickerEnableShadow")}
                                 </label>
                                 <button
                                   onClick={() =>
@@ -6408,7 +6405,7 @@ export default function EditorCanvas({
                               {selectedStickerShadow && (
                                 <div>
                                   <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">
-                                    Shadow Color
+                                    {t("stickerShadowColor")}
                                   </label>
                                   <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar font-sans border-t border-gray-50 pt-2">
                                     {[
@@ -6447,7 +6444,7 @@ export default function EditorCanvas({
                           onClick={handleDeleteText}
                           className="py-2.5 px-4 bg-red-100 text-red-600 hover:bg-red-200 rounded-xl font-bold text-xs uppercase tracking-wide transition-colors"
                         >
-                          Delete
+                          {t("btnDelete")}
                         </button>
                       )}
                       <button
@@ -6458,7 +6455,7 @@ export default function EditorCanvas({
                         }}
                         className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-xs uppercase tracking-wide"
                       >
-                        {isEditing ? "Close" : "Cancel"}
+                        {isEditing ? t("btnClose") : t("btnCancel")}
                       </button>
                       {!isEditing && selectedStickerTab === "badge" && (
                         <button
@@ -6468,7 +6465,7 @@ export default function EditorCanvas({
                           }
                           className="flex-[1.5] py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-xl font-bold text-xs uppercase tracking-wide shadow-md transition-all active:scale-95"
                         >
-                          Place Badge
+                          {t("btnPlaceBadge")}
                         </button>
                       )}
                     </div>

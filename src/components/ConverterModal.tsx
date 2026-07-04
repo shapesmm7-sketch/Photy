@@ -294,8 +294,15 @@ export const ConverterModal: React.FC<ConverterModalProps> = ({
                           alt={`Preview ${idx + 1}`}
                           className="w-full h-full object-contain"
                         />
-                        <button onClick={() => removePage(idx)} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                          <X className="w-3 h-3" />
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removePage(idx);
+                          }} 
+                          className="absolute top-1 right-1 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg transition-colors z-10 cursor-pointer"
+                          title="Remove image"
+                        >
+                          <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ))}
