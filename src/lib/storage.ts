@@ -17,7 +17,7 @@ function getDB(): Promise<IDBDatabase> {
 
 export interface RecentEdit {
   id: string; // timestamp
-  originalImage: string;
+  originalImage: string | Blob;
   thumbnail: string;
   createdAt: number;
 }
@@ -66,7 +66,13 @@ export async function getRecentEdits(): Promise<RecentEdit[]> {
       req.onsuccess = () => {
         const items = req.result as RecentEdit[];
         items.sort((a, b) => b.createdAt - a.createdAt);
-        resolve(items);
+        const processedItems = items.map(item => {
+          if (item.originalImage instanceof Blob) {
+            return { ...item, originalImage: URL.createObjectURL(item.originalImage) };
+          }
+          return item;
+        });
+        resolve(processedItems);
       };
       req.onerror = () => reject();
     });

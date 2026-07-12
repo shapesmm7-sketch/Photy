@@ -8,8 +8,8 @@ android {
         applicationId "com.shotclean.myapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 13
-        versionName "1.12"
+        versionCode 14
+        versionName "1.13"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -20,16 +20,22 @@ android {
     signingConfigs {
         release {
             def keystoreFile = file("shotclean.keystore")
-            if (System.getenv("FAD_ANDROID_KEYSTORE_PASSWORD") != null) {
+            if (System.getenv("CM_KEYSTORE_PASSWORD") != null) {
+                def cmPath = System.getenv("CM_KEYSTORE_PATH")
+                storeFile cmPath ? file(cmPath) : keystoreFile
+                storePassword System.getenv("CM_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("CM_KEY_ALIAS") ?: "shotclean"
+                keyPassword System.getenv("CM_KEY_PASSWORD") ?: System.getenv("CM_KEYSTORE_PASSWORD")
+            } else if (System.getenv("FAD_ANDROID_KEYSTORE_PASSWORD") != null) {
                 storeFile keystoreFile
                 storePassword System.getenv("FAD_ANDROID_KEYSTORE_PASSWORD")
                 keyAlias System.getenv("FAD_ANDROID_KEY_ALIAS") ?: "shotclean"
                 keyPassword System.getenv("FAD_ANDROID_KEY_PASSWORD") ?: System.getenv("FAD_ANDROID_KEYSTORE_PASSWORD")
             } else if (keystoreFile.exists()) {
                 storeFile keystoreFile
-                storePassword "Burubi23re%"
+                storePassword "shotclean123"
                 keyAlias "shotclean"
-                keyPassword "Burubi23re%"
+                keyPassword "shotclean123"
             }
         }
     }

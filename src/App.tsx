@@ -34,6 +34,7 @@ import {
   PhoneLayouts,
   burnEditsToImage,
   preloadPhoneFrames,
+  getCachedImage,
 } from "./lib/imageProcessor";
 import EditorCanvas from "./EditorCanvas";
 import { convertPhotoToPdf } from "./lib/pdfGenerator";
@@ -149,30 +150,31 @@ export default function App() {
     getRecentEdits().then(setRecentEdits).catch(console.error);
   }, []);
 
-  const generateThumbnail = (src: string, maxSize = 200): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        let width = img.width;
-        let height = img.height;
-        const scale = Math.min(maxSize / width, maxSize / height);
-        if (scale < 1) {
-          width = Math.round(width * scale);
-          height = Math.round(height * scale);
-        } else {
-          resolve(src);
-          return;
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.7));
-      };
-      img.onerror = () => resolve(src);
-      img.src = src;
-    });
+  const generateThumbnail = async (src: string, maxSize = 200): Promise<string> => {
+    try {
+      const img = await getCachedImage(src);
+      const canvas = document.createElement("canvas");
+      let width = img.width;
+      let height = img.height;
+      const scale = Math.min(maxSize / width, maxSize / height);
+      if (scale < 1) {
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      } else {
+        return src;
+      }
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "medium";
+        ctx.drawImage(img, 0, 0, width, height);
+      }
+      return canvas.toDataURL("image/jpeg", 0.7);
+    } catch {
+      return src;
+    }
   };
 
   const generateHighQualityImage = async (): Promise<string> => {
@@ -626,24 +628,14 @@ export default function App() {
     const filesArray = Array.from(filesList);
 
     if (activeQuickFeature === "stitch" && filesArray.length > 0) {
-      const readers = filesArray.map((f: File) => {
-        return new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (event) => resolve(event.target?.result as string);
-          reader.readAsDataURL(f);
-        });
-      });
-      Promise.all(readers)
-        .then((srcs) => {
-          setStitchImages(srcs);
-          if (activeQuickFeature === "stitch") {
-            setIsStitchPhotoModalOpen(true);
-          }
-          setAppState("preview");
-          setOriginalImage(null);
-          setCleanImage(null);
-        })
-        .catch(console.error);
+      const srcs = filesArray.map((f: File) => URL.createObjectURL(f));
+      setStitchImages(srcs);
+      if (activeQuickFeature === "stitch") {
+        setIsStitchPhotoModalOpen(true);
+      }
+      setAppState("preview");
+      setOriginalImage(null);
+      setCleanImage(null);
       // Clear input value so selecting the same file works later
       e.target.value = "";
       return;
@@ -677,104 +669,103 @@ export default function App() {
     setZoomScale(1);
     setZoomOffset({ x: 0, y: 0 });
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const img = new Image();
-      img.onload = () => {
-        // Keep 100% original size and quality from the uploaded file!
-        const resizedResult = event.target?.result as string;
-        const width = img.width;
-        const height = img.height;
-        setOriginalImage(resizedResult);
-        setCleanImage(resizedResult);
-        setProcessedImage(resizedResult);
+    const objectUrl = URL.createObjectURL(file);
+    getCachedImage(objectUrl).then((img) => {
+      // Keep 100% original size and quality from the uploaded file!
+      const resizedResult = objectUrl;
+      const width = img.width;
+      const height = img.height;
+      setOriginalImage(resizedResult);
+      setCleanImage(resizedResult);
+      setProcessedImage(resizedResult);
 
-        generateThumbnail(resizedResult)
-          .then((thumb) => {
-            saveRecentEdit({ originalImage: resizedResult, thumbnail: thumb })
-              .then(() => {
-                getRecentEdits().then(setRecentEdits).catch(console.error);
-              })
-              .catch(console.error);
-          })
-          .catch(console.error);
+      generateThumbnail(resizedResult)
+        .then((thumb) => {
+          saveRecentEdit({ originalImage: file, thumbnail: thumb })
+            .then(() => {
+              getRecentEdits().then(setRecentEdits).catch(console.error);
+            })
+            .catch(console.error);
+        })
+        .catch(console.error);
 
-        if (!activeQuickFeature) {
-          const topH = Math.round(height * 0.04);
-          const bottomH = Math.round(height * 0.05);
-          setCustomCropRect({
-            x: 0,
-            y: topH,
-            w: width,
-            h: height - topH - bottomH,
-          });
-          setCustomCanvasSize(null);
-          setEditorPaths([]);
-          setEditorTexts([]);
+      if (!activeQuickFeature) {
+        const topH = Math.round(height * 0.04);
+        const bottomH = Math.round(height * 0.05);
+        setCustomCropRect({
+          x: 0,
+          y: topH,
+          w: width,
+          h: height - topH - bottomH,
+        });
+        setCustomCanvasSize(null);
+        setEditorPaths([]);
+        setEditorTexts([]);
 
-          setAppState("processing");
+        setAppState("processing");
 
-          setTimeout(() => {
-            setAppState("preview");
-          }, 800);
+        setTimeout(() => {
+          setAppState("preview");
+        }, 800);
+      } else {
+        // If a quick feature from landing page is active:
+        setEditorPaths([]);
+        setEditorTexts([]);
+        setCustomCanvasSize(null);
+        setCustomCropRect(null); // Full size canvas, no custom template wrapper
+
+        if (activeQuickFeature === "pdf") {
+          setIsPdfModalOpen(true);
+        } else if (activeQuickFeature === "split") {
+          setIsSplitPhotoModalOpen(true);
+          setAppState("preview");
+        } else if (activeQuickFeature === "stitch") {
+          setIsStitchPhotoModalOpen(true);
+          setAppState("preview");
+        } else if (activeQuickFeature === "converter") {
+          setIsConverterModalOpen(true);
+        } else if (activeQuickFeature === "text") {
+          setIsTextModalOpen(true);
+        } else if (activeQuickFeature === "appicons") {
+          setIsAppIconModalOpen(true);
         } else {
-          // If a quick feature from landing page is active:
-          setEditorPaths([]);
-          setEditorTexts([]);
-          setCustomCanvasSize(null);
-          setCustomCropRect(null); // Full size canvas, no custom template wrapper
-
-          if (activeQuickFeature === "pdf") {
-            setIsPdfModalOpen(true);
-          } else if (activeQuickFeature === "split") {
-            setIsSplitPhotoModalOpen(true);
-            setAppState("preview");
-          } else if (activeQuickFeature === "stitch") {
-            setIsStitchPhotoModalOpen(true);
-            setAppState("preview");
-          } else if (activeQuickFeature === "converter") {
-            setIsConverterModalOpen(true);
-          } else if (activeQuickFeature === "text") {
-            setIsTextModalOpen(true);
-          } else if (activeQuickFeature === "appicons") {
-            setIsAppIconModalOpen(true);
-          } else {
-            if (activeQuickFeature === "markup") {
-              setEditorInitialTool("none");
-              setEditorTexts([]);
-            } else if (activeQuickFeature === "resizer") {
-              setEditorInitialTool("size");
-              setEditorTexts([]);
-            } else if (activeQuickFeature === "watermark") {
-              setEditorInitialTool("text");
-              // Elegant drag-adjustable watermark centered by default
-              const initialRefSize = { width, height };
-              setEditorReferenceSize(initialRefSize);
-              setEditorTexts([
-                {
-                  text: "Draft Watermark",
-                  x: width / 2,
-                  y: height / 2,
-                  color: "#FFFFFF",
-                  size: Math.round(Math.min(width, height) * 0.12), // Use a more visible size
-                  positionMode: "Default",
-                  fontName: "Space Grotesk",
-                  hasShadow: true,
-                  shadowColor: "rgba(0, 0, 0, 0.4)",
-                  bgColor: "rgba(0, 0, 0, 0.35)", // Slightly darker bg
-                  opacity: 0.85,
-                  rotation: 0,
-                },
-              ]);
-            }
-            setEditorSessionId(Date.now());
-            setShowEditor(true);
+          if (activeQuickFeature === "markup") {
+            setEditorInitialTool("none");
+            setEditorTexts([]);
+          } else if (activeQuickFeature === "resizer") {
+            setEditorInitialTool("size");
+            setEditorTexts([]);
+          } else if (activeQuickFeature === "watermark") {
+            setEditorInitialTool("text");
+            // Elegant drag-adjustable watermark centered by default
+            const initialRefSize = { width, height };
+            setEditorReferenceSize(initialRefSize);
+            setEditorTexts([
+              {
+                text: "Draft Watermark",
+                x: width / 2,
+                y: height / 2,
+                color: "#FFFFFF",
+                size: Math.round(Math.min(width, height) * 0.12), // Use a more visible size
+                positionMode: "Default",
+                fontName: "Space Grotesk",
+                hasShadow: true,
+                shadowColor: "rgba(0, 0, 0, 0.4)",
+                bgColor: "rgba(0, 0, 0, 0.35)", // Slightly darker bg
+                opacity: 0.85,
+                rotation: 0,
+              },
+            ]);
           }
+          setEditorSessionId(Date.now());
+          setShowEditor(true);
         }
-      };
-      img.src = event.target?.result as string;
-    };
-    reader.readAsDataURL(file);
+      }
+    }).catch((err) => {
+      console.error("Failed to load uploaded image", err);
+      // Give feedback if possible, or just fail gracefully.
+      setAppState("upload");
+    });
 
     // Clear input value so selecting the same file works later
     e.target.value = "";

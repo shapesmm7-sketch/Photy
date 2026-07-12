@@ -304,7 +304,7 @@ export function getCachedImage(src: string | HTMLImageElement): Promise<HTMLImag
   if (cached) return Promise.resolve(cached);
   return new Promise((resolve, reject) => {
     const img = new Image();
-    if (!src.startsWith("data:")) {
+    if (!src.startsWith("data:") && !src.startsWith("blob:")) {
       img.crossOrigin = "anonymous";
     }
     img.onload = () => {
