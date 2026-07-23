@@ -51,15 +51,6 @@ workflows:
       - name: Build Android App (Release and Debug)
         script: |
           cd android
-          
-          # Force use gradle 8.9
-          curl -sSLO https://services.gradle.org/distributions/gradle-8.9-bin.zip
-          unzip -qo gradle-8.9-bin.zip
-          ./gradle-8.9/bin/gradle wrapper --gradle-version 8.9 --distribution-type all
-          
-          # Clean up the downloaded gradle binaries to prevent them from being committed
-          rm -rf gradle-8.9-bin.zip gradle-8.9
-          
           chmod +x gradlew
           ./gradlew clean assembleRelease bundleRelease --no-daemon --no-build-cache --stacktrace -Dorg.gradle.vfs.watch=false
     artifacts:
