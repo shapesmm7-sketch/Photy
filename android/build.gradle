@@ -41,6 +41,7 @@ allprojects {
             force 'org.bouncycastle:bcpkix-jdk18on:1.78.1'
             force 'androidx.core:core:1.15.0'
             force 'androidx.core:core-ktx:1.15.0'
+            force 'com.android.billingclient:billing:9.1.0'
         }
         exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
         exclude group: 'org.bouncycastle', module: 'bcutil-jdk15on'
