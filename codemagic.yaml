@@ -51,6 +51,12 @@ workflows:
       - name: Build Android App (Release and Debug)
         script: |
           cd android
+          # Verify gradle wrapper jar integrity; if corrupt or missing, repair with pristine Gradle 8.9 wrapper
+          if ! unzip -t gradle/wrapper/gradle-wrapper.jar > /dev/null 2>&1; then
+            echo "gradle-wrapper.jar is invalid or corrupted. Fetching pristine Gradle 8.9 wrapper..."
+            mkdir -p gradle/wrapper
+            curl -sSL "https://raw.githubusercontent.com/gradle/gradle/v8.9.0/gradle/wrapper/gradle-wrapper.jar" -o gradle/wrapper/gradle-wrapper.jar
+          fi
           chmod +x gradlew
           ./gradlew clean assembleRelease bundleRelease --no-daemon --no-build-cache --stacktrace -Dorg.gradle.vfs.watch=false
     artifacts:
